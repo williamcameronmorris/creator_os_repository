@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { useTheme } from '../contexts/ThemeContext';
 import { supabase } from '../lib/supabase';
-import { X, Instagram, Youtube, Image as ImageIcon, Video, Calendar, Clock, Upload, Sparkles } from 'lucide-react';
+import { X, Instagram, Youtube, Video, Calendar, Upload, Sparkles } from 'lucide-react';
 
 interface PostComposerProps {
   onClose: () => void;
@@ -33,7 +32,6 @@ const PLATFORM_LIMITS = {
 
 export function PostComposer({ onClose, onSuccess, editPost }: PostComposerProps) {
   const { user } = useAuth();
-  const { darkMode } = useTheme();
 
   const [platform, setPlatform] = useState<Platform>(editPost?.platform as Platform || 'instagram');
   const [caption, setCaption] = useState(editPost?.caption || '');
@@ -161,30 +159,22 @@ export function PostComposer({ onClose, onSuccess, editPost }: PostComposerProps
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className={`w-full max-w-2xl max-h-[90vh] rounded-2xl overflow-hidden ${
-        darkMode ? 'bg-slate-900' : 'bg-white'
-      }`}>
-        <div className={`flex items-center justify-between p-6 border-b ${
-          darkMode ? 'border-slate-800' : 'border-slate-200'
-        }`}>
-          <h2 className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-slate-900'}`}>
+      <div className="w-full max-w-2xl max-h-[90vh] rounded-2xl overflow-hidden bg-card border border-border shadow-2xl">
+        <div className="flex items-center justify-between p-6 border-b border-border">
+          <h2 className="text-2xl font-bold text-foreground">
             {editPost ? 'Edit Post' : 'Create New Post'}
           </h2>
           <button
             onClick={onClose}
-            className={`p-2 rounded-lg transition-colors ${
-              darkMode ? 'hover:bg-slate-800' : 'hover:bg-slate-100'
-            }`}
+            className="p-2 rounded-lg transition-colors hover:bg-accent"
           >
-            <X className={`w-5 h-5 ${darkMode ? 'text-slate-400' : 'text-slate-600'}`} />
+            <X className="w-5 h-5 text-muted-foreground hover:text-foreground" />
           </button>
         </div>
 
         <div className="overflow-y-auto max-h-[calc(90vh-180px)] p-6 space-y-6">
           <div>
-            <label className={`block text-sm font-medium mb-3 ${
-              darkMode ? 'text-slate-300' : 'text-slate-700'
-            }`}>
+            <label className="block text-sm font-medium mb-3 text-foreground">
               Platform
             </label>
             <div className="grid grid-cols-3 gap-3">
@@ -197,17 +187,15 @@ export function PostComposer({ onClose, onSuccess, editPost }: PostComposerProps
                     onClick={() => setPlatform(p)}
                     className={`p-4 rounded-xl border-2 transition-all ${
                       isSelected
-                        ? 'border-sky-500 bg-sky-500/10'
-                        : darkMode
-                        ? 'border-slate-700 hover:border-slate-600'
-                        : 'border-slate-200 hover:border-slate-300'
+                        ? 'border-primary bg-primary/10'
+                        : 'border-border hover:border-primary/50 hover:bg-accent'
                     }`}
                   >
                     <Icon className={`w-6 h-6 mx-auto mb-2 ${
-                      isSelected ? 'text-sky-500' : darkMode ? 'text-slate-400' : 'text-slate-600'
+                      isSelected ? 'text-primary' : 'text-muted-foreground'
                     }`} />
                     <span className={`text-sm font-medium capitalize ${
-                      isSelected ? 'text-sky-500' : darkMode ? 'text-slate-300' : 'text-slate-700'
+                      isSelected ? 'text-primary' : 'text-foreground'
                     }`}>
                       {p}
                     </span>
@@ -219,9 +207,7 @@ export function PostComposer({ onClose, onSuccess, editPost }: PostComposerProps
 
           <div>
             <div className="flex items-center justify-between mb-3">
-              <label className={`text-sm font-medium ${
-                darkMode ? 'text-slate-300' : 'text-slate-700'
-              }`}>
+              <label className="text-sm font-medium text-foreground">
                 Caption
               </label>
               <span className={`text-sm ${
@@ -229,9 +215,7 @@ export function PostComposer({ onClose, onSuccess, editPost }: PostComposerProps
                   ? 'text-red-500'
                   : charactersRemaining < 100
                   ? 'text-orange-500'
-                  : darkMode
-                  ? 'text-slate-500'
-                  : 'text-slate-500'
+                  : 'text-muted-foreground'
               }`}>
                 {charactersRemaining} characters remaining
               </span>
@@ -241,30 +225,20 @@ export function PostComposer({ onClose, onSuccess, editPost }: PostComposerProps
               onChange={(e) => setCaption(e.target.value)}
               placeholder="Write your caption here... Include #hashtags and @mentions"
               rows={6}
-              className={`w-full px-4 py-3 rounded-xl border resize-none ${
-                darkMode
-                  ? 'bg-slate-800 border-slate-700 text-white placeholder-slate-500'
-                  : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400'
-              } focus:outline-none focus:ring-2 focus:ring-sky-500`}
+              className="w-full px-4 py-3 rounded-xl border border-border bg-background text-foreground placeholder-muted-foreground resize-none focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
             />
           </div>
 
           <div>
-            <label className={`block text-sm font-medium mb-3 ${
-              darkMode ? 'text-slate-300' : 'text-slate-700'
-            }`}>
+            <label className="block text-sm font-medium mb-3 text-foreground">
               Media ({mediaFiles.length + mediaUrls.length}/{limits.media})
             </label>
 
             <div className="space-y-3">
               {(mediaUrls.length + mediaFiles.length < limits.media) && (
-                <label className={`flex items-center justify-center gap-3 p-8 rounded-xl border-2 border-dashed cursor-pointer transition-colors ${
-                  darkMode
-                    ? 'border-slate-700 hover:border-slate-600 hover:bg-slate-800'
-                    : 'border-slate-300 hover:border-slate-400 hover:bg-slate-50'
-                }`}>
-                  <Upload className={`w-6 h-6 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`} />
-                  <span className={`text-sm font-medium ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                <label className="flex items-center justify-center gap-3 p-8 rounded-xl border-2 border-dashed border-border hover:border-primary/50 hover:bg-accent cursor-pointer transition-colors">
+                  <Upload className="w-6 h-6 text-muted-foreground" />
+                  <span className="text-sm font-medium text-muted-foreground">
                     Click to upload or drag and drop
                   </span>
                   <input
@@ -280,28 +254,28 @@ export function PostComposer({ onClose, onSuccess, editPost }: PostComposerProps
               {(mediaUrls.length > 0 || mediaFiles.length > 0) && (
                 <div className="grid grid-cols-2 gap-3">
                   {mediaUrls.map((url, index) => (
-                    <div key={`url-${index}`} className="relative aspect-square rounded-xl overflow-hidden group">
+                    <div key={`url-${index}`} className="relative aspect-square rounded-xl overflow-hidden group border border-border">
                       <img src={url} alt="" className="w-full h-full object-cover" />
                       <button
                         onClick={() => removeMedia(index, true)}
-                        className="absolute top-2 right-2 p-2 bg-red-500 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="absolute top-2 right-2 p-2 bg-red-500 hover:bg-red-600 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-all shadow-lg"
                       >
                         <X className="w-4 h-4" />
                       </button>
                     </div>
                   ))}
                   {mediaFiles.map((file, index) => (
-                    <div key={`file-${index}`} className="relative aspect-square rounded-xl overflow-hidden group">
+                    <div key={`file-${index}`} className="relative aspect-square rounded-xl overflow-hidden group border border-border">
                       {file.type.startsWith('video') ? (
-                        <div className="w-full h-full bg-slate-900 flex items-center justify-center">
-                          <Video className="w-12 h-12 text-slate-600" />
+                        <div className="w-full h-full bg-accent flex items-center justify-center">
+                          <Video className="w-12 h-12 text-muted-foreground" />
                         </div>
                       ) : (
                         <img src={URL.createObjectURL(file)} alt="" className="w-full h-full object-cover" />
                       )}
                       <button
                         onClick={() => removeMedia(index, false)}
-                        className="absolute top-2 right-2 p-2 bg-red-500 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="absolute top-2 right-2 p-2 bg-red-500 hover:bg-red-600 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-all shadow-lg"
                       >
                         <X className="w-4 h-4" />
                       </button>
@@ -313,9 +287,7 @@ export function PostComposer({ onClose, onSuccess, editPost }: PostComposerProps
           </div>
 
           <div>
-            <label className={`block text-sm font-medium mb-3 ${
-              darkMode ? 'text-slate-300' : 'text-slate-700'
-            }`}>
+            <label className="block text-sm font-medium mb-3 text-foreground">
               <div className="flex items-center gap-2">
                 <Calendar className="w-4 h-4" />
                 Schedule (Optional)
@@ -326,33 +298,23 @@ export function PostComposer({ onClose, onSuccess, editPost }: PostComposerProps
               value={scheduledDate}
               onChange={(e) => setScheduledDate(e.target.value)}
               min={new Date().toISOString().slice(0, 16)}
-              className={`w-full px-4 py-3 rounded-xl border ${
-                darkMode
-                  ? 'bg-slate-800 border-slate-700 text-white'
-                  : 'bg-white border-slate-300 text-slate-900'
-              } focus:outline-none focus:ring-2 focus:ring-sky-500`}
+              className="w-full px-4 py-3 rounded-xl border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
             />
           </div>
         </div>
 
-        <div className={`flex items-center justify-end gap-3 p-6 border-t ${
-          darkMode ? 'border-slate-800' : 'border-slate-200'
-        }`}>
+        <div className="flex items-center justify-end gap-3 p-6 border-t border-border">
           <button
             onClick={() => handleSave('draft')}
             disabled={saving || uploading || !caption.trim()}
-            className={`px-6 py-3 rounded-xl font-medium transition-colors ${
-              darkMode
-                ? 'bg-slate-800 hover:bg-slate-700 text-white'
-                : 'bg-slate-100 hover:bg-slate-200 text-slate-900'
-            } disabled:opacity-50 disabled:cursor-not-allowed`}
+            className="px-6 py-3 rounded-xl font-medium bg-accent hover:bg-accent/80 text-foreground transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
           >
             {saving ? 'Saving...' : 'Save Draft'}
           </button>
           <button
             onClick={() => handleSave('scheduled')}
             disabled={saving || uploading || !caption.trim() || !scheduledDate}
-            className="px-6 py-3 rounded-xl font-medium bg-gray-900 hover:bg-gray-800 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-6 py-3 rounded-xl font-medium bg-primary hover:bg-primary/90 text-primary-foreground transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
           >
             {uploading ? 'Uploading...' : saving ? 'Scheduling...' : 'Schedule Post'}
           </button>

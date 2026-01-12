@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { useTheme } from '../contexts/ThemeContext';
 import { supabase } from '../lib/supabase';
-import { Calendar, Clock, Instagram, Youtube, Plus, Sparkles, Edit, Trash2, Image as ImageIcon, DollarSign } from 'lucide-react';
+import { Calendar, Clock, Instagram, Youtube, Plus, Sparkles, Edit, Trash2, DollarSign } from 'lucide-react';
 import { format } from 'date-fns';
 import { PostComposer } from '../components/PostComposer';
 
@@ -19,7 +18,6 @@ interface Post {
 
 export function Schedule() {
   const { user } = useAuth();
-  const { darkMode } = useTheme();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [showComposer, setShowComposer] = useState(false);
