@@ -1,0 +1,11 @@
+{
+	"appId": "com.branddealos.app",
+	"appName": "Brand Deal OS",
+	"webDir": "dist",
+	"packageClassList": [
+		"AppPlugin",
+		"HapticsPlugin",
+		"KeyboardPlugin",
+		"StatusBarPlugin"
+	]
+}
