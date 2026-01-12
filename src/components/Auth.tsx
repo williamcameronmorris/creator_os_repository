@@ -29,20 +29,20 @@ export function Auth() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-500 rounded-2xl mb-4">
-            <Briefcase className="w-8 h-8 text-white" />
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-primary rounded-2xl mb-4 shadow-lg">
+            <Briefcase className="w-8 h-8 text-primary-foreground" />
           </div>
-          <h1 className="text-3xl font-bold text-white mb-2">Brand Deal OS</h1>
-          <p className="text-slate-400">Pricing, pitching, and tracking in one system</p>
+          <h1 className="text-4xl font-bold text-foreground mb-2 tracking-tight">Creator OS</h1>
+          <p className="text-muted-foreground text-lg">Your content studio and business office, unified</p>
         </div>
 
-        <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700 rounded-2xl p-8 shadow-2xl">
+        <div className="bg-card backdrop-blur-sm border border-border rounded-2xl p-8 shadow-xl">
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-slate-200 mb-2">
+              <label htmlFor="email" className="block text-sm font-medium text-foreground mb-2">
                 Email
               </label>
               <input
@@ -50,14 +50,14 @@ export function Auth() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-4 py-3 bg-background border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
                 placeholder="you@example.com"
                 required
               />
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-slate-200 mb-2">
+              <label htmlFor="password" className="block text-sm font-medium text-foreground mb-2">
                 Password
               </label>
               <input
@@ -65,7 +65,7 @@ export function Auth() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-4 py-3 bg-background border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
                 placeholder="••••••••"
                 required
                 minLength={6}
@@ -81,7 +81,7 @@ export function Auth() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3 px-4 bg-blue-500 hover:bg-blue-600 disabled:bg-slate-600 text-white font-medium rounded-lg transition-colors duration-200"
+              className="w-full py-3 px-4 bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-primary-foreground font-medium rounded-lg transition-all duration-200 shadow-md hover:shadow-lg"
             >
               {loading ? 'Loading...' : isSignUp ? 'Sign Up' : 'Sign In'}
             </button>
@@ -94,7 +94,7 @@ export function Auth() {
                 setIsSignUp(!isSignUp);
                 setError('');
               }}
-              className="text-sm text-slate-400 hover:text-slate-200 transition-colors"
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
               {isSignUp ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
             </button>
