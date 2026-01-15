@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useSubscription } from '../contexts/SubscriptionContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { supabase } from '../lib/supabase';
-import { TrendingUp, Eye, Heart, MessageCircle, Users, Instagram, Youtube, Sparkles, ArrowUp, ArrowDown, Calendar } from 'lucide-react';
+import { TrendingUp, Eye, Heart, MessageCircle, Users, Instagram, Youtube, Sparkles, ArrowUp, ArrowDown, Calendar, Lock, Crown } from 'lucide-react';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { format, subDays } from 'date-fns';
+import { PaywallModal } from '../components/PaywallModal';
 
 interface Metrics {
   totalViews: number;
@@ -47,6 +49,7 @@ const PLATFORM_COLORS = {
 
 export function Analytics() {
   const { user } = useAuth();
+  const { tier } = useSubscription();
   const { darkMode } = useTheme();
   const [metrics, setMetrics] = useState<Metrics>({
     totalViews: 0,
@@ -64,6 +67,10 @@ export function Analytics() {
   const [topPosts, setTopPosts] = useState<PostPerformance[]>([]);
   const [loading, setLoading] = useState(true);
   const [timeRange, setTimeRange] = useState<'7d' | '30d' | '90d'>('30d');
+  const [showPaywall, setShowPaywall] = useState(false);
+  const [paywallFeature, setPaywallFeature] = useState('');
+
+  const isPremium = tier === 'paid';
 
   useEffect(() => {
     if (user) {
@@ -71,10 +78,19 @@ export function Analytics() {
     }
   }, [user, timeRange]);
 
+  const handleTimeRangeChange = (range: '7d' | '30d' | '90d') => {
+    if (!isPremium && (range === '30d' || range === '90d')) {
+      setPaywallFeature('Extended Analytics (30 and 90 day views)');
+      setShowPaywall(true);
+      return;
+    }
+    setTimeRange(range);
+  };
+
   const loadAnalytics = async () => {
     if (!user) return;
 
-    const days = timeRange === '7d' ? 7 : timeRange === '30d' ? 30 : 90;
+    const days = isPremium ? (timeRange === '7d' ? 7 : timeRange === '30d' ? 30 : 90) : 7;
     const startDate = subDays(new Date(), days).toISOString();
 
     const [metricsRes, postsRes, platformMetricsRes] = await Promise.all([
@@ -90,7 +106,7 @@ export function Analytics() {
         .select('*, content_posts!inner(platform, caption, published_at)')
         .eq('content_posts.user_id', user.id)
         .order('engagement_rate', { ascending: false })
-        .limit(5),
+        .limit(isPremium ? 10 : 3),
 
       supabase
         .from('platform_metrics')
@@ -228,19 +244,39 @@ export function Analytics() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            {['7d', '30d', '90d'].map((range) => (
+            {['7d', '30d', '90d'].map((range) => {
+              const isLocked = !isPremium && (range === '30d' || range === '90d');
+              return (
+                <button
+                  key={range}
+                  onClick={() => handleTimeRangeChange(range as any)}
+                  className={`px-4 py-2 rounded-xl font-medium transition-colors shadow-sm relative ${
+                    timeRange === range
+                      ? 'bg-primary text-primary-foreground'
+                      : isLocked
+                      ? 'bg-card border border-border text-muted-foreground hover:bg-accent hover:text-foreground'
+                      : 'bg-card border border-border text-muted-foreground hover:bg-accent hover:text-foreground'
+                  }`}
+                >
+                  <span className="flex items-center gap-2">
+                    {range === '7d' ? '7 Days' : range === '30d' ? '30 Days' : '90 Days'}
+                    {isLocked && <Lock className="w-3.5 h-3.5" />}
+                  </span>
+                </button>
+              );
+            })}
+            {!isPremium && (
               <button
-                key={range}
-                onClick={() => setTimeRange(range as any)}
-                className={`px-4 py-2 rounded-xl font-medium transition-colors shadow-sm ${
-                  timeRange === range
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-card border border-border text-muted-foreground hover:bg-accent hover:text-foreground'
-                }`}
+                onClick={() => {
+                  setPaywallFeature('Full Analytics Access');
+                  setShowPaywall(true);
+                }}
+                className="ml-2 px-4 py-2 rounded-xl font-medium bg-gradient-to-r from-orange-500 to-orange-600 text-white hover:shadow-lg transition-all flex items-center gap-2"
               >
-                {range === '7d' ? '7 Days' : range === '30d' ? '30 Days' : '90 Days'}
+                <Crown className="w-4 h-4" />
+                Upgrade
               </button>
-            ))}
+            )}
           </div>
         </div>
       </div>
@@ -347,10 +383,18 @@ export function Analytics() {
               </ResponsiveContainer>
             </div>
 
-            <div className="p-6 rounded-xl bg-card border border-border shadow-md">
-              <h3 className="text-lg font-bold mb-6 text-foreground">
-                Top Performing Posts
-              </h3>
+            <div className="p-6 rounded-xl bg-card border border-border shadow-md relative">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-bold text-foreground">
+                  Top Performing Posts
+                </h3>
+                {!isPremium && topPosts.length > 0 && (
+                  <span className="text-xs px-2 py-1 rounded-full bg-orange-500/10 text-orange-600 dark:text-orange-400 border border-orange-500/20 flex items-center gap-1">
+                    <Lock className="w-3 h-3" />
+                    Limited
+                  </span>
+                )}
+              </div>
               <div className="space-y-4">
                 {topPosts.length === 0 ? (
                   <p className="text-center py-8 text-muted-foreground">
@@ -384,11 +428,29 @@ export function Analytics() {
                     );
                   })
                 )}
+                {!isPremium && topPosts.length > 0 && (
+                  <button
+                    onClick={() => {
+                      setPaywallFeature('Full Top Posts Analytics (10 posts vs 3)');
+                      setShowPaywall(true);
+                    }}
+                    className="w-full py-3 px-4 rounded-lg border-2 border-dashed border-orange-500/30 bg-orange-500/5 text-orange-600 dark:text-orange-400 font-medium hover:bg-orange-500/10 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Lock className="w-4 h-4" />
+                    View All Top Posts (Premium)
+                  </button>
+                )}
               </div>
             </div>
           </div>
         </div>
       )}
+
+      <PaywallModal
+        isOpen={showPaywall}
+        onClose={() => setShowPaywall(false)}
+        feature={paywallFeature}
+      />
     </div>
   );
 }

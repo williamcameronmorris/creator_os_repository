@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
+import { useSubscription } from '../contexts/SubscriptionContext';
 import { supabase } from '../lib/supabase';
 import { generateInsights, getStoredInsights, saveInsights, type Insight } from '../lib/analyticsInsights';
 import { AnalyticsCTABanner } from './AnalyticsCTABanner';
+import { PaywallModal } from './PaywallModal';
 import {
   TrendingUp,
   AlertCircle,
@@ -22,6 +24,8 @@ import {
   Clock,
   Sparkles,
   Send,
+  Lock,
+  Crown,
 } from 'lucide-react';
 
 interface Deal {
@@ -41,6 +45,7 @@ interface ActionDashboardProps {
 }
 
 export default function ActionDashboard({ onViewDeal, onNavigate, darkMode }: ActionDashboardProps) {
+  const { tier } = useSubscription();
   const [insights, setInsights] = useState<Insight[]>([]);
   const [deals, setDeals] = useState<Deal[]>([]);
   const [pipelineStats, setPipelineStats] = useState({
@@ -58,6 +63,9 @@ export default function ActionDashboard({ onViewDeal, onNavigate, darkMode }: Ac
   const [selectedPlatform, setSelectedPlatform] = useState<string | null>(null);
   const [aiQuery, setAiQuery] = useState('');
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
+  const [showPaywall, setShowPaywall] = useState(false);
+
+  const isPremium = tier === 'paid';
 
   const placeholders = [
     "Ask your question here: Why did my engagements drop?",
@@ -149,6 +157,10 @@ export default function ActionDashboard({ onViewDeal, onNavigate, darkMode }: Ac
   };
 
   const syncAllPlatforms = async () => {
+    if (!isPremium) {
+      setShowPaywall(true);
+      return;
+    }
     setSyncing(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -255,8 +267,9 @@ export default function ActionDashboard({ onViewDeal, onNavigate, darkMode }: Ac
     );
   }
 
-  const highPriorityInsights = insights.filter(i => i.priority === 'high');
-  const mediumPriorityInsights = insights.filter(i => i.priority === 'medium');
+  const displayedInsights = isPremium ? insights : insights.slice(0, 3);
+  const highPriorityInsights = displayedInsights.filter(i => i.priority === 'high');
+  const mediumPriorityInsights = displayedInsights.filter(i => i.priority === 'medium');
 
   const platforms = [
     {
@@ -306,16 +319,30 @@ export default function ActionDashboard({ onViewDeal, onNavigate, darkMode }: Ac
             Real-time insights and action items across your content and deals
           </p>
         </div>
-        <button
-          onClick={syncAllPlatforms}
-          disabled={syncing}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl font-semibold transition-all bg-primary text-primary-foreground hover:bg-primary/90 ${
-            syncing ? 'opacity-50 cursor-not-allowed' : ''
-          }`}
-        >
-          <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
-          {syncing ? 'Syncing...' : 'Sync All'}
-        </button>
+        <div className="flex items-center gap-2">
+          {!isPremium && (
+            <button
+              onClick={() => setShowPaywall(true)}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl font-medium bg-gradient-to-r from-orange-500 to-orange-600 text-white hover:shadow-lg transition-all"
+            >
+              <Crown className="w-4 h-4" />
+              Upgrade
+            </button>
+          )}
+          <button
+            onClick={syncAllPlatforms}
+            disabled={syncing}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl font-semibold transition-all ${
+              isPremium
+                ? 'bg-primary text-primary-foreground hover:bg-primary/90'
+                : 'bg-card border border-border text-muted-foreground hover:bg-accent'
+            } ${syncing ? 'opacity-50 cursor-not-allowed' : ''}`}
+          >
+            {!isPremium && <Lock className="w-4 h-4" />}
+            <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
+            {syncing ? 'Syncing...' : isPremium ? 'Sync All' : 'Sync (Premium)'}
+          </button>
+        </div>
       </div>
 
       <div className="relative">
@@ -566,6 +593,12 @@ export default function ActionDashboard({ onViewDeal, onNavigate, darkMode }: Ac
       <div className="mt-12">
         <AnalyticsCTABanner />
       </div>
+
+      <PaywallModal
+        isOpen={showPaywall}
+        onClose={() => setShowPaywall(false)}
+        feature="Platform Sync & Full Insights"
+      />
     </div>
   );
 }

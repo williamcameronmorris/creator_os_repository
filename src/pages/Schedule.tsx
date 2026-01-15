@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useSubscription } from '../contexts/SubscriptionContext';
 import { supabase } from '../lib/supabase';
-import { Calendar, Clock, Instagram, Youtube, Plus, Sparkles, Edit, Trash2, DollarSign, Lightbulb, Type, Hash, BarChart3, Bot, ArrowRight, Info, Zap, TrendingUp, Cpu } from 'lucide-react';
+import { Calendar, Clock, Instagram, Youtube, Plus, Sparkles, Edit, Trash2, DollarSign, Lightbulb, Type, Hash, BarChart3, Bot, ArrowRight, Info, Zap, TrendingUp, Cpu, Lock, Crown } from 'lucide-react';
 import { format } from 'date-fns';
 import { PostComposer } from '../components/PostComposer';
 import { AnalyticsCTABanner } from '../components/AnalyticsCTABanner';
 import { useNavigate } from 'react-router-dom';
 import { getAIQuota, formatResetTime, type AIQuotaInfo } from '../lib/aiQuota';
+import { PaywallModal } from '../components/PaywallModal';
 
 interface Post {
   id: string;
@@ -21,6 +23,7 @@ interface Post {
 
 export function Schedule() {
   const { user } = useAuth();
+  const { tier } = useSubscription();
   const navigate = useNavigate();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
@@ -28,6 +31,10 @@ export function Schedule() {
   const [editingPost, setEditingPost] = useState<Post | undefined>();
   const [filter, setFilter] = useState<'all' | 'scheduled' | 'draft'>('all');
   const [aiQuota, setAiQuota] = useState<AIQuotaInfo | null>(null);
+  const [showPaywall, setShowPaywall] = useState(false);
+  const [paywallFeature, setPaywallFeature] = useState('');
+
+  const isPremium = tier === 'paid';
 
   useEffect(() => {
     if (user) {
@@ -101,7 +108,18 @@ export function Schedule() {
 
   const scheduledPosts = posts.filter(post => post.status === 'scheduled');
   const totalScheduled = scheduledPosts.length;
-  const freeLimit = 5;
+  const freeLimit = isPremium ? 999 : 5;
+  const schedulingLimit = isPremium ? 999 : 5;
+
+  const handleNewPost = () => {
+    if (!isPremium && totalScheduled >= schedulingLimit) {
+      setPaywallFeature('Unlimited Post Scheduling');
+      setShowPaywall(true);
+      return;
+    }
+    setEditingPost(undefined);
+    setShowComposer(true);
+  };
 
   const now = new Date();
   const next7Days = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
@@ -132,10 +150,7 @@ export function Schedule() {
             </p>
           </div>
           <button
-            onClick={() => {
-              setEditingPost(undefined);
-              setShowComposer(true);
-            }}
+            onClick={handleNewPost}
             className="flex items-center gap-2 px-6 py-3 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl font-medium transition-colors shadow-md"
           >
             <Plus className="w-5 h-5" />
@@ -361,24 +376,41 @@ export function Schedule() {
             <div className="relative z-10">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-medium text-muted-foreground">Total Scheduled</span>
-                <Calendar className="w-5 h-5 text-blue-500" />
+                <div className="flex items-center gap-2">
+                  {!isPremium && (
+                    <span className="text-xs px-2 py-1 rounded-full bg-orange-500/10 text-orange-600 dark:text-orange-400 border border-orange-500/20 flex items-center gap-1">
+                      <Lock className="w-3 h-3" />
+                      Limited
+                    </span>
+                  )}
+                  <Calendar className="w-5 h-5 text-blue-500" />
+                </div>
               </div>
               <div className="flex items-baseline gap-2 mb-1">
                 <span className="text-3xl font-bold text-foreground">{totalScheduled}</span>
                 <span className="text-sm text-muted-foreground">posts</span>
               </div>
-              <div className="flex items-center gap-2">
-                <div className="flex-1 h-2 bg-secondary rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-blue-500 transition-all duration-500"
-                    style={{ width: `${Math.min((totalScheduled / freeLimit) * 100, 100)}%` }}
-                  ></div>
-                </div>
-                <span className="text-xs text-muted-foreground whitespace-nowrap">
-                  {freeLimit - totalScheduled > 0 ? `${freeLimit - totalScheduled} left` : 'Limit reached'}
-                </span>
-              </div>
-              <p className="text-xs text-muted-foreground mt-2">Max {freeLimit} on free plan</p>
+              {!isPremium ? (
+                <>
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 h-2 bg-secondary rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-blue-500 transition-all duration-500"
+                        style={{ width: `${Math.min((totalScheduled / schedulingLimit) * 100, 100)}%` }}
+                      ></div>
+                    </div>
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">
+                      {schedulingLimit - totalScheduled > 0 ? `${schedulingLimit - totalScheduled} left` : 'Limit reached'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-2">Max {schedulingLimit} on free plan</p>
+                </>
+              ) : (
+                <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium mt-2 flex items-center gap-1">
+                  <Crown className="w-3 h-3" />
+                  Unlimited scheduling
+                </p>
+              )}
             </div>
           </div>
 
@@ -431,19 +463,29 @@ export function Schedule() {
               </p>
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Sparkles className="w-4 h-4" />
-                <span>Schedule up to {freeLimit} posts on the free plan</span>
+                <span>{isPremium ? 'Unlimited post scheduling' : `Schedule up to ${schedulingLimit} posts on the free plan`}</span>
               </div>
             </div>
-            <button
-              onClick={() => {
-                setEditingPost(undefined);
-                setShowComposer(true);
-              }}
-              className="flex items-center gap-2 px-8 py-4 bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white rounded-xl font-semibold transition-all shadow-lg hover:shadow-xl hover:scale-105"
-            >
-              <Plus className="w-5 h-5" />
-              Schedule Post
-            </button>
+            {!isPremium && totalScheduled >= schedulingLimit ? (
+              <button
+                onClick={() => {
+                  setPaywallFeature('Unlimited Post Scheduling');
+                  setShowPaywall(true);
+                }}
+                className="flex items-center gap-2 px-8 py-4 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl font-semibold transition-all shadow-lg hover:shadow-xl hover:scale-105"
+              >
+                <Crown className="w-5 h-5" />
+                Upgrade to Schedule More
+              </button>
+            ) : (
+              <button
+                onClick={handleNewPost}
+                className="flex items-center gap-2 px-8 py-4 bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white rounded-xl font-semibold transition-all shadow-lg hover:shadow-xl hover:scale-105"
+              >
+                <Plus className="w-5 h-5" />
+                Schedule Post
+              </button>
+            )}
           </div>
         </div>
 
@@ -510,10 +552,7 @@ export function Schedule() {
             Create your first post to get started with content scheduling
           </p>
           <button
-            onClick={() => {
-              setEditingPost(undefined);
-              setShowComposer(true);
-            }}
+            onClick={handleNewPost}
             className="inline-flex items-center gap-2 px-6 py-3 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl font-medium transition-colors shadow-md"
           >
             <Plus className="w-5 h-5" />
@@ -625,6 +664,12 @@ export function Schedule() {
           editPost={editingPost}
         />
       )}
+
+      <PaywallModal
+        isOpen={showPaywall}
+        onClose={() => setShowPaywall(false)}
+        feature={paywallFeature}
+      />
     </div>
   );
 }
