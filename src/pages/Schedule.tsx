@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
-import { Calendar, Clock, Instagram, Youtube, Plus, Sparkles, Edit, Trash2, DollarSign, Lightbulb, Type, Hash, BarChart3, Bot, ArrowRight } from 'lucide-react';
+import { Calendar, Clock, Instagram, Youtube, Plus, Sparkles, Edit, Trash2, DollarSign, Lightbulb, Type, Hash, BarChart3, Bot, ArrowRight, Info, Zap, TrendingUp } from 'lucide-react';
 import { format } from 'date-fns';
 import { PostComposer } from '../components/PostComposer';
 import { useNavigate } from 'react-router-dom';
@@ -88,6 +88,26 @@ export function Schedule() {
     if (filter === 'all') return true;
     return post.status === filter;
   });
+
+  const scheduledPosts = posts.filter(post => post.status === 'scheduled');
+  const totalScheduled = scheduledPosts.length;
+  const freeLimit = 5;
+
+  const now = new Date();
+  const next7Days = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+  const next24Hours = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+
+  const thisWeekPosts = scheduledPosts.filter(post => {
+    if (!post.scheduled_date) return false;
+    const postDate = new Date(post.scheduled_date);
+    return postDate >= now && postDate <= next7Days;
+  }).length;
+
+  const publishingSoonPosts = scheduledPosts.filter(post => {
+    if (!post.scheduled_date) return false;
+    const postDate = new Date(post.scheduled_date);
+    return postDate >= now && postDate <= next24Hours;
+  }).length;
 
   return (
     <div className="max-w-7xl mx-auto">
@@ -242,6 +262,112 @@ export function Schedule() {
               </div>
             </div>
           </button>
+        </div>
+      </div>
+
+      <div className="mb-8">
+        <h2 className="text-2xl font-bold text-foreground mb-6">Content Scheduling Stats</h2>
+
+        <div className="grid md:grid-cols-3 gap-4 mb-6">
+          <div className="relative p-6 rounded-xl bg-card border border-border shadow-md overflow-hidden">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl"></div>
+            <div className="relative z-10">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium text-muted-foreground">Total Scheduled</span>
+                <Calendar className="w-5 h-5 text-blue-500" />
+              </div>
+              <div className="flex items-baseline gap-2 mb-1">
+                <span className="text-3xl font-bold text-foreground">{totalScheduled}</span>
+                <span className="text-sm text-muted-foreground">posts</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="flex-1 h-2 bg-secondary rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-blue-500 transition-all duration-500"
+                    style={{ width: `${Math.min((totalScheduled / freeLimit) * 100, 100)}%` }}
+                  ></div>
+                </div>
+                <span className="text-xs text-muted-foreground whitespace-nowrap">
+                  {freeLimit - totalScheduled > 0 ? `${freeLimit - totalScheduled} left` : 'Limit reached'}
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">Max {freeLimit} on free plan</p>
+            </div>
+          </div>
+
+          <div className="relative p-6 rounded-xl bg-card border border-border shadow-md overflow-hidden">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-3xl"></div>
+            <div className="relative z-10">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium text-muted-foreground">This Week</span>
+                <TrendingUp className="w-5 h-5 text-emerald-500" />
+              </div>
+              <div className="flex items-baseline gap-2 mb-1">
+                <span className="text-3xl font-bold text-foreground">{thisWeekPosts}</span>
+                <span className="text-sm text-muted-foreground">posts</span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">Next 7 days</p>
+            </div>
+          </div>
+
+          <div className="relative p-6 rounded-xl bg-card border border-border shadow-md overflow-hidden">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-orange-500/10 rounded-full blur-3xl"></div>
+            <div className="relative z-10">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium text-muted-foreground">Publishing Soon</span>
+                <Clock className="w-5 h-5 text-orange-500" />
+              </div>
+              <div className="flex items-baseline gap-2 mb-1">
+                <span className="text-3xl font-bold text-foreground">{publishingSoonPosts}</span>
+                <span className="text-sm text-muted-foreground">posts</span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">Next 24 hours</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="relative p-8 rounded-2xl bg-gradient-to-br from-blue-500/20 via-purple-500/20 to-pink-500/20 border border-blue-500/30 shadow-xl overflow-hidden mb-6">
+          <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-purple-500/10 backdrop-blur-3xl"></div>
+          <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/20 rounded-full blur-3xl"></div>
+          <div className="absolute bottom-0 left-0 w-64 h-64 bg-purple-500/20 rounded-full blur-3xl"></div>
+
+          <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
+            <div className="flex-1">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-purple-500 shadow-lg">
+                  <Zap className="w-6 h-6 text-white" />
+                </div>
+                <h3 className="text-2xl font-bold text-foreground">Stay Consistent With Scheduling</h3>
+              </div>
+              <p className="text-muted-foreground mb-4">
+                Keep your audience engaged by maintaining a regular posting schedule. Plan your content ahead and never miss a post.
+              </p>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Sparkles className="w-4 h-4" />
+                <span>Schedule up to {freeLimit} posts on the free plan</span>
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                setEditingPost(undefined);
+                setShowComposer(true);
+              }}
+              className="flex items-center gap-2 px-8 py-4 bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white rounded-xl font-semibold transition-all shadow-lg hover:shadow-xl hover:scale-105"
+            >
+              <Plus className="w-5 h-5" />
+              Schedule Post
+            </button>
+          </div>
+        </div>
+
+        <div className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-start gap-3">
+          <Info className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
+          <div>
+            <h4 className="font-semibold text-foreground mb-1">Manual Publishing Note</h4>
+            <p className="text-sm text-muted-foreground">
+              Posts are currently scheduled for manual publishing. Auto-posting integration with Instagram, TikTok, and YouTube is coming soon. You'll receive notifications when it's time to publish your scheduled content.
+            </p>
+          </div>
         </div>
       </div>
 
