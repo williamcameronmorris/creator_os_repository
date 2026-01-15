@@ -5,6 +5,7 @@ import TimelineView from '../components/TimelineView';
 import GalleryView from '../components/GalleryView';
 import { DealIntake } from '../components/DealIntake';
 import DealDetailDrawer from '../components/DealDetailDrawer';
+import { GrowSectionCards } from '../components/GrowSectionCards';
 import { LayoutGrid, Calendar, Grid3x3, Plus } from 'lucide-react';
 
 type PipelineView = 'kanban' | 'timeline' | 'gallery';
@@ -106,6 +107,8 @@ export function Pipeline() {
       {pipelineView === 'kanban' && <KanbanBoard onDealClick={handleDealClick} onCreateDeal={handleCreateDeal} />}
       {pipelineView === 'timeline' && <TimelineView onDealClick={handleDealClick} onCreateDeal={handleCreateDeal} />}
       {pipelineView === 'gallery' && <GalleryView onDealClick={handleDealClick} onCreateDeal={handleCreateDeal} />}
+
+      <GrowSectionCards />
 
       <DealDetailDrawer
         isOpen={showDetailDrawer}
