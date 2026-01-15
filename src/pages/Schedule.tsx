@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
-import { Calendar, Clock, Instagram, Youtube, Plus, Sparkles, Edit, Trash2, DollarSign, Lightbulb, Type, Hash, BarChart3, Bot, ArrowRight, Info, Zap, TrendingUp } from 'lucide-react';
+import { Calendar, Clock, Instagram, Youtube, Plus, Sparkles, Edit, Trash2, DollarSign, Lightbulb, Type, Hash, BarChart3, Bot, ArrowRight, Info, Zap, TrendingUp, Cpu } from 'lucide-react';
 import { format } from 'date-fns';
 import { PostComposer } from '../components/PostComposer';
 import { useNavigate } from 'react-router-dom';
+import { getAIQuota, formatResetTime, type AIQuotaInfo } from '../lib/aiQuota';
 
 interface Post {
   id: string;
@@ -25,12 +26,20 @@ export function Schedule() {
   const [showComposer, setShowComposer] = useState(false);
   const [editingPost, setEditingPost] = useState<Post | undefined>();
   const [filter, setFilter] = useState<'all' | 'scheduled' | 'draft'>('all');
+  const [aiQuota, setAiQuota] = useState<AIQuotaInfo | null>(null);
 
   useEffect(() => {
     if (user) {
       loadPosts();
+      loadAIQuota();
     }
   }, [user]);
+
+  const loadAIQuota = async () => {
+    if (!user) return;
+    const quota = await getAIQuota(user.id);
+    setAiQuota(quota);
+  };
 
   const loadPosts = async () => {
     if (!user) return;
@@ -264,6 +273,83 @@ export function Schedule() {
           </button>
         </div>
       </div>
+
+      {aiQuota && (
+        <div className="mb-8">
+          <div className="relative p-6 rounded-2xl bg-gradient-to-br from-violet-500/10 via-purple-500/10 to-fuchsia-500/10 border-2 border-violet-500/20 shadow-lg overflow-hidden">
+            <div className="absolute top-0 right-0 w-48 h-48 bg-violet-500/20 rounded-full blur-3xl"></div>
+            <div className="absolute bottom-0 left-0 w-48 h-48 bg-fuchsia-500/20 rounded-full blur-3xl"></div>
+
+            <div className="relative z-10">
+              <div className="flex items-start justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-500 shadow-lg">
+                    <Cpu className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-foreground mb-1">AI Request Quota</h3>
+                    <p className="text-sm text-muted-foreground">Free tier daily usage</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-2xl font-bold text-foreground mb-1">
+                    {aiQuota.requestsRemaining}
+                    <span className="text-sm font-normal text-muted-foreground ml-1">remaining</span>
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    {formatResetTime(aiQuota.resetAt)}
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Usage today</span>
+                  <span className="font-semibold text-foreground">
+                    {aiQuota.requestsUsed} / {aiQuota.dailyLimit} requests
+                  </span>
+                </div>
+
+                <div className="relative">
+                  <div className="h-3 bg-secondary/50 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full transition-all duration-500 ${
+                        aiQuota.requestsRemaining === 0
+                          ? 'bg-gradient-to-r from-red-500 to-rose-500'
+                          : aiQuota.requestsRemaining <= 3
+                          ? 'bg-gradient-to-r from-orange-500 to-amber-500'
+                          : 'bg-gradient-to-r from-violet-500 to-fuchsia-500'
+                      }`}
+                      style={{ width: `${(aiQuota.requestsUsed / aiQuota.dailyLimit) * 100}%` }}
+                    ></div>
+                  </div>
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <span className="text-xs font-bold text-foreground drop-shadow-lg">
+                      {Math.round((aiQuota.requestsUsed / aiQuota.dailyLimit) * 100)}%
+                    </span>
+                  </div>
+                </div>
+
+                {aiQuota.requestsRemaining === 0 ? (
+                  <div className="flex items-start gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/30">
+                    <Info className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+                    <div className="text-sm text-red-600 dark:text-red-400">
+                      <span className="font-semibold">Daily limit reached.</span> Your quota will reset {formatResetTime(aiQuota.resetAt).toLowerCase()}. Upgrade to Pro for unlimited AI requests.
+                    </div>
+                  </div>
+                ) : aiQuota.requestsRemaining <= 3 ? (
+                  <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30">
+                    <Info className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+                    <div className="text-sm text-amber-600 dark:text-amber-400">
+                      <span className="font-semibold">Running low on AI requests.</span> Consider upgrading to Pro for unlimited access to all AI features.
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="mb-8">
         <h2 className="text-2xl font-bold text-foreground mb-6">Content Scheduling Stats</h2>
