@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { generateInsights, getStoredInsights, saveInsights, type Insight } from '../lib/analyticsInsights';
+import { AnalyticsCTABanner } from './AnalyticsCTABanner';
 import {
   TrendingUp,
   AlertCircle,
@@ -561,6 +562,10 @@ export default function ActionDashboard({ onViewDeal, onNavigate, darkMode }: Ac
           )}
         </div>
       )}
+
+      <div className="mt-12">
+        <AnalyticsCTABanner />
+      </div>
     </div>
   );
 }

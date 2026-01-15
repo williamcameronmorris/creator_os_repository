@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { Calendar, Clock, Instagram, Youtube, Plus, Sparkles, Edit, Trash2, DollarSign, Lightbulb, Type, Hash, BarChart3, Bot, ArrowRight, Info, Zap, TrendingUp, Cpu } from 'lucide-react';
 import { format } from 'date-fns';
 import { PostComposer } from '../components/PostComposer';
+import { AnalyticsCTABanner } from '../components/AnalyticsCTABanner';
 import { useNavigate } from 'react-router-dom';
 import { getAIQuota, formatResetTime, type AIQuotaInfo } from '../lib/aiQuota';
 
@@ -603,6 +604,12 @@ export function Schedule() {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {filteredPosts.length > 0 && (
+        <div className="mt-12">
+          <AnalyticsCTABanner />
         </div>
       )}
 

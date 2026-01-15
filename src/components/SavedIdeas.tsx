@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
+import { AnalyticsCTABanner } from './AnalyticsCTABanner';
 import {
   Bookmark,
   Plus,
@@ -387,6 +388,12 @@ export function SavedIdeas() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {filteredIdeas.length > 0 && (
+        <div className="mt-12">
+          <AnalyticsCTABanner />
         </div>
       )}
 
