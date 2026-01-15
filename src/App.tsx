@@ -16,6 +16,7 @@ import { Revenue } from './pages/Revenue';
 import { QuickQuotePage } from './pages/QuickQuotePage';
 import { TemplatesPage } from './pages/TemplatesPage';
 import { CopyBankPage } from './pages/CopyBankPage';
+import { SavedIdeasPage } from './pages/SavedIdeasPage';
 import { Profile } from './pages/Profile';
 import { SettingsPage } from './pages/SettingsPage';
 import { supabase, type Profile as ProfileType } from './lib/supabase';
@@ -199,6 +200,16 @@ function AppContent() {
           <ProtectedRoute>
             <Layout>
               <CopyBankPage />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/saved-ideas"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <SavedIdeasPage />
             </Layout>
           </ProtectedRoute>
         }

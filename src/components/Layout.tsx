@@ -21,7 +21,8 @@ import {
   ChevronDown,
   ChevronRight,
   X,
-  Sparkles
+  Sparkles,
+  Bookmark
 } from 'lucide-react';
 
 interface LayoutProps {
@@ -71,6 +72,7 @@ export function Layout({ children }: LayoutProps) {
       title: 'THE STUDIO',
       items: [
         { path: '/schedule', label: 'Content Schedule', icon: Calendar },
+        { path: '/saved-ideas', label: 'Saved Ideas', icon: Bookmark },
         { path: '/media', label: 'Media Library', icon: Image },
         { path: '/analytics', label: 'Audience Growth', icon: TrendingUp },
       ],
