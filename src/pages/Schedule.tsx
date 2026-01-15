@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
-import { Calendar, Clock, Instagram, Youtube, Plus, Sparkles, Edit, Trash2, DollarSign } from 'lucide-react';
+import { Calendar, Clock, Instagram, Youtube, Plus, Sparkles, Edit, Trash2, DollarSign, Lightbulb, Type, Hash, BarChart3, Bot, ArrowRight } from 'lucide-react';
 import { format } from 'date-fns';
 import { PostComposer } from '../components/PostComposer';
+import { useNavigate } from 'react-router-dom';
 
 interface Post {
   id: string;
@@ -18,6 +19,7 @@ interface Post {
 
 export function Schedule() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [showComposer, setShowComposer] = useState(false);
@@ -93,10 +95,10 @@ export function Schedule() {
         <div className="flex items-center justify-between mb-4">
           <div>
             <h1 className="text-3xl font-bold text-foreground mb-2">
-              Content Schedule
+              The Studio
             </h1>
             <p className="text-muted-foreground">
-              Manage your scheduled and draft posts
+              AI-powered tools for content creation and scheduling
             </p>
           </div>
           <button
@@ -110,6 +112,142 @@ export function Schedule() {
             New Post
           </button>
         </div>
+      </div>
+
+      <div className="mb-8">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h2 className="text-2xl font-bold text-foreground mb-2">AI Tools</h2>
+            <p className="text-muted-foreground">Supercharge your content with AI-powered tools</p>
+          </div>
+        </div>
+
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <button
+            onClick={() => setShowComposer(true)}
+            className="group relative p-6 rounded-2xl bg-slate-950 dark:bg-slate-950 border border-slate-800 hover:border-blue-500/50 transition-all hover:shadow-xl text-left overflow-hidden"
+          >
+            <div className="relative z-10">
+              <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-blue-500 mb-4 group-hover:scale-110 transition-transform shadow-lg">
+                <Lightbulb className="w-6 h-6 text-white" />
+              </div>
+              <h3 className="text-lg font-bold text-white mb-2">Content Ideas Generator</h3>
+              <p className="text-sm text-slate-400 mb-4">
+                Generate fresh ideas based on your niche and trending topics
+              </p>
+              <div className="flex items-center gap-2 text-sm font-semibold text-blue-400">
+                <Sparkles className="w-4 h-4" />
+                <span>Generate Ideas</span>
+                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+              </div>
+            </div>
+          </button>
+
+          <button
+            onClick={() => setShowComposer(true)}
+            className="group relative p-6 rounded-2xl bg-slate-950 dark:bg-slate-950 border border-slate-800 hover:border-purple-500/50 transition-all hover:shadow-xl text-left overflow-hidden"
+          >
+            <div className="relative z-10">
+              <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-purple-500 mb-4 group-hover:scale-110 transition-transform shadow-lg">
+                <Type className="w-6 h-6 text-white" />
+              </div>
+              <h3 className="text-lg font-bold text-white mb-2">Caption Optimizer</h3>
+              <p className="text-sm text-slate-400 mb-4">
+                AI-powered caption suggestions and tone adjustments
+              </p>
+              <div className="flex items-center gap-2 text-sm font-semibold text-purple-400">
+                <Sparkles className="w-4 h-4" />
+                <span>Optimize Caption</span>
+                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+              </div>
+            </div>
+          </button>
+
+          <button
+            onClick={() => setShowComposer(true)}
+            className="group relative p-6 rounded-2xl bg-slate-950 dark:bg-slate-950 border border-slate-800 hover:border-emerald-500/50 transition-all hover:shadow-xl text-left overflow-hidden"
+          >
+            <div className="relative z-10">
+              <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-emerald-500 mb-4 group-hover:scale-110 transition-transform shadow-lg">
+                <Hash className="w-6 h-6 text-white" />
+              </div>
+              <h3 className="text-lg font-bold text-white mb-2">Hashtag Generator</h3>
+              <p className="text-sm text-slate-400 mb-4">
+                Relevant hashtag recommendations to boost your reach
+              </p>
+              <div className="flex items-center gap-2 text-sm font-semibold text-emerald-400">
+                <Sparkles className="w-4 h-4" />
+                <span>Generate Hashtags</span>
+                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+              </div>
+            </div>
+          </button>
+
+          <button
+            onClick={() => navigate('/analytics')}
+            className="group relative p-6 rounded-2xl bg-slate-950 dark:bg-slate-950 border border-slate-800 hover:border-orange-500/50 transition-all hover:shadow-xl text-left overflow-hidden"
+          >
+            <div className="relative z-10">
+              <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-orange-500 mb-4 group-hover:scale-110 transition-transform shadow-lg">
+                <Clock className="w-6 h-6 text-white" />
+              </div>
+              <h3 className="text-lg font-bold text-white mb-2">Best Time to Post</h3>
+              <p className="text-sm text-slate-400 mb-4">
+                AI predicts optimal posting times based on your audience
+              </p>
+              <div className="flex items-center gap-2 text-sm font-semibold text-orange-400">
+                <Sparkles className="w-4 h-4" />
+                <span>Find Best Time</span>
+                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+              </div>
+            </div>
+          </button>
+
+          <button
+            onClick={() => setShowComposer(true)}
+            className="group relative p-6 rounded-2xl bg-slate-950 dark:bg-slate-950 border border-slate-800 hover:border-rose-500/50 transition-all hover:shadow-xl text-left overflow-hidden"
+          >
+            <div className="relative z-10">
+              <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-rose-500 mb-4 group-hover:scale-110 transition-transform shadow-lg">
+                <BarChart3 className="w-6 h-6 text-white" />
+              </div>
+              <h3 className="text-lg font-bold text-white mb-2">Performance Score</h3>
+              <p className="text-sm text-slate-400 mb-4">
+                Performance prediction for drafts before publishing
+              </p>
+              <div className="flex items-center gap-2 text-sm font-semibold text-rose-400">
+                <Sparkles className="w-4 h-4" />
+                <span>Predict Performance</span>
+                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+              </div>
+            </div>
+          </button>
+
+          <button
+            onClick={() => navigate('/settings')}
+            className="group relative p-6 rounded-2xl bg-slate-950 dark:bg-slate-950 border border-slate-800 hover:border-violet-500/50 transition-all hover:shadow-xl text-left overflow-hidden"
+          >
+            <div className="relative z-10">
+              <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-violet-500 mb-4 group-hover:scale-110 transition-transform shadow-lg">
+                <Bot className="w-6 h-6 text-white" />
+              </div>
+              <h3 className="text-lg font-bold text-white mb-2">AI Community Manager</h3>
+              <p className="text-sm text-slate-400 mb-4">
+                AI bot to engage with comments automatically
+              </p>
+              <div className="flex items-center gap-2 text-sm font-semibold text-violet-400">
+                <Sparkles className="w-4 h-4" />
+                <span>Setup Auto-Reply</span>
+                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+              </div>
+            </div>
+          </button>
+        </div>
+      </div>
+
+      <div className="mb-8">
+        <h2 className="text-2xl font-bold text-foreground mb-4">Content Schedule</h2>
+        <p className="text-muted-foreground mb-6">Manage your scheduled and draft posts</p>
 
         <div className="flex items-center gap-3">
           <button
