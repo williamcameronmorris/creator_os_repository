@@ -33,6 +33,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
         .update({
           ...formData,
           onboarding_completed: true,
+          role: 'creator',
         })
         .eq('id', user.id);
 
@@ -224,7 +225,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                   <DollarSign className="w-6 h-6 text-foreground" />
                 </div>
                 <div>
-                  <h2 className="text-2xl font-bold text-foreground">Choose Your CPM Tier</h2>
+                  <h2 className="text-2xl font-bold text-foreground">Choose Your Tier</h2>
                   <p className="text-muted-foreground text-sm">Start with Conservative and move up as you grow</p>
                 </div>
               </div>

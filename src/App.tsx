@@ -93,15 +93,6 @@ function AppContent() {
     );
   }
 
-  if (profile && !profile.role) {
-    return (
-      <Routes>
-        <Route path="/role-selection" element={<RoleSelection />} />
-        <Route path="*" element={<Navigate to="/role-selection" replace />} />
-      </Routes>
-    );
-  }
-
   return (
     <Routes>
       <Route
