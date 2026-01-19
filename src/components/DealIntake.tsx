@@ -168,16 +168,23 @@ export function DealIntake({ dealId, template, onSave, onBack }: DealIntakeProps
     setSuccess('');
 
     try {
+      const dealData = {
+        ...formData,
+        brand_name: formData.brand,
+        deliverable_type: formData.requested_deliverables,
+        rate: formData.final_amount || formData.quote_standard || 0,
+      };
+
       if (dealId) {
         const { error: updateError } = await supabase
           .from('deals')
-          .update(formData)
+          .update(dealData)
           .eq('id', dealId);
         if (updateError) throw updateError;
       } else {
         const { error: insertError } = await supabase
           .from('deals')
-          .insert({ ...formData, user_id: user.id });
+          .insert({ ...dealData, user_id: user.id });
         if (insertError) throw insertError;
       }
 
