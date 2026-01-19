@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useSubscription } from '../contexts/SubscriptionContext';
 import { supabase } from '../lib/supabase';
-import { Calendar, Clock, Instagram, Youtube, Plus, Sparkles, Edit, Trash2, DollarSign, Lightbulb, Type, Hash, BarChart3, Bot, ArrowRight, Info, Zap, TrendingUp, Cpu, Lock, Crown } from 'lucide-react';
+import { Calendar, Clock, Instagram, Youtube, Plus, Sparkles, Edit, Trash2, DollarSign, Lightbulb, Type, BarChart3, Bot, ArrowRight, Info, Zap, TrendingUp, Cpu, Lock, Crown } from 'lucide-react';
 import { format } from 'date-fns';
 import { PostComposer } from '../components/PostComposer';
 import { AnalyticsCTABanner } from '../components/AnalyticsCTABanner';
@@ -203,26 +203,6 @@ export function Schedule() {
               <div className="flex items-center gap-2 text-sm font-semibold text-purple-400">
                 <Sparkles className="w-4 h-4" />
                 <span>Optimize Caption</span>
-                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-              </div>
-            </div>
-          </button>
-
-          <button
-            onClick={() => setShowComposer(true)}
-            className="group relative p-6 rounded-2xl bg-slate-950 dark:bg-slate-950 border border-slate-800 hover:border-emerald-500/50 transition-all hover:shadow-xl text-left overflow-hidden"
-          >
-            <div className="relative z-10">
-              <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-emerald-500 mb-4 group-hover:scale-110 transition-transform shadow-lg">
-                <Hash className="w-6 h-6 text-white" />
-              </div>
-              <h3 className="text-lg font-bold text-white mb-2">Hashtag Generator</h3>
-              <p className="text-sm text-slate-400 mb-4">
-                Relevant hashtag recommendations to boost your reach
-              </p>
-              <div className="flex items-center gap-2 text-sm font-semibold text-emerald-400">
-                <Sparkles className="w-4 h-4" />
-                <span>Generate Hashtags</span>
                 <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
               </div>
             </div>

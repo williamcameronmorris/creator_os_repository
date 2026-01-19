@@ -76,7 +76,6 @@ export async function syncDealToSchedule(
           status: 'draft',
           deal_id: dealId,
           is_sponsored: true,
-          hashtags: [],
           mentions: [],
         });
       }

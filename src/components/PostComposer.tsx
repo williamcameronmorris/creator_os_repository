@@ -127,7 +127,6 @@ export function PostComposer({ onClose, onSuccess, editPost }: PostComposerProps
         media_urls: allMediaUrls,
         scheduled_date: status === 'scheduled' ? new Date(scheduledDate).toISOString() : null,
         status,
-        hashtags: caption.match(/#\w+/g) || [],
         mentions: caption.match(/@\w+/g) || [],
       };
 
@@ -223,7 +222,7 @@ export function PostComposer({ onClose, onSuccess, editPost }: PostComposerProps
             <textarea
               value={caption}
               onChange={(e) => setCaption(e.target.value)}
-              placeholder="Write your caption here... Include #hashtags and @mentions"
+              placeholder="Write your caption here... Include @mentions"
               rows={6}
               className="w-full px-4 py-3 rounded-xl border border-border bg-background text-foreground placeholder-muted-foreground resize-none focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
             />
