@@ -309,30 +309,30 @@ export default function ActionDashboard({ onViewDeal, onNavigate, darkMode }: Ac
   };
 
   return (
-    <div className="space-y-8">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground mb-2">
+    <div className="space-y-8 overflow-x-hidden">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-2">
             Command Center
           </h1>
-          <p className="text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             Real-time insights and action items across your content and deals
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-shrink-0">
           {!isPremium && (
             <button
               onClick={() => setShowPaywall(true)}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl font-medium bg-gradient-to-r from-orange-500 to-orange-600 text-white hover:shadow-lg transition-all"
+              className="flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl font-medium bg-gradient-to-r from-orange-500 to-orange-600 text-white hover:shadow-lg transition-all text-sm whitespace-nowrap"
             >
               <Crown className="w-4 h-4" />
-              Upgrade
+              <span className="hidden sm:inline">Upgrade</span>
             </button>
           )}
           <button
             onClick={syncAllPlatforms}
             disabled={syncing}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl font-semibold transition-all ${
+            className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl font-semibold transition-all text-sm whitespace-nowrap ${
               isPremium
                 ? 'bg-primary text-primary-foreground hover:bg-primary/90'
                 : 'bg-card border border-border text-muted-foreground hover:bg-accent'
@@ -340,7 +340,8 @@ export default function ActionDashboard({ onViewDeal, onNavigate, darkMode }: Ac
           >
             {!isPremium && <Lock className="w-4 h-4" />}
             <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
-            {syncing ? 'Syncing...' : isPremium ? 'Sync All' : 'Sync (Premium)'}
+            <span className="hidden sm:inline">{syncing ? 'Syncing...' : isPremium ? 'Sync All' : 'Sync (Premium)'}</span>
+            <span className="sm:hidden">{syncing ? 'Sync...' : 'Sync'}</span>
           </button>
         </div>
       </div>
@@ -373,7 +374,7 @@ export default function ActionDashboard({ onViewDeal, onNavigate, darkMode }: Ac
         </p>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
         <button
           onClick={() => onNavigate('/revenue')}
           className="p-4 rounded-xl bg-card border border-border hover:bg-accent transition-all cursor-pointer text-left shadow-md hover:shadow-lg"

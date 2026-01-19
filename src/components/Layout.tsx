@@ -424,14 +424,14 @@ export function Layout({ children }: LayoutProps) {
 
       {renderBottomNavContent()}
 
-      <div className="flex">
+      <div className="flex overflow-x-hidden">
         <aside className="w-64 bg-card border-r border-border min-h-[calc(100vh-4rem)] hidden lg:block">
           <div className="p-4">
             {renderNavigation()}
           </div>
         </aside>
 
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 min-w-0">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 min-w-0 overflow-x-hidden">
           {children}
         </main>
       </div>
