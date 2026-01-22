@@ -1,6 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { X, Lock, Unlock, Calendar, Shield, Target, FileText, AlertTriangle, CheckCircle, Share2, Download, Copy, Link2, Check } from 'lucide-react';
+import { X, Lock, Unlock, Calendar, Shield, Target, FileText, AlertTriangle, CheckCircle, Share2, Download, Copy, Link2, Check, Award, FileCheck, Hammer, BarChart3, DollarSign } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { DealFitCheck } from './DealFitCheck';
+import { DealContract } from './DealContract';
+import { DealProductionChecklist } from './DealProductionChecklist';
+import { DealPerformanceReport } from './DealPerformanceReport';
+import { DealInvoice } from './DealInvoice';
 
 const DealDetailDrawer = ({ isOpen, onClose, deal = {} }) => {
   const [loadingDeal, setLoadingDeal] = useState(false);
@@ -326,8 +331,13 @@ SCOPE LOCKED: ${isScopeLocked ? 'Yes' : 'No'}
           <div className="border-b border-border flex px-4 sm:px-6 space-x-4 sm:space-x-8 bg-card overflow-x-auto">
             {[
               { id: 'brief', label: 'Brief', icon: Target },
+              { id: 'fitcheck', label: 'Fit Check', icon: Award },
+              { id: 'contract', label: 'Contract', icon: FileCheck },
               { id: 'scope', label: 'Scope', icon: Shield },
-              { id: 'timeline', label: 'Timeline', icon: Calendar }
+              { id: 'timeline', label: 'Timeline', icon: Calendar },
+              { id: 'production', label: 'Production', icon: Hammer },
+              { id: 'report', label: 'Report', icon: BarChart3 },
+              { id: 'invoice', label: 'Invoice', icon: DollarSign }
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -532,6 +542,36 @@ SCOPE LOCKED: ${isScopeLocked ? 'Yes' : 'No'}
                     ))}
                   </div>
                 </div>
+              </div>
+            )}
+
+            {activeTab === 'fitcheck' && dealData?.id && (
+              <div className="bg-card p-4 sm:p-6 rounded-xl border border-border shadow-sm">
+                <DealFitCheck dealId={dealData.id} />
+              </div>
+            )}
+
+            {activeTab === 'contract' && dealData?.id && (
+              <div className="bg-card p-4 sm:p-6 rounded-xl border border-border shadow-sm">
+                <DealContract dealId={dealData.id} />
+              </div>
+            )}
+
+            {activeTab === 'production' && dealData?.id && (
+              <div className="bg-card p-4 sm:p-6 rounded-xl border border-border shadow-sm">
+                <DealProductionChecklist dealId={dealData.id} />
+              </div>
+            )}
+
+            {activeTab === 'report' && dealData?.id && (
+              <div className="bg-card p-4 sm:p-6 rounded-xl border border-border shadow-sm">
+                <DealPerformanceReport dealId={dealData.id} />
+              </div>
+            )}
+
+            {activeTab === 'invoice' && dealData?.id && (
+              <div className="bg-card p-4 sm:p-6 rounded-xl border border-border shadow-sm">
+                <DealInvoice dealId={dealData.id} />
               </div>
             )}
           </div>

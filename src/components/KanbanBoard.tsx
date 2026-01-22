@@ -20,6 +20,8 @@ interface Stage {
   name: string;
   position: number;
   color: string;
+  stage_category?: string;
+  is_milestone?: boolean;
 }
 
 interface KanbanBoardProps {
@@ -55,12 +57,21 @@ export default function KanbanBoard({ onDealClick, onCreateDeal }: KanbanBoardPr
 
       if (stagesResult.data && stagesResult.data.length === 0) {
         const defaultStages = [
-          { user_id: user.id, name: 'Lead', position: 0, color: '#9CA3AF', is_default: true },
-          { user_id: user.id, name: 'Contacted', position: 1, color: '#60A5FA', is_default: true },
-          { user_id: user.id, name: 'Negotiating', position: 2, color: '#FBBF24', is_default: true },
-          { user_id: user.id, name: 'Proposal Sent', position: 3, color: '#A78BFA', is_default: true },
-          { user_id: user.id, name: 'Won', position: 4, color: '#34D399', is_default: true },
-          { user_id: user.id, name: 'Lost', position: 5, color: '#F87171', is_default: true },
+          { user_id: user.id, name: 'Lead', position: 0, color: '#9CA3AF', stage_category: 'opportunity', is_default: true, is_milestone: false },
+          { user_id: user.id, name: 'Fit Check', position: 1, color: '#8B5CF6', stage_category: 'opportunity', is_default: true, is_milestone: true },
+          { user_id: user.id, name: 'Contacted', position: 2, color: '#60A5FA', stage_category: 'opportunity', is_default: true, is_milestone: false },
+          { user_id: user.id, name: 'Info Exchanged', position: 3, color: '#3B82F6', stage_category: 'opportunity', is_default: true, is_milestone: false },
+          { user_id: user.id, name: 'Brief Received', position: 4, color: '#10B981', stage_category: 'opportunity', is_default: true, is_milestone: false },
+          { user_id: user.id, name: 'Quote Sent', position: 5, color: '#FBBF24', stage_category: 'opportunity', is_default: true, is_milestone: false },
+          { user_id: user.id, name: 'Negotiating', position: 6, color: '#F59E0B', stage_category: 'opportunity', is_default: true, is_milestone: false },
+          { user_id: user.id, name: 'Contract Signed', position: 7, color: '#34D399', stage_category: 'opportunity', is_default: true, is_milestone: true },
+          { user_id: user.id, name: 'In Production', position: 8, color: '#A78BFA', stage_category: 'delivery', is_default: true, is_milestone: false },
+          { user_id: user.id, name: 'Approved', position: 9, color: '#10B981', stage_category: 'delivery', is_default: true, is_milestone: true },
+          { user_id: user.id, name: 'Posted / Live', position: 10, color: '#059669', stage_category: 'delivery', is_default: true, is_milestone: true },
+          { user_id: user.id, name: 'Reporting Sent', position: 11, color: '#06B6D4', stage_category: 'delivery', is_default: true, is_milestone: false },
+          { user_id: user.id, name: 'Invoiced', position: 12, color: '#F59E0B', stage_category: 'payment_renewal', is_default: true, is_milestone: false },
+          { user_id: user.id, name: 'Paid', position: 13, color: '#22C55E', stage_category: 'payment_renewal', is_default: true, is_milestone: true },
+          { user_id: user.id, name: 'Closed', position: 14, color: '#6B7280', stage_category: 'payment_renewal', is_default: true, is_milestone: true },
         ];
 
         const { data: newStages } = await supabase
@@ -273,17 +284,34 @@ export default function KanbanBoard({ onDealClick, onCreateDeal }: KanbanBoardPr
 
       <div className="flex-1 overflow-x-auto">
         <div className="flex gap-4 pb-4" style={{ minWidth: 'max-content' }}>
-          {stages.map((stage) => {
+          {stages.map((stage, index) => {
             const stageDeals = getDealsForStage(stage.id);
             const totalValue = stageDeals.reduce((sum, deal) => sum + deal.rate, 0);
+            const prevStage = index > 0 ? stages[index - 1] : null;
+            const showCategoryHeader = !prevStage || (stage as any).stage_category !== (prevStage as any).stage_category;
+            const categoryName =
+              (stage as any).stage_category === 'opportunity' ? 'Opportunity' :
+              (stage as any).stage_category === 'delivery' ? 'Delivery' :
+              (stage as any).stage_category === 'payment_renewal' ? 'Payment & Renewal' : '';
 
             return (
-              <div
-                key={stage.id}
-                className="flex-shrink-0 w-80 flex flex-col rounded-xl bg-card border border-border"
-                onDragOver={handleDragOver}
-                onDrop={() => handleDrop(stage.id)}
-              >
+              <>
+                {showCategoryHeader && (
+                  <div className="flex-shrink-0 w-2 flex items-start pt-5">
+                    <div className="bg-muted/50 px-3 py-2 rounded-lg">
+                      <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider transform -rotate-90 whitespace-nowrap origin-center">
+                        {categoryName}
+                      </p>
+                    </div>
+                  </div>
+                )}
+                <div
+                  key={stage.id}
+                  className="flex-shrink-0 w-80 flex flex-col rounded-xl bg-card border border-border"
+                  onDragOver={handleDragOver}
+                  onDrop={() => handleDrop(stage.id)}
+                >
+
                 <div className="p-5 border-b border-border">
                   <div className="flex items-center justify-between mb-2">
                     <h3 className="font-bold text-foreground flex items-center gap-3">
@@ -402,6 +430,7 @@ export default function KanbanBoard({ onDealClick, onCreateDeal }: KanbanBoardPr
                   )}
                 </div>
               </div>
+              </>
             );
           })}
         </div>
