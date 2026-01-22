@@ -297,9 +297,9 @@ export default function KanbanBoard({ onDealClick, onCreateDeal }: KanbanBoardPr
             return (
               <>
                 {showCategoryHeader && (
-                  <div className="flex-shrink-0 w-2 flex items-start pt-5">
-                    <div className="bg-muted/50 px-3 py-2 rounded-lg">
-                      <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider transform -rotate-90 whitespace-nowrap origin-center">
+                  <div className="flex-shrink-0 w-12 flex items-center justify-center">
+                    <div className="bg-muted/50 px-2 py-3 rounded-lg">
+                      <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide whitespace-nowrap" style={{ writingMode: 'vertical-rl', textOrientation: 'mixed' }}>
                         {categoryName}
                       </p>
                     </div>
