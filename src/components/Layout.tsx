@@ -391,7 +391,7 @@ export function Layout({ children }: LayoutProps) {
               </div>
               <div>
                 <h1 className="text-xl font-bold tracking-tight text-foreground">
-                  Creator OS
+                  Creator Command
                 </h1>
                 <p className="text-xs text-muted-foreground hidden sm:block">
                   Studio + Office

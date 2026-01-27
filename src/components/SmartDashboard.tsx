@@ -9,6 +9,8 @@ import {
   Calendar,
   Activity,
   ArrowRight,
+  Eye,
+  Heart,
 } from 'lucide-react';
 
 interface Deal {
@@ -48,9 +50,11 @@ export default function SmartDashboard({ onViewDeal, onViewPipeline }: SmartDash
   const [deals, setDeals] = useState<Deal[]>([]);
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [stats, setStats] = useState({
+    totalViews: 0,
+    totalEngagement: 0,
+    scheduledPosts: 0,
     totalPipelineValue: 0,
-    dealsThisMonth: 0,
-    averageDealSize: 0,
+    activeDeals: 0,
     dealsNeedingAttention: 0,
   });
   const [loading, setLoading] = useState(true);
@@ -65,7 +69,7 @@ export default function SmartDashboard({ onViewDeal, onViewPipeline }: SmartDash
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const [dealsResult, activitiesResult] = await Promise.all([
+      const [dealsResult, activitiesResult, postsResult, analyticsResult] = await Promise.all([
         supabase
           .from('deals')
           .select(`
@@ -88,11 +92,19 @@ export default function SmartDashboard({ onViewDeal, onViewPipeline }: SmartDash
           .eq('user_id', user.id)
           .order('created_at', { ascending: false })
           .limit(10),
+        supabase
+          .from('content_posts')
+          .select('id, status')
+          .eq('user_id', user.id),
+        supabase
+          .from('post_analytics')
+          .select('views, likes, comments, shares')
+          .eq('user_id', user.id),
       ]);
 
       if (dealsResult.data) {
         setDeals(dealsResult.data);
-        calculateStats(dealsResult.data);
+        calculateStats(dealsResult.data, postsResult.data, analyticsResult.data);
       }
 
       if (activitiesResult.data) {
@@ -115,27 +127,28 @@ export default function SmartDashboard({ onViewDeal, onViewPipeline }: SmartDash
     }
   };
 
-  const calculateStats = (dealsData: Deal[]) => {
-    const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-
+  const calculateStats = (dealsData: Deal[], postsData: any[] = [], analyticsData: any[] = []) => {
     const activeDeals = dealsData.filter((d) => {
       const stageName = d.deal_stages?.name?.toLowerCase() || d.stage?.toLowerCase() || '';
-      return stageName !== 'won' && stageName !== 'lost' && stageName !== 'closed';
+      return stageName !== 'won' && stageName !== 'lost' && stageName !== 'closed' && stageName !== 'paid';
     });
 
     const totalValue = activeDeals.reduce((sum, deal) => sum + deal.final_amount, 0);
-    const dealsThisMonth = activeDeals.filter(
-      (d) => new Date(d.created_at) >= startOfMonth
-    ).length;
-    const avgDealSize = activeDeals.length > 0 ? totalValue / activeDeals.length : 0;
-
     const needingAttention = getDealsNeedingAttention(dealsData).length;
 
+    const totalViews = analyticsData.reduce((sum, analytics) => sum + (analytics.views || 0), 0);
+    const totalEngagement = analyticsData.reduce(
+      (sum, analytics) => sum + (analytics.likes || 0) + (analytics.comments || 0) + (analytics.shares || 0),
+      0
+    );
+    const scheduledPosts = postsData.filter((post) => post.status === 'scheduled').length;
+
     setStats({
+      totalViews,
+      totalEngagement,
+      scheduledPosts,
       totalPipelineValue: totalValue,
-      dealsThisMonth,
-      averageDealSize: avgDealSize,
+      activeDeals: activeDeals.length,
       dealsNeedingAttention: needingAttention,
     });
   };
@@ -276,41 +289,59 @@ export default function SmartDashboard({ onViewDeal, onViewPipeline }: SmartDash
 
   return (
     <div className="space-y-8">
-      <div className="grid md:grid-cols-4 gap-6">
+      <div className="grid md:grid-cols-3 lg:grid-cols-6 gap-6">
         <div className="card-soft card-pastel-sky p-8 animate-scale-in">
           <div className="icon-container-sky w-12 h-12 rounded-2xl flex items-center justify-center mb-4">
-            <DollarSign className="w-6 h-6 text-sky-700" />
+            <Eye className="w-6 h-6 text-sky-700" />
+          </div>
+          <div className="text-4xl font-bold mb-2 text-slate-900">
+            {stats.totalViews.toLocaleString()}
+          </div>
+          <div className="text-sky-700 text-sm font-medium">Total Views</div>
+        </div>
+
+        <div className="card-soft card-pastel-rose p-8 animate-scale-in" style={{ animationDelay: '0.05s' }}>
+          <div className="icon-container-rose w-12 h-12 rounded-2xl flex items-center justify-center mb-4">
+            <Heart className="w-6 h-6 text-rose-700" />
+          </div>
+          <div className="text-4xl font-bold mb-2 text-slate-900">
+            {stats.totalEngagement.toLocaleString()}
+          </div>
+          <div className="text-rose-700 text-sm font-medium">Engagement</div>
+        </div>
+
+        <div className="card-soft card-pastel-lavender p-8 animate-scale-in" style={{ animationDelay: '0.1s' }}>
+          <div className="icon-container-lavender w-12 h-12 rounded-2xl flex items-center justify-center mb-4">
+            <Calendar className="w-6 h-6 text-purple-700" />
+          </div>
+          <div className="text-4xl font-bold mb-2 text-slate-900">{stats.scheduledPosts}</div>
+          <div className="text-purple-700 text-sm font-medium">Scheduled</div>
+        </div>
+
+        <div className="card-soft card-pastel-emerald p-8 animate-scale-in" style={{ animationDelay: '0.15s' }}>
+          <div className="icon-container-emerald w-12 h-12 rounded-2xl flex items-center justify-center mb-4">
+            <DollarSign className="w-6 h-6 text-emerald-700" />
           </div>
           <div className="text-4xl font-bold mb-2 text-slate-900">
             {formatCurrency(stats.totalPipelineValue)}
           </div>
-          <div className="text-sky-700 text-sm font-medium">Total Pipeline Value</div>
+          <div className="text-emerald-700 text-sm font-medium">Pipeline Value</div>
         </div>
 
-        <div className="card-soft card-pastel-emerald p-8 animate-scale-in" style={{ animationDelay: '0.1s' }}>
-          <div className="icon-container-emerald w-12 h-12 rounded-2xl flex items-center justify-center mb-4">
-            <CheckCircle className="w-6 h-6 text-emerald-700" />
+        <div className="card-soft card-pastel-cyan p-8 animate-scale-in" style={{ animationDelay: '0.2s' }}>
+          <div className="icon-container-cyan w-12 h-12 rounded-2xl flex items-center justify-center mb-4">
+            <CheckCircle className="w-6 h-6 text-cyan-700" />
           </div>
-          <div className="text-4xl font-bold mb-2 text-slate-900">{stats.dealsThisMonth}</div>
-          <div className="text-emerald-700 text-sm font-medium">Deals This Month</div>
+          <div className="text-4xl font-bold mb-2 text-slate-900">{stats.activeDeals}</div>
+          <div className="text-cyan-700 text-sm font-medium">Active Deals</div>
         </div>
 
-        <div className="card-soft card-pastel-lavender p-8 animate-scale-in" style={{ animationDelay: '0.2s' }}>
-          <div className="icon-container-lavender w-12 h-12 rounded-2xl flex items-center justify-center mb-4">
-            <TrendingUp className="w-6 h-6 text-purple-700" />
-          </div>
-          <div className="text-4xl font-bold mb-2 text-slate-900">
-            {formatCurrency(stats.averageDealSize)}
-          </div>
-          <div className="text-purple-700 text-sm font-medium">Average Deal Size</div>
-        </div>
-
-        <div className="card-soft card-pastel-amber p-8 animate-scale-in" style={{ animationDelay: '0.3s' }}>
+        <div className="card-soft card-pastel-amber p-8 animate-scale-in" style={{ animationDelay: '0.25s' }}>
           <div className="icon-container-amber w-12 h-12 rounded-2xl flex items-center justify-center mb-4">
             <AlertCircle className="w-6 h-6 text-amber-700" />
           </div>
           <div className="text-4xl font-bold mb-2 text-slate-900">{stats.dealsNeedingAttention}</div>
-          <div className="text-amber-700 text-sm font-medium">Need Attention</div>
+          <div className="text-amber-700 text-sm font-medium">Action Items</div>
         </div>
       </div>
 

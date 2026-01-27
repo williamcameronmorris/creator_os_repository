@@ -96,7 +96,7 @@ export function Auth() {
           <div className="inline-flex items-center justify-center w-16 h-16 bg-primary rounded-2xl mb-4 shadow-lg">
             <Briefcase className="w-8 h-8 text-primary-foreground" />
           </div>
-          <h1 className="text-4xl font-bold text-foreground mb-2 tracking-tight">Creator OS</h1>
+          <h1 className="text-4xl font-bold text-foreground mb-2 tracking-tight">Creator Command</h1>
           <p className="text-muted-foreground text-lg">Your content studio and business office, unified</p>
         </div>
 
