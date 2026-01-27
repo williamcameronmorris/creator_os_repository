@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { DollarSign, Calendar, MessageSquare, MoreVertical, X, Search, Filter, LayoutGrid, List } from 'lucide-react';
+import { DollarSign, Calendar, MessageSquare, MoreVertical, X, Search, Filter, LayoutGrid, List, ArrowRight, Star } from 'lucide-react';
 
 interface Deal {
   id: string;
@@ -12,6 +12,17 @@ interface Deal {
   priority: string;
   expected_close_date: string | null;
   last_activity_at: string;
+  created_at: string;
+}
+
+interface BrandProspect {
+  id: string;
+  brand_name: string;
+  industry?: string;
+  status: string;
+  fit_score?: number;
+  tags?: string[];
+  notes?: string;
   created_at: string;
 }
 
@@ -32,6 +43,7 @@ interface KanbanBoardProps {
 export default function KanbanBoard({ onDealClick, onCreateDeal }: KanbanBoardProps) {
   const [stages, setStages] = useState<Stage[]>([]);
   const [deals, setDeals] = useState<Deal[]>([]);
+  const [prospects, setProspects] = useState<BrandProspect[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [draggedDeal, setDraggedDeal] = useState<string | null>(null);
@@ -57,21 +69,22 @@ export default function KanbanBoard({ onDealClick, onCreateDeal }: KanbanBoardPr
 
       if (stagesResult.data && stagesResult.data.length === 0) {
         const defaultStages = [
-          { user_id: user.id, name: 'Lead', position: 0, color: '#9CA3AF', stage_category: 'opportunity', is_default: true, is_milestone: false },
-          { user_id: user.id, name: 'Fit Check', position: 1, color: '#8B5CF6', stage_category: 'opportunity', is_default: true, is_milestone: true },
-          { user_id: user.id, name: 'Contacted', position: 2, color: '#60A5FA', stage_category: 'opportunity', is_default: true, is_milestone: false },
-          { user_id: user.id, name: 'Info Exchanged', position: 3, color: '#3B82F6', stage_category: 'opportunity', is_default: true, is_milestone: false },
-          { user_id: user.id, name: 'Brief Received', position: 4, color: '#10B981', stage_category: 'opportunity', is_default: true, is_milestone: false },
-          { user_id: user.id, name: 'Quote Sent', position: 5, color: '#FBBF24', stage_category: 'opportunity', is_default: true, is_milestone: false },
-          { user_id: user.id, name: 'Negotiating', position: 6, color: '#F59E0B', stage_category: 'opportunity', is_default: true, is_milestone: false },
-          { user_id: user.id, name: 'Contract Signed', position: 7, color: '#34D399', stage_category: 'opportunity', is_default: true, is_milestone: true },
-          { user_id: user.id, name: 'In Production', position: 8, color: '#A78BFA', stage_category: 'delivery', is_default: true, is_milestone: false },
-          { user_id: user.id, name: 'Approved', position: 9, color: '#10B981', stage_category: 'delivery', is_default: true, is_milestone: true },
-          { user_id: user.id, name: 'Posted / Live', position: 10, color: '#059669', stage_category: 'delivery', is_default: true, is_milestone: true },
-          { user_id: user.id, name: 'Reporting Sent', position: 11, color: '#06B6D4', stage_category: 'delivery', is_default: true, is_milestone: false },
-          { user_id: user.id, name: 'Invoiced', position: 12, color: '#F59E0B', stage_category: 'payment_renewal', is_default: true, is_milestone: false },
-          { user_id: user.id, name: 'Paid', position: 13, color: '#22C55E', stage_category: 'payment_renewal', is_default: true, is_milestone: true },
-          { user_id: user.id, name: 'Closed', position: 14, color: '#6B7280', stage_category: 'payment_renewal', is_default: true, is_milestone: true },
+          { user_id: user.id, name: 'Prospecting', position: 0, color: '#F59E0B', stage_category: 'prospecting', is_default: true, is_milestone: false },
+          { user_id: user.id, name: 'Lead', position: 1, color: '#9CA3AF', stage_category: 'opportunity', is_default: true, is_milestone: false },
+          { user_id: user.id, name: 'Fit Check', position: 2, color: '#8B5CF6', stage_category: 'opportunity', is_default: true, is_milestone: true },
+          { user_id: user.id, name: 'Contacted', position: 3, color: '#60A5FA', stage_category: 'opportunity', is_default: true, is_milestone: false },
+          { user_id: user.id, name: 'Info Exchanged', position: 4, color: '#3B82F6', stage_category: 'opportunity', is_default: true, is_milestone: false },
+          { user_id: user.id, name: 'Brief Received', position: 5, color: '#10B981', stage_category: 'opportunity', is_default: true, is_milestone: false },
+          { user_id: user.id, name: 'Quote Sent', position: 6, color: '#FBBF24', stage_category: 'opportunity', is_default: true, is_milestone: false },
+          { user_id: user.id, name: 'Negotiating', position: 7, color: '#F59E0B', stage_category: 'opportunity', is_default: true, is_milestone: false },
+          { user_id: user.id, name: 'Contract Signed', position: 8, color: '#34D399', stage_category: 'opportunity', is_default: true, is_milestone: true },
+          { user_id: user.id, name: 'In Production', position: 9, color: '#A78BFA', stage_category: 'delivery', is_default: true, is_milestone: false },
+          { user_id: user.id, name: 'Approved', position: 10, color: '#10B981', stage_category: 'delivery', is_default: true, is_milestone: true },
+          { user_id: user.id, name: 'Posted / Live', position: 11, color: '#059669', stage_category: 'delivery', is_default: true, is_milestone: true },
+          { user_id: user.id, name: 'Reporting Sent', position: 12, color: '#06B6D4', stage_category: 'delivery', is_default: true, is_milestone: false },
+          { user_id: user.id, name: 'Invoiced', position: 13, color: '#F59E0B', stage_category: 'payment_renewal', is_default: true, is_milestone: false },
+          { user_id: user.id, name: 'Paid', position: 14, color: '#22C55E', stage_category: 'payment_renewal', is_default: true, is_milestone: true },
+          { user_id: user.id, name: 'Closed', position: 15, color: '#6B7280', stage_category: 'payment_renewal', is_default: true, is_milestone: true },
         ];
 
         const { data: newStages } = await supabase
@@ -91,6 +104,15 @@ export default function KanbanBoard({ onDealClick, onCreateDeal }: KanbanBoardPr
         .order('last_activity_at', { ascending: false });
 
       if (dealsResult.data) setDeals(dealsResult.data);
+
+      const prospectsResult = await supabase
+        .from('brand_prospects')
+        .select('*')
+        .eq('user_id', user.id)
+        .in('status', ['dream_brand', 'ready_to_pitch', 'researching'])
+        .order('created_at', { ascending: false });
+
+      if (prospectsResult.data) setProspects(prospectsResult.data);
     } catch (error) {
       console.error('Error loading kanban data:', error);
       setError('Failed to load pipeline data. Please try refreshing the page.');
@@ -138,6 +160,21 @@ export default function KanbanBoard({ onDealClick, onCreateDeal }: KanbanBoardPr
     } finally {
       setDraggedDeal(null);
     }
+  };
+
+  const convertProspectToDeal = (prospectId: string) => {
+    window.location.href = `/pipeline?convert=${prospectId}`;
+  };
+
+  const getProspectsForStage = (stageName: string) => {
+    if (stageName !== 'Prospecting') return [];
+
+    return prospects.filter(prospect => {
+      const matchesSearch = searchQuery === '' ||
+        prospect.brand_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        prospect.industry?.toLowerCase().includes(searchQuery.toLowerCase());
+      return matchesSearch;
+    });
   };
 
   const getDealsForStage = (stageId: string) => {
@@ -286,10 +323,13 @@ export default function KanbanBoard({ onDealClick, onCreateDeal }: KanbanBoardPr
         <div className="flex gap-4 pb-4" style={{ minWidth: 'max-content' }}>
           {stages.map((stage, index) => {
             const stageDeals = getDealsForStage(stage.id);
+            const stageProspects = getProspectsForStage(stage.name);
+            const itemCount = stage.name === 'Prospecting' ? stageProspects.length + stageDeals.length : stageDeals.length;
             const totalValue = stageDeals.reduce((sum, deal) => sum + deal.rate, 0);
             const prevStage = index > 0 ? stages[index - 1] : null;
             const showCategoryHeader = !prevStage || (stage as any).stage_category !== (prevStage as any).stage_category;
             const categoryName =
+              (stage as any).stage_category === 'prospecting' ? 'Prospecting' :
               (stage as any).stage_category === 'opportunity' ? 'Opportunity' :
               (stage as any).stage_category === 'delivery' ? 'Delivery' :
               (stage as any).stage_category === 'payment_renewal' ? 'Payment & Renewal' : '';
@@ -322,7 +362,7 @@ export default function KanbanBoard({ onDealClick, onCreateDeal }: KanbanBoardPr
                       {stage.name}
                     </h3>
                     <span className="bg-muted text-foreground text-sm font-bold px-3 py-1 rounded-full">
-                      {stageDeals.length}
+                      {itemCount}
                     </span>
                   </div>
                   {totalValue > 0 && (
@@ -333,6 +373,52 @@ export default function KanbanBoard({ onDealClick, onCreateDeal }: KanbanBoardPr
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-muted/30">
+                  {stage.name === 'Prospecting' && getProspectsForStage(stage.name).map((prospect) => (
+                    <div
+                      key={`prospect-${prospect.id}`}
+                      className="bg-card border border-amber-200 rounded-2xl p-5 hover:border-amber-400 transition-all shadow-sm"
+                    >
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex-1">
+                          <h4 className="font-bold text-foreground mb-1">
+                            {prospect.brand_name}
+                          </h4>
+                          {prospect.industry && (
+                            <p className="text-sm text-muted-foreground">{prospect.industry}</p>
+                          )}
+                        </div>
+                        {prospect.fit_score && (
+                          <div className="bg-emerald-100 text-emerald-700 text-xs px-2 py-1 rounded-full font-semibold">
+                            {prospect.fit_score}% fit
+                          </div>
+                        )}
+                      </div>
+
+                      {prospect.tags && prospect.tags.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mb-3">
+                          {prospect.tags.slice(0, 2).map((tag, idx) => (
+                            <span key={idx} className="bg-muted text-xs px-2 py-1 rounded">
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      {prospect.notes && (
+                        <p className="text-sm text-muted-foreground mb-3 line-clamp-2">
+                          {prospect.notes}
+                        </p>
+                      )}
+
+                      <button
+                        onClick={() => convertProspectToDeal(prospect.id)}
+                        className="w-full bg-primary text-primary-foreground px-4 py-2 rounded-lg hover:bg-primary/90 transition-colors flex items-center justify-center gap-2 text-sm font-semibold"
+                      >
+                        <ArrowRight className="w-4 h-4" />
+                        Convert to Deal
+                      </button>
+                    </div>
+                  ))}
                   {stageDeals.map((deal) => {
                     const progress = getProgressPercentage(deal.stage_id);
 
@@ -423,9 +509,9 @@ export default function KanbanBoard({ onDealClick, onCreateDeal }: KanbanBoardPr
                     );
                   })}
 
-                  {stageDeals.length === 0 && (
+                  {stageDeals.length === 0 && (stage.name !== 'Prospecting' || getProspectsForStage(stage.name).length === 0) && (
                     <div className="text-center py-12 text-muted-foreground text-sm font-medium">
-                      No deals in this stage
+                      {stage.name === 'Prospecting' ? 'No brand prospects yet' : 'No deals in this stage'}
                     </div>
                   )}
                 </div>

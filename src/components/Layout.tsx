@@ -22,7 +22,8 @@ import {
   ChevronRight,
   X,
   Sparkles,
-  Bookmark
+  Bookmark,
+  Building2
 } from 'lucide-react';
 
 interface LayoutProps {
@@ -81,6 +82,7 @@ export function Layout({ children }: LayoutProps) {
       title: 'THE OFFICE',
       items: [
         { path: '/pipeline', label: 'Deal Pipeline', icon: LayoutGrid },
+        { path: '/brands', label: 'Brand Library', icon: Building2 },
         { path: '/revenue', label: 'Finances', icon: DollarSign },
         { path: '/quick-quote', label: 'Quick Quote', icon: Calculator },
         { path: '/templates', label: 'Templates', icon: FileText },

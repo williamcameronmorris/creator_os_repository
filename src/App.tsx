@@ -17,6 +17,7 @@ import { QuickQuotePage } from './pages/QuickQuotePage';
 import { TemplatesPage } from './pages/TemplatesPage';
 import { CopyBankPage } from './pages/CopyBankPage';
 import { SavedIdeasPage } from './pages/SavedIdeasPage';
+import BrandLibrary from './pages/BrandLibrary';
 import { Profile } from './pages/Profile';
 import { SettingsPage } from './pages/SettingsPage';
 import { supabase, type Profile as ProfileType } from './lib/supabase';
@@ -201,6 +202,16 @@ function AppContent() {
           <ProtectedRoute>
             <Layout>
               <SavedIdeasPage />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/brands"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <BrandLibrary />
             </Layout>
           </ProtectedRoute>
         }
