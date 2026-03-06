@@ -39,7 +39,7 @@ const platformIcons: Record<Platform, typeof Instagram> = {
 const platformColors: Record<Platform, string> = {
   instagram: 'text-pink-500',
   youtube: 'text-red-500',
-  tiktok: 'text-gray-900 dark:text-white',
+  tiktok: 'text-gray-900',
 };
 
 const typeLabels: Record<ItemType, string> = {
@@ -118,27 +118,27 @@ export function ComingUpCard({
             return (
               <div
                 key={item.id}
-                className="flex items-center gap-3 p-3 bg-gray-100 dark:bg-gray-800 rounded-xl"
+                className="flex items-center gap-3 p-3 bg-gray-100 rounded-xl"
               >
                 <div className="flex items-center gap-2 min-w-0 flex-1">
-                  <span className="text-sm font-semibold text-gray-900 dark:text-white whitespace-nowrap">
+                  <span className="text-sm font-semibold text-gray-900 whitespace-nowrap">
                     {formatTime(item.scheduledTime)}
                   </span>
                   <PlatformIcon className={`w-4 h-4 ${platformColors[item.platform]} flex-shrink-0`} />
-                  <span className="text-sm text-gray-700 dark:text-gray-300 truncate">
+                  <span className="text-sm text-gray-700 truncate">
                     {formatType(item.platform, item.type)}
                   </span>
                 </div>
                 <div className="flex items-center gap-1">
                   <button
                     onClick={() => onEditPost(item.id)}
-                    className="px-2.5 py-1 rounded-lg text-xs font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                    className="px-2.5 py-1 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-200 transition-colors"
                   >
                     Edit
                   </button>
                   <button
                     onClick={() => onReschedule(item.id)}
-                    className="px-2.5 py-1 rounded-lg text-xs font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                    className="px-2.5 py-1 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-200 transition-colors"
                   >
                     Reschedule
                   </button>
@@ -165,10 +165,10 @@ export function ComingUpCard({
       <div className="space-y-4">
         {data.items.length === 0 ? (
           <div className="text-center py-8">
-            <div className="w-12 h-12 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mx-auto mb-3">
-              <Calendar className="w-6 h-6 text-gray-500 dark:text-gray-400" />
+            <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-3">
+              <Calendar className="w-6 h-6 text-gray-500" />
             </div>
-            <p className="text-gray-500 dark:text-gray-400 text-sm">No content scheduled</p>
+            <p className="text-gray-500 text-sm">No content scheduled</p>
           </div>
         ) : (
           <>
@@ -180,7 +180,7 @@ export function ComingUpCard({
 
         <button
           onClick={onViewCalendar}
-          className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-gray-900 dark:bg-white text-white dark:text-gray-900 font-medium hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors"
+          className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-violet-600 text-white font-medium hover:bg-violet-700 transition-colors"
         >
           View Calendar
           <ArrowRight className="w-4 h-4" />

@@ -341,7 +341,7 @@ export function SavedIdeas() {
                   {idea.tags.slice(0, 3).map((tag, index) => (
                     <span
                       key={index}
-                      className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-violet-500/10 text-violet-600 dark:text-violet-400 rounded-md"
+                      className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-violet-500/10 text-violet-600 rounded-md"
                     >
                       <Tag className="w-3 h-3" />
                       {tag}

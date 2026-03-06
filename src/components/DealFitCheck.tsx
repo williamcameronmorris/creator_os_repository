@@ -143,9 +143,9 @@ export function DealFitCheck({ dealId, onScoreChange }: DealFitCheckProps) {
   };
 
   const getScoreColor = (score: number) => {
-    if (score >= 80) return 'text-green-600 dark:text-green-400';
-    if (score >= 60) return 'text-yellow-600 dark:text-yellow-400';
-    return 'text-red-600 dark:text-red-400';
+    if (score >= 80) return 'text-green-600';
+    if (score >= 60) return 'text-yellow-600';
+    return 'text-red-600';
   };
 
   const getScoreLabel = (score: number) => {
@@ -196,11 +196,11 @@ export function DealFitCheck({ dealId, onScoreChange }: DealFitCheckProps) {
       <div className="p-4 rounded-xl bg-muted/30 border border-border">
         <div className="flex items-start gap-3">
           {score >= 80 ? (
-            <CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
+            <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
           ) : score >= 60 ? (
-            <AlertTriangle className="w-5 h-5 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5" />
+            <AlertTriangle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
           ) : (
-            <XCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+            <XCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
           )}
           <div>
             <p className="text-sm font-semibold text-foreground">

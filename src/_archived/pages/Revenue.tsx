@@ -166,7 +166,7 @@ export function Revenue() {
           {!isPremium && records.length > 3 && (
             <button
               onClick={() => setShowPaywall(true)}
-              className="w-full py-4 px-4 rounded-xl border-2 border-dashed border-orange-500/30 bg-orange-500/5 text-orange-600 dark:text-orange-400 font-medium hover:bg-orange-500/10 transition-colors flex items-center justify-center gap-2"
+              className="w-full py-4 px-4 rounded-xl border-2 border-dashed border-orange-500/30 bg-orange-500/5 text-orange-600 font-medium hover:bg-orange-500/10 transition-colors flex items-center justify-center gap-2"
             >
               <Lock className="w-5 h-5" />
               View All {records.length} Transactions (Premium)

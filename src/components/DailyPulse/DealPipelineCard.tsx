@@ -81,7 +81,7 @@ export function DealPipelineCard({
               e.stopPropagation();
               onSendFollowUp(deal.id);
             }}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-900 text-white text-xs font-medium hover:bg-gray-800 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-600 text-white text-xs font-medium hover:bg-violet-700 transition-colors"
           >
             Send Follow-up
             <ArrowRight className="w-3 h-3" />
@@ -107,7 +107,7 @@ export function DealPipelineCard({
               e.stopPropagation();
               onQuickQuote(deal.id);
             }}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-900 text-white text-xs font-medium hover:bg-gray-800 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-600 text-white text-xs font-medium hover:bg-violet-700 transition-colors"
           >
             Quick Quote
             <ArrowRight className="w-3 h-3" />

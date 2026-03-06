@@ -305,12 +305,12 @@ export function DealContract({ dealId }: DealContractProps) {
 
       <div className="flex items-center gap-3">
         {contract.contract_status === 'signed' || contract.contract_status === 'executed' ? (
-          <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
+          <div className="flex items-center gap-2 text-green-600">
             <CheckCircle className="w-5 h-5" />
             <span className="text-sm font-semibold">Contract Finalized - Scope Locked</span>
           </div>
         ) : (
-          <div className="flex items-center gap-2 text-yellow-600 dark:text-yellow-400">
+          <div className="flex items-center gap-2 text-yellow-600">
             <AlertCircle className="w-5 h-5" />
             <span className="text-sm font-semibold">Contract In Progress</span>
           </div>

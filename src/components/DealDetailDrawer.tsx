@@ -256,7 +256,7 @@ SCOPE LOCKED: ${isScopeLocked ? 'Yes' : 'No'}
       <div className="fixed inset-y-0 right-0 pl-0 sm:pl-10 max-w-full flex">
         <div className="w-screen sm:max-w-2xl transform transition-all ease-in-out duration-500 sm:duration-700 bg-card shadow-xl flex flex-col h-full">
 
-          <div className="px-4 sm:px-6 py-4 sm:py-6 bg-slate-900 dark:bg-slate-950 text-white flex items-center justify-between">
+          <div className="px-4 sm:px-6 py-4 sm:py-6 bg-slate-900 text-white flex items-center justify-between">
             <div className="min-w-0 flex-1">
               <h2 className="text-lg sm:text-xl font-bold truncate">{dealData?.brand || 'Campaign Details'}</h2>
               <p className="text-slate-400 text-xs sm:text-sm hidden sm:block">{dealData ? 'Manage the deal lifecycle' : 'Loading...'}</p>
@@ -414,7 +414,7 @@ SCOPE LOCKED: ${isScopeLocked ? 'Yes' : 'No'}
               <div className="space-y-4 sm:space-y-6">
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between bg-card p-4 sm:p-6 rounded-xl border border-border shadow-sm gap-3 sm:gap-0">
                   <div className="flex items-center gap-3">
-                    <div className={`p-2 rounded-full ${isScopeLocked ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400' : 'bg-muted text-muted-foreground'}`}>
+                    <div className={`p-2 rounded-full ${isScopeLocked ? 'bg-emerald-500/20 text-emerald-600' : 'bg-muted text-muted-foreground'}`}>
                       {isScopeLocked ? <Lock size={20} /> : <Unlock size={20} />}
                     </div>
                     <div>
@@ -476,7 +476,7 @@ SCOPE LOCKED: ${isScopeLocked ? 'Yes' : 'No'}
                   </div>
 
                   {formData.usageDuration.includes('Perpetuity') && (
-                    <div className="flex gap-2 items-center text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 p-3 rounded-lg border border-amber-200 dark:border-amber-800">
+                    <div className="flex gap-2 items-center text-xs text-amber-700 bg-amber-50 p-3 rounded-lg border border-amber-200">
                       <AlertTriangle size={14} />
                       <p>"Unlimited usage in perpetuity" is a major licensing deal. Price accordingly.</p>
                     </div>
@@ -580,7 +580,7 @@ SCOPE LOCKED: ${isScopeLocked ? 'Yes' : 'No'}
             <button
               onClick={handleSave}
               disabled={savingDeal}
-              className="w-full py-3 bg-slate-900 dark:bg-slate-950 hover:bg-slate-800 dark:hover:bg-slate-900 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              className="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {saveSuccess && <CheckCircle size={20} />}
               {savingDeal ? 'Saving...' : saveSuccess ? 'Saved!' : 'Save Changes'}

@@ -196,10 +196,10 @@ export function DealInvoice({ dealId }: DealInvoiceProps) {
       {isPaid ? (
         <div className="p-4 rounded-xl bg-green-500/10 border border-green-500/20">
           <div className="flex items-start gap-3">
-            <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
+            <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
             <div>
-              <p className="text-sm font-semibold text-green-600 dark:text-green-400">Payment Received</p>
-              <p className="text-xs text-green-600/80 dark:text-green-400/80 mt-1">
+              <p className="text-sm font-semibold text-green-600">Payment Received</p>
+              <p className="text-xs text-green-600/80 mt-1">
                 Paid on {formatDate(invoice.payment_received_date)}
               </p>
             </div>
@@ -208,10 +208,10 @@ export function DealInvoice({ dealId }: DealInvoiceProps) {
       ) : invoice.is_overdue ? (
         <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20">
           <div className="flex items-start gap-3">
-            <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+            <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
             <div>
-              <p className="text-sm font-semibold text-red-600 dark:text-red-400">Payment Overdue</p>
-              <p className="text-xs text-red-600/80 dark:text-red-400/80 mt-1">
+              <p className="text-sm font-semibold text-red-600">Payment Overdue</p>
+              <p className="text-xs text-red-600/80 mt-1">
                 Due date was {formatDate(invoice.due_date)} ({Math.abs(daysUntilDue || 0)} days overdue)
               </p>
             </div>
@@ -220,10 +220,10 @@ export function DealInvoice({ dealId }: DealInvoiceProps) {
       ) : daysUntilDue !== null && daysUntilDue <= 7 && daysUntilDue >= 0 ? (
         <div className="p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/20">
           <div className="flex items-start gap-3">
-            <AlertTriangle className="w-5 h-5 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5" />
+            <AlertTriangle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
             <div>
-              <p className="text-sm font-semibold text-yellow-600 dark:text-yellow-400">Payment Due Soon</p>
-              <p className="text-xs text-yellow-600/80 dark:text-yellow-400/80 mt-1">
+              <p className="text-sm font-semibold text-yellow-600">Payment Due Soon</p>
+              <p className="text-xs text-yellow-600/80 mt-1">
                 Due {formatDate(invoice.due_date)} ({daysUntilDue} days remaining)
               </p>
             </div>

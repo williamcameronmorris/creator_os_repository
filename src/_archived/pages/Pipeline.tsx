@@ -89,7 +89,7 @@ export function Pipeline() {
               Track and manage all your brand deals
             </p>
             {!isPremium && (
-              <span className="text-xs px-2 py-1 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+              <span className="text-xs px-2 py-1 rounded-full bg-blue-500/10 text-blue-600 border border-blue-500/20">
                 {dealsCount}/{dealLimit} deals
               </span>
             )}

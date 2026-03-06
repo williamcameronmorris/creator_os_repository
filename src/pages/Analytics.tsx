@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useSubscription } from '../contexts/SubscriptionContext';
-import { useTheme } from '../contexts/ThemeContext';
 import { supabase } from '../lib/supabase';
 import { TrendingUp, Eye, Heart, MessageCircle, Users, Instagram, Youtube, Sparkles, ArrowUp, ArrowDown, Calendar, Lock, Crown } from 'lucide-react';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
@@ -50,7 +49,6 @@ const PLATFORM_COLORS = {
 export function Analytics() {
   const { user } = useAuth();
   const { tier } = useSubscription();
-  const { darkMode } = useTheme();
   const [metrics, setMetrics] = useState<Metrics>({
     totalViews: 0,
     totalLikes: 0,
@@ -313,12 +311,12 @@ export function Analytics() {
                         metric.color === 'sky' ? 'text-chart-1' :
                         metric.color === 'red' ? 'text-chart-2' :
                         metric.color === 'blue' ? 'text-chart-3' :
-                        'text-emerald-500 dark:text-emerald-400'
+                        'text-emerald-500'
                       }`} />
                     </div>
                     {metric.change !== 0 && (
                       <div className={`flex items-center gap-1 text-sm font-medium ${
-                        isPositive ? 'text-emerald-500 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'
+                        isPositive ? 'text-emerald-500' : 'text-red-500'
                       }`}>
                         {isPositive ? <ArrowUp className="w-4 h-4" /> : <ArrowDown className="w-4 h-4" />}
                         {Math.abs(metric.change).toFixed(1)}%
@@ -342,15 +340,15 @@ export function Analytics() {
             </h3>
             <ResponsiveContainer width="100%" height={300}>
               <LineChart data={timelineData}>
-                <CartesianGrid strokeDasharray="3 3" stroke={darkMode ? '#334155' : '#e2e8f0'} />
-                <XAxis dataKey="date" stroke={darkMode ? '#94a3b8' : '#64748b'} />
-                <YAxis stroke={darkMode ? '#94a3b8' : '#64748b'} />
+                <CartesianGrid strokeDasharray="3 3" stroke={'#e2e8f0'} />
+                <XAxis dataKey="date" stroke={'#64748b'} />
+                <YAxis stroke={'#64748b'} />
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: darkMode ? '#1e293b' : '#ffffff',
-                    border: `1px solid ${darkMode ? '#334155' : '#e2e8f0'}`,
+                    backgroundColor: '#ffffff',
+                    border: `1px solid #e2e8f0`,
                     borderRadius: '0.75rem',
-                    color: darkMode ? '#ffffff' : '#0f172a',
+                    color: '#0f172a',
                   }}
                 />
                 <Line type="monotone" dataKey="views" stroke="#0ea5e9" strokeWidth={2} />
@@ -367,15 +365,15 @@ export function Analytics() {
               </h3>
               <ResponsiveContainer width="100%" height={250}>
                 <BarChart data={platformData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={darkMode ? '#334155' : '#e2e8f0'} />
-                  <XAxis dataKey="platform" stroke={darkMode ? '#94a3b8' : '#64748b'} />
-                  <YAxis stroke={darkMode ? '#94a3b8' : '#64748b'} />
+                  <CartesianGrid strokeDasharray="3 3" stroke={'#e2e8f0'} />
+                  <XAxis dataKey="platform" stroke={'#64748b'} />
+                  <YAxis stroke={'#64748b'} />
                   <Tooltip
                     contentStyle={{
-                      backgroundColor: darkMode ? '#1e293b' : '#ffffff',
-                      border: `1px solid ${darkMode ? '#334155' : '#e2e8f0'}`,
+                      backgroundColor: '#ffffff',
+                      border: `1px solid #e2e8f0`,
                       borderRadius: '0.75rem',
-                      color: darkMode ? '#ffffff' : '#0f172a',
+                      color: '#0f172a',
                     }}
                   />
                   <Bar dataKey="views" fill="#0ea5e9" />
@@ -389,7 +387,7 @@ export function Analytics() {
                   Top Performing Posts
                 </h3>
                 {!isPremium && topPosts.length > 0 && (
-                  <span className="text-xs px-2 py-1 rounded-full bg-orange-500/10 text-orange-600 dark:text-orange-400 border border-orange-500/20 flex items-center gap-1">
+                  <span className="text-xs px-2 py-1 rounded-full bg-orange-500/10 text-orange-600 border border-orange-500/20 flex items-center gap-1">
                     <Lock className="w-3 h-3" />
                     Limited
                   </span>
@@ -418,7 +416,7 @@ export function Analytics() {
                               <span className="text-muted-foreground">
                                 {post.likes.toLocaleString()} likes
                               </span>
-                              <span className="text-emerald-500 dark:text-emerald-400 font-medium">
+                              <span className="text-emerald-500 font-medium">
                                 {post.engagement_rate.toFixed(1)}% engagement
                               </span>
                             </div>
@@ -434,7 +432,7 @@ export function Analytics() {
                       setPaywallFeature('Full Top Posts Analytics (10 posts vs 3)');
                       setShowPaywall(true);
                     }}
-                    className="w-full py-3 px-4 rounded-lg border-2 border-dashed border-orange-500/30 bg-orange-500/5 text-orange-600 dark:text-orange-400 font-medium hover:bg-orange-500/10 transition-colors flex items-center justify-center gap-2"
+                    className="w-full py-3 px-4 rounded-lg border-2 border-dashed border-orange-500/30 bg-orange-500/5 text-orange-600 font-medium hover:bg-orange-500/10 transition-colors flex items-center justify-center gap-2"
                   >
                     <Lock className="w-4 h-4" />
                     View All Top Posts (Premium)

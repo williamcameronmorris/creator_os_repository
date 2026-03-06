@@ -2,13 +2,11 @@ import { useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { supabase, type Profile } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { useTheme } from '../contexts/ThemeContext';
 import { Save, TrendingUp, DollarSign, AlertCircle, CheckCircle, Instagram, Youtube, Video, Link2, RefreshCw, X, Palette, Sun, Moon } from 'lucide-react';
 import { getPlatformStatus, getInstagramAuthUrl, getTikTokAuthUrl, getYouTubeAuthUrl, disconnectPlatform, syncPlatform, getMetaAuthUrl, getThreadsAuthUrl, type PlatformStatus } from '../lib/platforms';
 
 export function Settings() {
   const { user } = useAuth();
-  const { darkMode, toggleDarkMode } = useTheme();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -142,7 +140,7 @@ export function Settings() {
       )}
 
       {success && (
-        <div className="p-3 border rounded-xl text-sm flex items-start gap-2 bg-emerald-50 dark:bg-emerald-900/30 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300">
+        <div className="p-3 border rounded-xl text-sm flex items-start gap-2 bg-emerald-50 border-emerald-200 text-emerald-700">
           <CheckCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
           {success}
         </div>
@@ -159,57 +157,30 @@ export function Settings() {
         </p>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <button
-            onClick={() => darkMode && toggleDarkMode()}
-            className={`p-6 rounded-xl border-2 text-left transition-all ${
-              !darkMode
-                ? 'border-primary bg-secondary'
-                : 'border-border bg-card hover:border-muted-foreground'
-            }`}
-          >
+          <div className="p-6 rounded-xl border-2 border-primary bg-secondary text-left">
             <div className="flex items-center gap-3 mb-3">
-              <div className={`flex items-center justify-center w-12 h-12 rounded-xl ${
-                !darkMode ? 'bg-primary' : 'bg-secondary'
-              }`}>
-                <Sun className={`w-6 h-6 ${!darkMode ? 'text-primary-foreground' : 'text-muted-foreground'}`} />
+              <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-violet-100">
+                <Sun className="w-6 h-6 text-violet-600" />
               </div>
               <div>
                 <div className="font-semibold text-foreground">Light Mode</div>
-                <div className="text-xs text-muted-foreground">
-                  Clean and bright
-                </div>
+                <div className="text-xs text-muted-foreground">Clean and bright</div>
               </div>
             </div>
-            {!darkMode && (
-              <div className="text-xs font-semibold text-foreground">Currently active</div>
-            )}
-          </button>
+            <div className="text-xs font-semibold text-violet-600">Currently active</div>
+          </div>
 
-          <button
-            onClick={() => !darkMode && toggleDarkMode()}
-            className={`p-6 rounded-xl border-2 text-left transition-all ${
-              darkMode
-                ? 'border-primary bg-secondary'
-                : 'border-border bg-card hover:border-muted-foreground'
-            }`}
-          >
+          <div className="p-6 rounded-xl border-2 border-border bg-card text-left opacity-50 cursor-not-allowed">
             <div className="flex items-center gap-3 mb-3">
-              <div className={`flex items-center justify-center w-12 h-12 rounded-xl ${
-                darkMode ? 'bg-primary' : 'bg-secondary'
-              }`}>
-                <Moon className={`w-6 h-6 ${darkMode ? 'text-primary-foreground' : 'text-muted-foreground'}`} />
+              <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-secondary">
+                <Moon className="w-6 h-6 text-muted-foreground" />
               </div>
               <div>
                 <div className="font-semibold text-foreground">Dark Mode</div>
-                <div className="text-xs text-muted-foreground">
-                  Easy on the eyes
-                </div>
+                <div className="text-xs text-muted-foreground">Coming soon</div>
               </div>
             </div>
-            {darkMode && (
-              <div className="text-xs font-semibold text-foreground">Currently active</div>
-            )}
-          </button>
+          </div>
         </div>
       </div>
 
@@ -265,7 +236,7 @@ export function Settings() {
               tiktok: {
                 label: 'TikTok',
                 subtitle: 'Videos, analytics & uploads',
-                iconBg: 'bg-slate-900',
+                iconBg: 'bg-violet-600',
                 icon: <Video className="w-6 h-6 text-white" />,
               },
               youtube: {
@@ -294,7 +265,7 @@ export function Settings() {
                     <div className="flex items-center gap-2 flex-wrap">
                       <h4 className="font-semibold text-foreground">{config.label}</h4>
                       {config.badge && (
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 font-medium">
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">
                           {config.badge}
                         </span>
                       )}
@@ -322,7 +293,7 @@ export function Settings() {
                   {platform.connected ? (
                     isInstagramViaMeta ? (
                       // Instagram connected via Meta — just show connected badge
-                      <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 font-medium">
+                      <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-emerald-600 bg-emerald-50 font-medium">
                         <CheckCircle className="w-3.5 h-3.5" />
                         Connected via Meta
                       </span>

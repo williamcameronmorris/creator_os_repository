@@ -1,6 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { useTheme } from '../contexts/ThemeContext';
 import { supabase } from '../lib/supabase';
 import { Image as ImageIcon, Video, Upload, Trash2, Download, X } from 'lucide-react';
 import { format } from 'date-fns';
@@ -16,7 +15,6 @@ interface MediaFile {
 
 export function Media() {
   const { user } = useAuth();
-  const { darkMode } = useTheme();
   const [media, setMedia] = useState<MediaFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);

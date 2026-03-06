@@ -78,21 +78,21 @@ export function CreationStage({ workflowId, contentType, onComplete, onSkip }: C
             {isMobileFormat ? <Smartphone className="w-6 h-6" /> : <Video className="w-6 h-6" />}
           </div>
           <div>
-            <h2 className="text-2xl font-bold text-slate-900">Production</h2>
-            <p className="text-slate-500 text-sm">
+            <h2 className="text-2xl font-bold text-gray-900">Production</h2>
+            <p className="text-gray-500 text-sm">
               {isMobileFormat ? 'Mobile-first setup' : 'Professional setup'}
             </p>
           </div>
         </div>
 
-        <button onClick={onSkip} className="text-slate-400 hover:text-slate-600 text-sm">
+        <button onClick={onSkip} className="text-gray-400 hover:text-gray-600 text-sm">
           Skip this step
         </button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         <div className={`border-2 border-dashed rounded-2xl flex flex-col items-center justify-center p-8 transition-colors ${
-          mediaUrl ? 'border-green-300 bg-green-50' : 'border-slate-300 bg-slate-50 hover:border-blue-400'
+          mediaUrl ? 'border-green-300 bg-green-50' : 'border-gray-300 bg-violet-50 hover:border-blue-400'
         }`}>
           {mediaUrl ? (
             <div className="text-center">
@@ -103,7 +103,7 @@ export function CreationStage({ workflowId, contentType, onComplete, onSkip }: C
               <a href={mediaUrl} target="_blank" rel="noreferrer" className="text-xs text-green-600 hover:underline block mb-4">
                 View File
               </a>
-              <label className="cursor-pointer text-sm font-semibold text-slate-600 bg-white px-4 py-2 rounded-lg border border-slate-200 hover:bg-slate-50 shadow-sm">
+              <label className="cursor-pointer text-sm font-semibold text-gray-600 bg-white px-4 py-2 rounded-lg border border-gray-200 hover:bg-violet-50 shadow-sm">
                 Replace File
                 <input type="file" className="hidden" accept="video/*,image/*" onChange={handleUpload} />
               </label>
@@ -113,9 +113,9 @@ export function CreationStage({ workflowId, contentType, onComplete, onSkip }: C
               <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 {uploading ? <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" /> : <Upload className="w-8 h-8 text-blue-600" />}
               </div>
-              <p className="text-slate-900 font-medium mb-1">{uploading ? 'Uploading...' : 'Upload Draft'}</p>
-              <p className="text-slate-500 text-sm mb-4">Drag & drop or click to browse</p>
-              <label className="cursor-pointer bg-slate-900 text-white px-6 py-2 rounded-xl text-sm font-medium hover:bg-slate-800 transition-colors shadow-lg">
+              <p className="text-gray-900 font-medium mb-1">{uploading ? 'Uploading...' : 'Upload Draft'}</p>
+              <p className="text-gray-500 text-sm mb-4">Drag & drop or click to browse</p>
+              <label className="cursor-pointer bg-violet-600 text-white px-6 py-2 rounded-xl text-sm font-medium hover:bg-violet-700 transition-colors shadow-lg">
                 Select File
                 <input type="file" className="hidden" accept="video/*,image/*" onChange={handleUpload} />
               </label>
@@ -123,24 +123,24 @@ export function CreationStage({ workflowId, contentType, onComplete, onSkip }: C
           )}
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
-          <h3 className="font-bold text-slate-900 mb-4 flex items-center gap-2">
+        <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+          <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
             Quality Check
-            <span className="text-xs font-normal text-slate-400 bg-slate-100 px-2 py-1 rounded-full">
+            <span className="text-xs font-normal text-gray-400 bg-gray-100 px-2 py-1 rounded-full">
               {checklist.filter(i => i.checked).length}/{checklist.length}
             </span>
           </h3>
 
           <div className="space-y-3">
             {checklist.map(item => (
-              <label key={item.id} className="flex items-center gap-3 p-3 rounded-xl border border-slate-100 hover:border-slate-200 hover:bg-slate-50 transition-all cursor-pointer">
+              <label key={item.id} className="flex items-center gap-3 p-3 rounded-xl border border-slate-100 hover:border-gray-200 hover:bg-violet-50 transition-all cursor-pointer">
                 <input
                   type="checkbox"
                   checked={item.checked}
                   onChange={() => toggleCheck(item.id)}
                   className="w-5 h-5 rounded text-blue-600 focus:ring-blue-500 border-gray-300"
                 />
-                <span className={`text-sm ${item.checked ? 'text-slate-400 line-through' : 'text-slate-700 font-medium'}`}>
+                <span className={`text-sm ${item.checked ? 'text-gray-400 line-through' : 'text-gray-700 font-medium'}`}>
                   {item.label}
                 </span>
               </label>
@@ -156,7 +156,7 @@ export function CreationStage({ workflowId, contentType, onComplete, onSkip }: C
 
           <button
             onClick={onComplete}
-            className="w-full mt-6 py-3 bg-slate-900 text-white rounded-xl font-medium hover:bg-slate-800 transition-colors shadow-lg"
+            className="w-full mt-6 py-3 bg-violet-600 text-white rounded-xl font-medium hover:bg-violet-700 transition-colors shadow-lg"
           >
             Finish Creation
           </button>

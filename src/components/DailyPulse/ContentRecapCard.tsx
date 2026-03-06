@@ -66,7 +66,7 @@ export function ContentRecapCard({
     >
       <div className="space-y-6">
         <div>
-          <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Your Week in Numbers</p>
+          <p className="text-sm font-medium text-gray-700 mb-3">Your Week in Numbers</p>
           <div className="flex items-end gap-1 h-16">
             {data.dailyViews.map((views, index) => (
               <div
@@ -90,16 +90,16 @@ export function ContentRecapCard({
         </div>
 
         {data.bestPost && (
-          <div className="bg-gray-100 dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+          <div className="bg-gray-100 rounded-xl p-4 border border-gray-200">
             <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-lg bg-gray-200 dark:bg-gray-700 flex items-center justify-center flex-shrink-0">
-                <Play className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+              <div className="w-10 h-10 rounded-lg bg-gray-200 flex items-center justify-center flex-shrink-0">
+                <Play className="w-5 h-5 text-gray-600" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                <p className="text-sm font-medium text-gray-900 truncate">
                   "{data.bestPost.title}"
                 </p>
-                <p className="text-sm text-gray-600 dark:text-gray-400 font-semibold">
+                <p className="text-sm text-gray-600 font-semibold">
                   {Math.round(
                     ((data.bestPost.views - data.totalViews / data.postsCount) /
                       (data.totalViews / data.postsCount)) *
@@ -114,11 +114,11 @@ export function ContentRecapCard({
 
         {data.recentPosts.length > 0 && (
           <div>
-            <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Recent Posts</p>
+            <p className="text-sm font-medium text-gray-700 mb-3">Recent Posts</p>
             <div className="space-y-3">
               {data.recentPosts.slice(0, 3).map((post) => (
-                <div key={post.id} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-xl">
-                  <div className="w-12 h-12 rounded-lg bg-gray-200 dark:bg-gray-700 flex items-center justify-center flex-shrink-0 overflow-hidden">
+                <div key={post.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
+                  <div className="w-12 h-12 rounded-lg bg-gray-200 flex items-center justify-center flex-shrink-0 overflow-hidden">
                     {post.thumbnail_url ? (
                       <img
                         src={post.thumbnail_url}
@@ -130,8 +130,8 @@ export function ContentRecapCard({
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{post.title}</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                    <p className="text-sm font-medium text-gray-900 truncate">{post.title}</p>
+                    <p className="text-xs text-gray-500">
                       {formatNumber(post.views)} views · {formatNumber(post.likes)} likes
                     </p>
                   </div>
@@ -143,7 +143,7 @@ export function ContentRecapCard({
 
         <button
           onClick={onViewAnalytics}
-          className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-gray-900 dark:bg-white text-white dark:text-gray-900 font-medium hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors"
+          className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-violet-600 text-white font-medium hover:bg-violet-700 transition-colors"
         >
           View Full Analytics
           <ArrowRight className="w-4 h-4" />

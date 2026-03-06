@@ -180,48 +180,48 @@ export function AnalysisStage({ workflowId, onComplete }: AnalysisStageProps) {
 
   const hasAvg = metrics.avgViews > 0;
   const overperformed = metrics.views >= metrics.avgViews;
-  const performanceColor = !hasAvg ? 'text-slate-500' : overperformed ? 'text-emerald-600' : 'text-amber-600';
+  const performanceColor = !hasAvg ? 'text-gray-500' : overperformed ? 'text-emerald-600' : 'text-amber-600';
   const performanceIcon = overperformed ? <ArrowUp className="w-4 h-4" /> : <ArrowDown className="w-4 h-4" />;
 
   return (
     <div className="max-w-3xl mx-auto">
       <div className="text-center mb-10">
-        <h2 className="text-2xl font-bold text-slate-900">The Retro</h2>
-        <p className="text-slate-500 text-sm mt-1">
+        <h2 className="text-2xl font-bold text-gray-900">The Retro</h2>
+        <p className="text-gray-500 text-sm mt-1">
           Review performance and capture one key learning to improve your next video.
         </p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm text-center">
-          <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Views</p>
+        <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm text-center">
+          <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Views</p>
           <div className="flex items-center justify-center gap-2">
-            <span className="text-3xl font-bold text-slate-900">{metrics.views.toLocaleString()}</span>
+            <span className="text-3xl font-bold text-gray-900">{metrics.views.toLocaleString()}</span>
             {hasAvg && metrics.views > 0 && (
-              <div className={`flex items-center text-xs font-bold ${performanceColor} bg-slate-50 px-2 py-1 rounded-lg`}>
+              <div className={`flex items-center text-xs font-bold ${performanceColor} bg-violet-50 px-2 py-1 rounded-lg`}>
                 {performanceIcon}
                 {Math.abs(Math.round(((metrics.views - metrics.avgViews) / metrics.avgViews) * 100))}%
               </div>
             )}
           </div>
-          <p className="text-xs text-slate-400 mt-2">
+          <p className="text-xs text-gray-400 mt-2">
             {hasAvg ? `vs. your avg (${metrics.avgViews.toLocaleString()})` : 'No comparison data yet'}
           </p>
         </div>
 
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm text-center">
-          <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Engagement</p>
-          <div className="text-3xl font-bold text-slate-900">{metrics.engagementRate.toFixed(1)}%</div>
-          <p className="text-xs text-slate-400 mt-2">
+        <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm text-center">
+          <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Engagement</p>
+          <div className="text-3xl font-bold text-gray-900">{metrics.engagementRate.toFixed(1)}%</div>
+          <p className="text-xs text-gray-400 mt-2">
             {metrics.likes.toLocaleString()} likes · {metrics.comments.toLocaleString()} comments
           </p>
         </div>
 
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm text-center flex flex-col items-center justify-center">
+        <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm text-center flex flex-col items-center justify-center">
           <div className={`w-10 h-10 rounded-full flex items-center justify-center mb-2 ${hasAvg && metrics.views > 0 ? (overperformed ? 'bg-emerald-50' : 'bg-amber-50') : 'bg-blue-50'}`}>
             <TrendingUp className={`w-5 h-5 ${hasAvg && metrics.views > 0 ? (overperformed ? 'text-emerald-600' : 'text-amber-600') : 'text-blue-600'}`} />
           </div>
-          <p className="text-sm font-medium text-slate-600">
+          <p className="text-sm font-medium text-gray-600">
             {!metrics.hasRealData
               ? 'Metrics sync after publish'
               : !hasAvg
@@ -233,14 +233,14 @@ export function AnalysisStage({ workflowId, onComplete }: AnalysisStageProps) {
         </div>
       </div>
 
-      <div className="bg-slate-50 border border-slate-200 rounded-2xl p-8">
+      <div className="bg-violet-50 border border-gray-200 rounded-2xl p-8">
         <div className="flex items-start gap-4 mb-6">
           <div className="p-3 bg-yellow-100 rounded-xl text-yellow-700">
             <Lightbulb className="w-6 h-6" />
           </div>
           <div className="flex-1">
-            <h3 className="text-lg font-bold text-slate-900">What did we learn?</h3>
-            <p className="text-slate-500 text-sm">
+            <h3 className="text-lg font-bold text-gray-900">What did we learn?</h3>
+            <p className="text-gray-500 text-sm">
               Don't just look at numbers. Why did this perform the way it did?
             </p>
           </div>
@@ -263,19 +263,19 @@ export function AnalysisStage({ workflowId, onComplete }: AnalysisStageProps) {
             </div>
           )}
           <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-2">
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
               Key Takeaway (The "Insight")
             </label>
             <textarea
               value={insight}
               onChange={(e) => setInsight(e.target.value)}
               placeholder="e.g. The text overlay hook worked better than just talking..."
-              className="w-full p-4 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none bg-white min-h-[100px]"
+              className="w-full p-4 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none bg-white min-h-[100px]"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-2">
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
               Next Video Idea (Optional)
             </label>
             <input
@@ -283,9 +283,9 @@ export function AnalysisStage({ workflowId, onComplete }: AnalysisStageProps) {
               value={nextIdea}
               onChange={(e) => setNextIdea(e.target.value)}
               placeholder="e.g. Try the same hook format on a different topic..."
-              className="w-full p-4 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+              className="w-full p-4 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none bg-white"
             />
-            <p className="text-xs text-slate-400 mt-2 flex items-center gap-1">
+            <p className="text-xs text-gray-400 mt-2 flex items-center gap-1">
               <CheckCircle2 className="w-3 h-3" />
               This will automatically be added to your Saved Ideas.
             </p>
@@ -295,7 +295,7 @@ export function AnalysisStage({ workflowId, onComplete }: AnalysisStageProps) {
             <button
               onClick={handleSave}
               disabled={loading || !insight}
-              className="px-8 py-3 bg-slate-900 text-white rounded-xl font-medium hover:bg-slate-800 transition-all shadow-lg flex items-center gap-2 disabled:opacity-50"
+              className="px-8 py-3 bg-violet-600 text-white rounded-xl font-medium hover:bg-violet-700 transition-all shadow-lg flex items-center gap-2 disabled:opacity-50"
             >
               {loading ? 'Saving...' : 'Complete Workflow'}
               <Save className="w-4 h-4" />

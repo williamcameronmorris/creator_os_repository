@@ -242,11 +242,11 @@ export default function BrandLibrary() {
   const getStatusConfig = (status: string) => {
     switch (status) {
       case 'dream_brand':
-        return { label: 'Dream Brand', color: 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20', icon: Star };
+        return { label: 'Dream Brand', color: 'bg-purple-500/10 text-purple-600 border-purple-500/20', icon: Star };
       case 'ready_to_pitch':
-        return { label: 'Ready to Pitch', color: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20', icon: Target };
+        return { label: 'Ready to Pitch', color: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20', icon: Target };
       case 'researching':
-        return { label: 'Researching', color: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20', icon: Search };
+        return { label: 'Researching', color: 'bg-blue-500/10 text-blue-600 border-blue-500/20', icon: Search };
       case 'not_a_fit':
         return { label: 'Not a Fit', color: 'bg-muted text-muted-foreground border-border', icon: ExternalLink };
       default:
@@ -627,7 +627,7 @@ export default function BrandLibrary() {
                 </button>
                 <button
                   onClick={() => setShowFitCheck(!showFitCheck)}
-                  className="flex-1 bg-blue-500/10 text-blue-600 dark:text-blue-400 px-6 py-3 rounded-xl hover:bg-blue-500/20 transition-all flex items-center justify-center gap-2 font-semibold"
+                  className="flex-1 bg-blue-500/10 text-blue-600 px-6 py-3 rounded-xl hover:bg-blue-500/20 transition-all flex items-center justify-center gap-2 font-semibold"
                 >
                   <Target className="w-5 h-5" />
                   {showFitCheck ? 'Hide' : 'Check'} Brand Fit

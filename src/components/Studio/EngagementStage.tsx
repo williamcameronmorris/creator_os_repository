@@ -161,40 +161,40 @@ export function EngagementStage({ workflowId, contentType, onComplete }: Engagem
         <div className="inline-flex items-center justify-center p-3 bg-amber-100 text-amber-600 rounded-full mb-4 ring-4 ring-amber-50">
           <Clock className="w-8 h-8" />
         </div>
-        <h2 className="text-2xl font-bold text-slate-900">The Golden Hour</h2>
-        <p className="text-slate-500 max-w-md mx-auto mt-2">
+        <h2 className="text-2xl font-bold text-gray-900">The Golden Hour</h2>
+        <p className="text-gray-500 max-w-md mx-auto mt-2">
           Algorithms boost content that gets engagement in the first 60 minutes. Complete this checklist to maximize reach.
         </p>
       </div>
 
       {liveMetrics && (liveMetrics.views > 0 || liveMetrics.likes > 0) && (
         <div className="grid grid-cols-3 gap-3 mb-6">
-          <div className="bg-white border border-slate-200 rounded-xl p-4 text-center">
-            <Eye className="w-4 h-4 text-slate-400 mx-auto mb-1" />
-            <p className="text-xl font-bold text-slate-900">{liveMetrics.views.toLocaleString()}</p>
-            <p className="text-xs text-slate-400">Views</p>
+          <div className="bg-white border border-gray-200 rounded-xl p-4 text-center">
+            <Eye className="w-4 h-4 text-gray-400 mx-auto mb-1" />
+            <p className="text-xl font-bold text-gray-900">{liveMetrics.views.toLocaleString()}</p>
+            <p className="text-xs text-gray-400">Views</p>
           </div>
-          <div className="bg-white border border-slate-200 rounded-xl p-4 text-center">
-            <ThumbsUp className="w-4 h-4 text-slate-400 mx-auto mb-1" />
-            <p className="text-xl font-bold text-slate-900">{liveMetrics.likes.toLocaleString()}</p>
-            <p className="text-xs text-slate-400">Likes</p>
+          <div className="bg-white border border-gray-200 rounded-xl p-4 text-center">
+            <ThumbsUp className="w-4 h-4 text-gray-400 mx-auto mb-1" />
+            <p className="text-xl font-bold text-gray-900">{liveMetrics.likes.toLocaleString()}</p>
+            <p className="text-xs text-gray-400">Likes</p>
           </div>
-          <div className="bg-white border border-slate-200 rounded-xl p-4 text-center">
-            <BarChart2 className="w-4 h-4 text-slate-400 mx-auto mb-1" />
-            <p className="text-xl font-bold text-slate-900">{liveMetrics.engagementRate.toFixed(1)}%</p>
-            <p className="text-xs text-slate-400">Engagement</p>
+          <div className="bg-white border border-gray-200 rounded-xl p-4 text-center">
+            <BarChart2 className="w-4 h-4 text-gray-400 mx-auto mb-1" />
+            <p className="text-xl font-bold text-gray-900">{liveMetrics.engagementRate.toFixed(1)}%</p>
+            <p className="text-xs text-gray-400">Engagement</p>
           </div>
         </div>
       )}
 
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-        <div className="h-2 bg-slate-100">
+      <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
+        <div className="h-2 bg-gray-100">
           <div className="h-full bg-amber-500 transition-all duration-500 ease-out" style={{ width: `${progress}%` }} />
         </div>
 
         <div className="p-8">
           <div className="flex items-center justify-between mb-6">
-            <h3 className="font-bold text-lg text-slate-900 flex items-center gap-2">
+            <h3 className="font-bold text-lg text-gray-900 flex items-center gap-2">
               <span className="capitalize">{platform}</span> Checklist
             </h3>
             {postUrl && (
@@ -207,22 +207,22 @@ export function EngagementStage({ workflowId, contentType, onComplete }: Engagem
           <div className="space-y-3">
             {checklist.map((item) => (
               <label key={item.id} className={`flex items-center p-4 rounded-xl border-2 transition-all cursor-pointer group ${item.checked ? 'border-emerald-500 bg-emerald-50/50' : 'border-slate-100 hover:border-amber-200 hover:bg-amber-50/30'}`}>
-                <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center mr-4 transition-colors ${item.checked ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-slate-300 group-hover:border-amber-400'}`}>
+                <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center mr-4 transition-colors ${item.checked ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-gray-300 group-hover:border-amber-400'}`}>
                   {item.checked && <CheckCircle2 className="w-4 h-4" />}
                 </div>
                 <input type="checkbox" className="hidden" checked={item.checked} onChange={() => toggleItem(item.id)} />
                 <div className="flex-1 flex items-center gap-3">
-                  <div className={`p-2 rounded-lg ${item.checked ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-500'}`}>
+                  <div className={`p-2 rounded-lg ${item.checked ? 'bg-emerald-100 text-emerald-600' : 'bg-gray-100 text-gray-500'}`}>
                     {item.icon}
                   </div>
-                  <span className={`font-medium ${item.checked ? 'text-emerald-900' : 'text-slate-700'}`}>{item.label}</span>
+                  <span className={`font-medium ${item.checked ? 'text-emerald-900' : 'text-gray-700'}`}>{item.label}</span>
                 </div>
               </label>
             ))}
           </div>
 
           <div className="mt-8 pt-6 border-t border-slate-100 flex justify-end">
-            <button onClick={handleFinish} disabled={loading} className="px-8 py-3 bg-slate-900 text-white rounded-xl font-medium hover:bg-slate-800 transition-shadow shadow-lg flex items-center gap-2">
+            <button onClick={handleFinish} disabled={loading} className="px-8 py-3 bg-violet-600 text-white rounded-xl font-medium hover:bg-violet-700 transition-shadow shadow-lg flex items-center gap-2">
               {progress === 100 ? <><Heart className="w-4 h-4 text-red-400 fill-red-400" /> Golden Hour Complete</> : "Finish Engagement"}
             </button>
           </div>

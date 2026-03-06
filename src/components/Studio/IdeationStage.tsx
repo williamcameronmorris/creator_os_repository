@@ -236,12 +236,12 @@ export function IdeationStage({ onIdeaSelected }: IdeationStageProps) {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 sm:gap-3 mb-2 flex-wrap">
                         <span className={`px-2 sm:px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wide ${
-                          idea.platform === 'instagram' ? 'bg-pink-500/10 text-pink-600 dark:text-pink-400' :
-                          idea.platform === 'tiktok' ? 'bg-foreground/10 text-foreground' : 'bg-red-500/10 text-red-600 dark:text-red-400'
+                          idea.platform === 'instagram' ? 'bg-pink-500/10 text-pink-600' :
+                          idea.platform === 'tiktok' ? 'bg-foreground/10 text-foreground' : 'bg-red-500/10 text-red-600'
                         }`}>
                           {idea.platform}
                         </span>
-                        <span className="text-xs font-medium text-green-600 dark:text-green-400 flex items-center gap-1">
+                        <span className="text-xs font-medium text-green-600 flex items-center gap-1">
                           <Sparkles className="w-3 h-3" />
                           {idea.confidence_score}% Match
                         </span>

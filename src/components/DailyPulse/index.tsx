@@ -472,7 +472,7 @@ export function DailyPulse() {
           </button>
           <button
             onClick={handleDone}
-            className="flex items-center justify-center gap-2 px-6 py-3 rounded-2xl bg-gray-900 text-white font-bold hover:bg-gray-800 transition-colors"
+            className="flex items-center justify-center gap-2 px-6 py-3 rounded-2xl bg-violet-600 text-white font-bold hover:bg-violet-700 transition-colors"
           >
             <CheckCircle className="w-5 h-5" />
             Mark All as Reviewed
@@ -640,7 +640,7 @@ export function DailyPulse() {
                 onClick={() => setSlideIndex(i)}
                 className={`rounded-full transition-all ${
                   i === slideIndex
-                    ? 'w-6 h-2.5 bg-gray-900'
+                    ? 'w-6 h-2.5 bg-violet-600'
                     : 'w-2.5 h-2.5 bg-gray-300 hover:bg-gray-400'
                 }`}
               />
@@ -658,14 +658,14 @@ export function DailyPulse() {
             {slideIndex === SLIDES.length - 1 ? (
               <button
                 onClick={handleDone}
-                className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-gray-900 text-white font-bold text-sm hover:bg-gray-800 transition-colors"
+                className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-violet-600 text-white font-bold text-sm hover:bg-violet-700 transition-colors"
               >
                 Done <ArrowRight className="w-4 h-4" />
               </button>
             ) : (
               <button
                 onClick={() => setSlideIndex(i => i + 1)}
-                className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-gray-900 text-white font-bold text-sm hover:bg-gray-800 transition-colors"
+                className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-violet-600 text-white font-bold text-sm hover:bg-violet-700 transition-colors"
               >
                 Next <ArrowRight className="w-4 h-4" />
               </button>

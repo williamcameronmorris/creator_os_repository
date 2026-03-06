@@ -220,15 +220,15 @@ export function Schedule() {
                           {post.platform.charAt(0).toUpperCase() + post.platform.slice(1)} Post
                         </h3>
                         {post.is_sponsored && (
-                          <span className="flex items-center gap-1 px-2 py-1 text-xs rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 font-semibold">
+                          <span className="flex items-center gap-1 px-2 py-1 text-xs rounded-full bg-amber-500/10 text-amber-600 font-semibold">
                             <DollarSign className="w-3 h-3" />
                             Sponsored
                           </span>
                         )}
                         <span className={`px-2 py-1 text-xs rounded-full ${
                           post.status === 'scheduled'
-                            ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                            : 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                            ? 'bg-emerald-500/10 text-emerald-600'
+                            : 'bg-amber-500/10 text-amber-600'
                         }`}>
                           {post.status}
                         </span>
@@ -297,7 +297,7 @@ export function Schedule() {
                 <span className="text-sm font-medium text-muted-foreground">Total Scheduled</span>
                 <div className="flex items-center gap-2">
                   {!isPremium && (
-                    <span className="text-xs px-2 py-1 rounded-full bg-orange-500/10 text-orange-600 dark:text-orange-400 border border-orange-500/20 flex items-center gap-1">
+                    <span className="text-xs px-2 py-1 rounded-full bg-orange-500/10 text-orange-600 border border-orange-500/20 flex items-center gap-1">
                       <Lock className="w-3 h-3" />
                       Limited
                     </span>
@@ -325,7 +325,7 @@ export function Schedule() {
                   <p className="text-xs text-muted-foreground mt-2">Max {schedulingLimit} on free plan</p>
                 </>
               ) : (
-                <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium mt-2 flex items-center gap-1">
+                <p className="text-xs text-emerald-600 font-medium mt-2 flex items-center gap-1">
                   <Crown className="w-3 h-3" />
                   Unlimited scheduling
                 </p>

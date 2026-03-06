@@ -153,13 +153,13 @@ export function ScriptingStage({ workflowId, contentType, onComplete, onSkip }: 
       )}
 
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-        <h2 className="text-2xl font-bold text-slate-900">Scripting</h2>
+        <h2 className="text-2xl font-bold text-gray-900">Scripting</h2>
 
-        <div className="flex bg-slate-100 p-1 rounded-xl">
+        <div className="flex bg-gray-100 p-1 rounded-xl">
           <button
             onClick={() => setMode('simple')}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
-              mode === 'simple' ? 'bg-white shadow text-slate-900' : 'text-slate-500 hover:text-slate-700'
+              mode === 'simple' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'
             }`}
           >
             <AlignLeft className="w-4 h-4" />
@@ -168,7 +168,7 @@ export function ScriptingStage({ workflowId, contentType, onComplete, onSkip }: 
           <button
             onClick={() => setMode('structured')}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
-              mode === 'structured' ? 'bg-white shadow text-slate-900' : 'text-slate-500 hover:text-slate-700'
+              mode === 'structured' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'
             }`}
           >
             <Layout className="w-4 h-4" />
@@ -202,36 +202,36 @@ export function ScriptingStage({ workflowId, contentType, onComplete, onSkip }: 
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Jot down your concept, bullet points, or rough ideas here..."
-              className="w-full p-6 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none min-h-[400px] text-lg leading-relaxed bg-white shadow-sm"
+              className="w-full p-6 rounded-2xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none min-h-[400px] text-lg leading-relaxed bg-white shadow-sm"
             />
           ) : (
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-1">Visual Hook (0-3s)</label>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Visual Hook (0-3s)</label>
                 <textarea
                   value={script.hook}
                   onChange={(e) => setScript({ ...script, hook: e.target.value })}
                   placeholder="The 'Stop the Scroll' moment..."
-                  className="w-full p-4 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none min-h-[80px]"
+                  className="w-full p-4 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none min-h-[80px]"
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-1">Body</label>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Body</label>
                 <textarea
                   value={script.body}
                   onChange={(e) => setScript({ ...script, body: e.target.value })}
                   placeholder="The core value or story..."
-                  className="w-full p-4 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none min-h-[200px]"
+                  className="w-full p-4 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none min-h-[200px]"
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-1">CTA</label>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">CTA</label>
                 <input
                   type="text"
                   value={script.cta}
                   onChange={(e) => setScript({ ...script, cta: e.target.value })}
                   placeholder="What should they do next?"
-                  className="w-full p-4 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                  className="w-full p-4 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
                 />
               </div>
             </div>
@@ -239,9 +239,9 @@ export function ScriptingStage({ workflowId, contentType, onComplete, onSkip }: 
         </div>
 
         <div className="space-y-6">
-          <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 h-full">
-            <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
-              <FileText className="w-5 h-5 text-slate-500" />
+          <div className="bg-violet-50 p-6 rounded-2xl border border-gray-200 h-full">
+            <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+              <FileText className="w-5 h-5 text-gray-500" />
               Caption & Tags
             </h3>
 
@@ -250,25 +250,25 @@ export function ScriptingStage({ workflowId, contentType, onComplete, onSkip }: 
                 value={script.caption}
                 onChange={(e) => setScript({ ...script, caption: e.target.value })}
                 placeholder="Write your caption here (optional)..."
-                className="w-full p-4 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none min-h-[200px] bg-white"
+                className="w-full p-4 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none min-h-[200px] bg-white"
               />
-              <div className="flex items-center gap-2 bg-white p-3 rounded-xl border border-slate-200">
-                <Hash className="w-4 h-4 text-slate-400" />
+              <div className="flex items-center gap-2 bg-white p-3 rounded-xl border border-gray-200">
+                <Hash className="w-4 h-4 text-gray-400" />
                 <input
                   type="text"
                   value={script.hashtags}
                   onChange={(e) => setScript({ ...script, hashtags: e.target.value })}
                   placeholder="Add tags..."
-                  className="flex-1 outline-none text-blue-600 placeholder:text-slate-400"
+                  className="flex-1 outline-none text-blue-600 placeholder:text-gray-400"
                 />
               </div>
             </div>
 
-            <div className="mt-8 pt-6 border-t border-slate-200 space-y-3">
+            <div className="mt-8 pt-6 border-t border-gray-200 space-y-3">
               <button
                 onClick={() => handleSave(true)}
                 disabled={loading}
-                className="w-full py-3 px-4 bg-slate-900 hover:bg-slate-800 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 shadow-lg"
+                className="w-full py-3 px-4 bg-violet-600 hover:bg-violet-700 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 shadow-lg"
               >
                 Save & Continue
                 <ChevronRight className="w-4 h-4" />
@@ -276,7 +276,7 @@ export function ScriptingStage({ workflowId, contentType, onComplete, onSkip }: 
 
               <button
                 onClick={onSkip}
-                className="w-full py-2 text-slate-500 hover:text-slate-700 text-sm font-medium transition-colors"
+                className="w-full py-2 text-gray-500 hover:text-gray-700 text-sm font-medium transition-colors"
               >
                 Skip Scripting
               </button>

@@ -24,10 +24,9 @@ import {
 
 interface ActionDashboardProps {
   onNavigate: (path: string) => void;
-  darkMode: boolean;
 }
 
-export default function ActionDashboard({ onNavigate, darkMode }: ActionDashboardProps) {
+export default function ActionDashboard({ onNavigate }: ActionDashboardProps) {
   const { tier } = useSubscription();
   const [insights, setInsights] = useState<Insight[]>([]);
   const [socialStats, setSocialStats] = useState({
@@ -191,13 +190,6 @@ export default function ActionDashboard({ onNavigate, darkMode }: ActionDashboar
   };
 
   const getPriorityColors = (priority: string) => {
-    if (darkMode) {
-      return {
-        high: 'bg-red-900/30 text-red-300 border-red-800',
-        medium: 'bg-amber-900/30 text-amber-300 border-amber-800',
-        low: 'bg-emerald-900/30 text-emerald-300 border-emerald-800',
-      }[priority] || 'bg-card text-muted-foreground';
-    }
     return {
       high: 'bg-red-50 text-red-700 border-red-200',
       medium: 'bg-amber-50 text-amber-700 border-amber-200',
@@ -230,7 +222,7 @@ export default function ActionDashboard({ onNavigate, darkMode }: ActionDashboar
       icon: Instagram,
       color: 'from-pink-500 to-purple-600',
       iconBg: 'bg-gradient-to-br from-pink-500/20 to-purple-600/20',
-      iconColor: 'text-pink-600 dark:text-pink-400',
+      iconColor: 'text-pink-600',
     },
     {
       id: 'tiktok',
@@ -238,7 +230,7 @@ export default function ActionDashboard({ onNavigate, darkMode }: ActionDashboar
       icon: Video,
       color: 'from-slate-800 to-teal-500',
       iconBg: 'bg-gradient-to-br from-slate-800/20 to-teal-500/20',
-      iconColor: 'text-slate-800 dark:text-teal-400',
+      iconColor: 'text-slate-800',
     },
     {
       id: 'youtube',
@@ -246,7 +238,7 @@ export default function ActionDashboard({ onNavigate, darkMode }: ActionDashboar
       icon: Youtube,
       color: 'from-red-600 to-red-700',
       iconBg: 'bg-gradient-to-br from-red-600/20 to-red-700/20',
-      iconColor: 'text-red-600 dark:text-red-400',
+      iconColor: 'text-red-600',
     },
   ];
 
@@ -400,7 +392,7 @@ export default function ActionDashboard({ onNavigate, darkMode }: ActionDashboar
           className="p-4 rounded-xl bg-card border border-border hover:bg-accent transition-all cursor-pointer text-left shadow-md hover:shadow-lg"
         >
           <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-pink-500/20 mb-3">
-            <Heart className="w-5 h-5 text-pink-500 dark:text-pink-400" />
+            <Heart className="w-5 h-5 text-pink-500" />
           </div>
           <p className="text-xs text-muted-foreground mb-1">Engagement</p>
           <p className="text-xl font-bold text-foreground">
@@ -432,7 +424,7 @@ export default function ActionDashboard({ onNavigate, darkMode }: ActionDashboar
             highPriorityInsights.length > 0 ? 'bg-amber-500/20' : 'bg-emerald-500/20'
           }`}>
             <Bell className={`w-5 h-5 ${
-              highPriorityInsights.length > 0 ? 'text-amber-500 dark:text-amber-400' : 'text-emerald-500 dark:text-emerald-400'
+              highPriorityInsights.length > 0 ? 'text-amber-500' : 'text-emerald-500'
             }`} />
           </div>
           <p className="text-xs text-muted-foreground mb-1">Action Items</p>

@@ -197,10 +197,10 @@ export function DealProductionChecklist({ dealId }: DealProductionChecklistProps
       {production.is_overdue && (
         <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20">
           <div className="flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+            <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
             <div>
-              <p className="text-sm font-semibold text-red-600 dark:text-red-400">Production Overdue</p>
-              <p className="text-xs text-red-600/80 dark:text-red-400/80 mt-1">
+              <p className="text-sm font-semibold text-red-600">Production Overdue</p>
+              <p className="text-xs text-red-600/80 mt-1">
                 One or more milestones have passed their deadline.
               </p>
             </div>
@@ -225,7 +225,7 @@ export function DealProductionChecklist({ dealId }: DealProductionChecklistProps
               <div className="flex items-start gap-4">
                 <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center ${
                   isComplete
-                    ? 'bg-green-500/20 text-green-600 dark:text-green-400'
+                    ? 'bg-green-500/20 text-green-600'
                     : 'bg-muted text-muted-foreground'
                 }`}>
                   {isComplete ? (

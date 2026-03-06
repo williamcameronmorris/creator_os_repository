@@ -189,13 +189,13 @@ export function SchedulingStage({ workflowId, contentType, onComplete }: Schedul
   return (
     <div className="max-w-4xl mx-auto">
       <div className="mb-8">
-        <h2 className="text-2xl font-bold text-slate-900">Packaging & Scheduling</h2>
-        <p className="text-slate-500 text-sm">Finalize your post and pick a time slot.</p>
+        <h2 className="text-2xl font-bold text-gray-900">Packaging & Scheduling</h2>
+        <p className="text-gray-500 text-sm">Finalize your post and pick a time slot.</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <div className="space-y-6">
-          <div className="bg-slate-900 rounded-2xl overflow-hidden shadow-xl aspect-[9/16] relative flex items-center justify-center">
+          <div className="bg-gray-900 rounded-2xl overflow-hidden shadow-xl aspect-[9/16] relative flex items-center justify-center">
             {mediaUrl ? (
               contentType === 'reel' || contentType === 'tiktok' || mediaUrl.match(/\.(mp4|mov|webm)$/i) ? (
                 <video src={mediaUrl} controls className="w-full h-full object-cover" />
@@ -203,14 +203,14 @@ export function SchedulingStage({ workflowId, contentType, onComplete }: Schedul
                 <img src={mediaUrl} alt="Preview" className="w-full h-full object-cover" />
               )
             ) : (
-              <div className="text-slate-500 flex flex-col items-center">
+              <div className="text-gray-500 flex flex-col items-center">
                 <ImageIcon className="w-12 h-12 mb-2 opacity-50" />
                 <p>No media attached</p>
               </div>
             )}
 
             {!mediaUrl && (
-              <div className="absolute inset-0 bg-slate-900/50 flex items-center justify-center p-6 text-center">
+              <div className="absolute inset-0 bg-black/50 flex items-center justify-center p-6 text-center">
                 <div className="bg-white/10 backdrop-blur-md border border-white/20 p-4 rounded-xl text-white text-sm">
                   <AlertTriangle className="w-6 h-6 text-yellow-400 mx-auto mb-2" />
                   Warning: No media file found.
@@ -221,23 +221,23 @@ export function SchedulingStage({ workflowId, contentType, onComplete }: Schedul
         </div>
 
         <div className="space-y-6">
-          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-            <h3 className="font-bold text-slate-900 mb-4">Final Polish</h3>
+          <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
+            <h3 className="font-bold text-gray-900 mb-4">Final Polish</h3>
 
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-1">Caption</label>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Caption</label>
                 <textarea
                   value={caption}
                   onChange={(e) => setCaption(e.target.value)}
-                  className="w-full p-4 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none min-h-[200px] text-sm"
+                  className="w-full p-4 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none min-h-[200px] text-sm"
                   placeholder="Write your final caption..."
                 />
               </div>
 
               {timeSlots.length > 0 && (
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2 flex items-center gap-1.5">
+                  <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-1.5">
                     <Sparkles className="w-4 h-4 text-blue-500" />
                     {timeSlots[0].score > 0 ? 'Optimal Times (based on your data)' : 'Suggested Times'}
                   </label>
@@ -249,14 +249,14 @@ export function SchedulingStage({ workflowId, contentType, onComplete }: Schedul
                         className={`w-full text-left p-3 rounded-xl border transition-all ${
                           scheduledDate === slot.datetime
                             ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500'
-                            : 'border-slate-200 hover:border-blue-300 hover:bg-slate-50'
+                            : 'border-gray-200 hover:border-blue-300 hover:bg-violet-50'
                         }`}
                       >
                         <div className="flex items-center gap-2">
-                          <Clock className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                          <Clock className="w-4 h-4 text-gray-400 flex-shrink-0" />
                           <div>
-                            <p className="text-sm font-medium text-slate-800">{slot.label}</p>
-                            <p className="text-xs text-slate-500">{slot.reason}</p>
+                            <p className="text-sm font-medium text-gray-800">{slot.label}</p>
+                            <p className="text-xs text-gray-500">{slot.reason}</p>
                           </div>
                         </div>
                       </button>
@@ -266,20 +266,20 @@ export function SchedulingStage({ workflowId, contentType, onComplete }: Schedul
               )}
 
               <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-1">Or pick a custom time</label>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Or pick a custom time</label>
                 <div className="relative">
-                  <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                  <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                   <input
                     type="datetime-local"
                     value={scheduledDate}
                     onChange={(e) => setScheduledDate(e.target.value)}
-                    className="w-full pl-12 p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                    className="w-full pl-12 p-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
                   />
                 </div>
               </div>
             </div>
 
-            <div className="mt-8 pt-6 border-t border-slate-200">
+            <div className="mt-8 pt-6 border-t border-gray-200">
               <button
                 onClick={handleSchedule}
                 disabled={loading || !scheduledDate}

@@ -77,7 +77,7 @@ export function EngagementCard({
     >
       <div className="space-y-6">
         <div>
-          <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Engagement Breakdown</p>
+          <p className="text-sm font-medium text-gray-700 mb-3">Engagement Breakdown</p>
           <div className="grid grid-cols-2 gap-3">
             {metricItems.map((item) => {
               const Icon = item.icon;
@@ -85,13 +85,13 @@ export function EngagementCard({
               const isNegative = item.change < 0;
 
               return (
-                <div key={item.label} className="bg-gray-100 dark:bg-gray-800 rounded-xl p-3">
+                <div key={item.label} className="bg-gray-100 rounded-xl p-3">
                   <div className="flex items-center gap-2 mb-1">
                     <Icon className={`w-4 h-4 ${item.color}`} />
-                    <span className="text-xs text-gray-500 dark:text-gray-400">{item.label}</span>
+                    <span className="text-xs text-gray-500">{item.label}</span>
                   </div>
                   <div className="flex items-baseline gap-2">
-                    <span className="text-lg font-bold text-gray-900 dark:text-white">
+                    <span className="text-lg font-bold text-gray-900">
                       {formatNumber(item.value)}
                     </span>
                     {item.change !== 0 && (
@@ -111,16 +111,16 @@ export function EngagementCard({
 
         {data.topPosts.length > 0 && (
           <div>
-            <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Top Performing Posts</p>
+            <p className="text-sm font-medium text-gray-700 mb-3">Top Performing Posts</p>
             <div className="space-y-2">
               {data.topPosts.slice(0, 3).map((post, index) => (
-                <div key={post.id} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-xl">
-                  <div className="w-8 h-8 rounded-lg bg-gray-200 dark:bg-gray-700 flex items-center justify-center flex-shrink-0 text-sm font-bold text-gray-700 dark:text-gray-300">
+                <div key={post.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
+                  <div className="w-8 h-8 rounded-lg bg-gray-200 flex items-center justify-center flex-shrink-0 text-sm font-bold text-gray-700">
                     {index + 1}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{post.title}</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">{post.engagementRate.toFixed(1)}% engagement rate</p>
+                    <p className="text-sm font-medium text-gray-900 truncate">{post.title}</p>
+                    <p className="text-xs text-gray-500">{post.engagementRate.toFixed(1)}% engagement rate</p>
                   </div>
                 </div>
               ))}
@@ -130,7 +130,7 @@ export function EngagementCard({
 
         <button
           onClick={onViewAnalytics}
-          className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-gray-900 dark:bg-white text-white dark:text-gray-900 font-medium hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors"
+          className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-violet-600 text-white font-medium hover:bg-violet-700 transition-colors"
         >
           View Full Analytics
           <ArrowRight className="w-4 h-4" />

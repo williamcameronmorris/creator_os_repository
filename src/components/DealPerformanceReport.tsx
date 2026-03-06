@@ -194,25 +194,25 @@ This content resonated well with the audience and delivered strong results. I'd 
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <div className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/20">
-          <Eye className="w-5 h-5 text-blue-600 dark:text-blue-400 mb-2" />
+          <Eye className="w-5 h-5 text-blue-600 mb-2" />
           <div className="text-2xl font-bold text-foreground">{report.views.toLocaleString()}</div>
           <div className="text-xs text-muted-foreground">Views</div>
         </div>
 
         <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20">
-          <Heart className="w-5 h-5 text-red-600 dark:text-red-400 mb-2" />
+          <Heart className="w-5 h-5 text-red-600 mb-2" />
           <div className="text-2xl font-bold text-foreground">{report.likes.toLocaleString()}</div>
           <div className="text-xs text-muted-foreground">Likes</div>
         </div>
 
         <div className="p-4 rounded-xl bg-green-500/10 border border-green-500/20">
-          <MessageCircle className="w-5 h-5 text-green-600 dark:text-green-400 mb-2" />
+          <MessageCircle className="w-5 h-5 text-green-600 mb-2" />
           <div className="text-2xl font-bold text-foreground">{report.comments.toLocaleString()}</div>
           <div className="text-xs text-muted-foreground">Comments</div>
         </div>
 
         <div className="p-4 rounded-xl bg-purple-500/10 border border-purple-500/20">
-          <Share2 className="w-5 h-5 text-purple-600 dark:text-purple-400 mb-2" />
+          <Share2 className="w-5 h-5 text-purple-600 mb-2" />
           <div className="text-2xl font-bold text-foreground">{report.shares.toLocaleString()}</div>
           <div className="text-xs text-muted-foreground">Shares</div>
         </div>
@@ -345,7 +345,7 @@ This content resonated well with the audience and delivered strong results. I'd 
         )}
 
         {report.report_sent_at && (
-          <div className="flex-1 px-6 py-3 bg-green-600/20 text-green-600 dark:text-green-400 rounded-xl font-semibold flex items-center justify-center gap-2">
+          <div className="flex-1 px-6 py-3 bg-green-600/20 text-green-600 rounded-xl font-semibold flex items-center justify-center gap-2">
             <CheckCircle className="w-5 h-5" />
             Sent to Brand
           </div>
