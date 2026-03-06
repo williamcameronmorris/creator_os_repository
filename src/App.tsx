@@ -15,12 +15,6 @@ import { SavedIdeasPage } from './pages/SavedIdeasPage';
 import { Profile } from './pages/Profile';
 import { SettingsPage } from './pages/SettingsPage';
 import { Studio } from './pages/Studio';
-import { Pipeline } from './pages/Pipeline';
-import { Revenue } from './pages/Revenue';
-import { QuickQuotePage } from './pages/QuickQuotePage';
-import { CopyBankPage } from './pages/CopyBankPage';
-import BrandLibrary from './pages/BrandLibrary';
-import { TemplatesPage } from './pages/TemplatesPage';
 import { MetaCallback } from './components/MetaCallback';
 import { ThreadsCallback } from './components/ThreadsCallback';
 import { supabase, type Profile as ProfileType } from './lib/supabase';
@@ -30,8 +24,8 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-900">
-        <div className="text-white">Loading...</div>
+      <div className="min-h-screen flex items-center justify-center bg-[#f7f5ff]">
+        <div className="w-10 h-10 border-4 border-purple-200 border-t-purple-600 rounded-full animate-spin" />
       </div>
     );
   }
@@ -73,8 +67,8 @@ function AppContent() {
 
   if (loading || checkingProfile) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-900">
-        <div className="text-white">Loading...</div>
+      <div className="min-h-screen flex items-center justify-center bg-[#f7f5ff]">
+        <div className="w-10 h-10 border-4 border-purple-200 border-t-purple-600 rounded-full animate-spin" />
       </div>
     );
   }
@@ -103,9 +97,7 @@ function AppContent() {
         path="/"
         element={
           <ProtectedRoute>
-            <Layout>
-              <DailyPulse />
-            </Layout>
+            <Layout><DailyPulse /></Layout>
           </ProtectedRoute>
         }
       />
@@ -113,9 +105,7 @@ function AppContent() {
         path="/dashboard"
         element={
           <ProtectedRoute>
-            <Layout>
-              <DailyPulse />
-            </Layout>
+            <Layout><DailyPulse /></Layout>
           </ProtectedRoute>
         }
       />
@@ -123,9 +113,7 @@ function AppContent() {
         path="/command-center"
         element={
           <ProtectedRoute>
-            <Layout>
-              <SocialDashboard />
-            </Layout>
+            <Layout><SocialDashboard /></Layout>
           </ProtectedRoute>
         }
       />
@@ -133,9 +121,7 @@ function AppContent() {
         path="/studio"
         element={
           <ProtectedRoute>
-            <Layout>
-              <Studio />
-            </Layout>
+            <Layout><Studio /></Layout>
           </ProtectedRoute>
         }
       />
@@ -143,9 +129,7 @@ function AppContent() {
         path="/schedule"
         element={
           <ProtectedRoute>
-            <Layout>
-              <Schedule />
-            </Layout>
+            <Layout><Schedule /></Layout>
           </ProtectedRoute>
         }
       />
@@ -153,9 +137,7 @@ function AppContent() {
         path="/media"
         element={
           <ProtectedRoute>
-            <Layout>
-              <Media />
-            </Layout>
+            <Layout><Media /></Layout>
           </ProtectedRoute>
         }
       />
@@ -163,9 +145,7 @@ function AppContent() {
         path="/analytics"
         element={
           <ProtectedRoute>
-            <Layout>
-              <Analytics />
-            </Layout>
+            <Layout><Analytics /></Layout>
           </ProtectedRoute>
         }
       />
@@ -173,9 +153,7 @@ function AppContent() {
         path="/saved-ideas"
         element={
           <ProtectedRoute>
-            <Layout>
-              <SavedIdeasPage />
-            </Layout>
+            <Layout><SavedIdeasPage /></Layout>
           </ProtectedRoute>
         }
       />
@@ -183,9 +161,7 @@ function AppContent() {
         path="/profile"
         element={
           <ProtectedRoute>
-            <Layout>
-              <Profile />
-            </Layout>
+            <Layout><Profile /></Layout>
           </ProtectedRoute>
         }
       />
@@ -193,70 +169,7 @@ function AppContent() {
         path="/settings"
         element={
           <ProtectedRoute>
-            <Layout>
-              <SettingsPage />
-            </Layout>
-          </ProtectedRoute>
-        }
-      />
-      {/* ── Deal Module ── */}
-      <Route
-        path="/pipeline"
-        element={
-          <ProtectedRoute>
-            <Layout>
-              <Pipeline />
-            </Layout>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/revenue"
-        element={
-          <ProtectedRoute>
-            <Layout>
-              <Revenue />
-            </Layout>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/quick-quote"
-        element={
-          <ProtectedRoute>
-            <Layout>
-              <QuickQuotePage />
-            </Layout>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/copy-bank"
-        element={
-          <ProtectedRoute>
-            <Layout>
-              <CopyBankPage />
-            </Layout>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/brand-library"
-        element={
-          <ProtectedRoute>
-            <Layout>
-              <BrandLibrary />
-            </Layout>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/templates"
-        element={
-          <ProtectedRoute>
-            <Layout>
-              <TemplatesPage />
-            </Layout>
+            <Layout><SettingsPage /></Layout>
           </ProtectedRoute>
         }
       />

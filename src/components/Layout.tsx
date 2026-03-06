@@ -1,31 +1,20 @@
 import { ReactNode, useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { useTheme } from '../contexts/ThemeContext';
 import {
   Home,
   LayoutGrid,
   Settings as SettingsIcon,
   LogOut,
-  Briefcase,
   Calendar,
   Image,
   TrendingUp,
   User,
-  Moon,
-  Sun,
-  ChevronDown,
   ChevronRight,
   X,
   Sparkles,
   Bookmark,
   Video,
-  GitBranch,
-  DollarSign,
-  Calculator,
-  FileText,
-  Building2,
-  Layers
 } from 'lucide-react';
 
 interface LayoutProps {
@@ -44,22 +33,15 @@ interface NavItem {
   icon: any;
 }
 
-type BottomNavTab = 'content' | 'office' | 'settings' | null;
+type BottomNavTab = 'studio' | 'settings' | null;
 
 export function Layout({ children }: LayoutProps) {
   const { user, signOut } = useAuth();
-  const { darkMode, toggleDarkMode } = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
   const [activeBottomTab, setActiveBottomTab] = useState<BottomNavTab>(null);
-  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
-    headquarters: true,
-    'the-studio': true,
-    'the-office': true,
-    system: true,
-  });
 
-  // Swipe gesture state
+  // Swipe back gesture state
   const [swipeProgress, setSwipeProgress] = useState(0);
   const touchStartX = useRef<number | null>(null);
   const touchStartY = useRef<number | null>(null);
@@ -70,7 +52,7 @@ export function Layout({ children }: LayoutProps) {
       title: 'HEADQUARTERS',
       items: [
         { path: '/dashboard', label: 'Daily Pulse', icon: Home },
-        { path: '/command-center', label: 'Command Center', description: 'Full analytics dashboard', icon: LayoutGrid },
+        { path: '/command-center', label: 'Command Center', description: 'Analytics & AI', icon: LayoutGrid },
       ],
     },
     {
@@ -84,17 +66,6 @@ export function Layout({ children }: LayoutProps) {
       ],
     },
     {
-      title: 'THE OFFICE',
-      items: [
-        { path: '/pipeline', label: 'Deal Pipeline', icon: GitBranch },
-        { path: '/revenue', label: 'Revenue', icon: DollarSign },
-        { path: '/quick-quote', label: 'Quick Quote', icon: Calculator },
-        { path: '/copy-bank', label: 'Copy Bank', icon: FileText },
-        { path: '/brand-library', label: 'Brand Library', icon: Building2 },
-        { path: '/templates', label: 'Templates', icon: Layers },
-      ],
-    },
-    {
       title: 'SYSTEM',
       items: [
         { path: '/profile', label: 'Profile', icon: User },
@@ -103,273 +74,132 @@ export function Layout({ children }: LayoutProps) {
     },
   ];
 
-  const toggleSection = (sectionKey: string) => {
-    setExpandedSections(prev => ({
-      ...prev,
-      [sectionKey]: !prev[sectionKey],
-    }));
-  };
+  const isActive = (path: string) =>
+    location.pathname === path || location.pathname.startsWith(path + '/');
 
-  const isActive = (path: string) => {
-    return location.pathname === path || location.pathname.startsWith(path + '/');
-  };
+  const closeBottomNav = () => setActiveBottomTab(null);
 
-  const closeBottomNav = () => {
-    setActiveBottomTab(null);
-  };
-
-  const openBottomTab = (tab: BottomNavTab) => {
+  const openBottomTab = (tab: BottomNavTab) =>
     setActiveBottomTab(activeBottomTab === tab ? null : tab);
-  };
 
-  // Check if we can navigate back
-  const canGoBack = () => {
-    const homePaths = ['/', '/dashboard'];
-    return !homePaths.includes(location.pathname);
-  };
+  const canGoBack = () => !['/', '/dashboard'].includes(location.pathname);
 
-  // Swipe gesture handlers
+  // Swipe-back gesture
   const handleTouchStart = (e: TouchEvent) => {
     const touch = e.touches[0];
     touchStartX.current = touch.clientX;
     touchStartY.current = touch.clientY;
-
-    // Only trigger swipe if starting from left edge (within 50px)
     if (touch.clientX <= 50 && canGoBack()) {
       isSwipingBack.current = true;
     }
   };
 
   const handleTouchMove = (e: TouchEvent) => {
-    if (!isSwipingBack.current || touchStartX.current === null || touchStartY.current === null) {
-      return;
-    }
-
+    if (!isSwipingBack.current || touchStartX.current === null || touchStartY.current === null) return;
     const touch = e.touches[0];
     const deltaX = touch.clientX - touchStartX.current;
     const deltaY = touch.clientY - touchStartY.current;
-
-    // Cancel swipe if moving more vertically than horizontally
     if (Math.abs(deltaY) > Math.abs(deltaX)) {
       isSwipingBack.current = false;
       setSwipeProgress(0);
       return;
     }
-
-    // Update swipe progress (max 300px for full swipe)
     if (deltaX > 0) {
-      const progress = Math.min(deltaX / 300, 1);
-      setSwipeProgress(progress);
-
-      // Prevent default scrolling when swiping
-      if (deltaX > 10) {
-        e.preventDefault();
-      }
+      setSwipeProgress(Math.min(deltaX / 300, 1));
+      if (deltaX > 10) e.preventDefault();
     }
   };
 
   const handleTouchEnd = () => {
-    if (!isSwipingBack.current) {
-      return;
-    }
-
-    // Navigate back if swipe progress is more than 40%
-    if (swipeProgress > 0.4) {
-      navigate(-1);
-    }
-
-    // Reset state
+    if (!isSwipingBack.current) return;
+    if (swipeProgress > 0.4) navigate(-1);
     isSwipingBack.current = false;
     setSwipeProgress(0);
     touchStartX.current = null;
     touchStartY.current = null;
   };
 
-  // Attach touch event listeners
   useEffect(() => {
-    const handleStart = (e: TouchEvent) => handleTouchStart(e);
-    const handleMove = (e: TouchEvent) => handleTouchMove(e);
-    const handleEnd = () => handleTouchEnd();
-
-    document.addEventListener('touchstart', handleStart, { passive: false });
-    document.addEventListener('touchmove', handleMove, { passive: false });
-    document.addEventListener('touchend', handleEnd);
-
+    const s = (e: TouchEvent) => handleTouchStart(e);
+    const m = (e: TouchEvent) => handleTouchMove(e);
+    const en = () => handleTouchEnd();
+    document.addEventListener('touchstart', s, { passive: false });
+    document.addEventListener('touchmove', m, { passive: false });
+    document.addEventListener('touchend', en);
     return () => {
-      document.removeEventListener('touchstart', handleStart);
-      document.removeEventListener('touchmove', handleMove);
-      document.removeEventListener('touchend', handleEnd);
+      document.removeEventListener('touchstart', s);
+      document.removeEventListener('touchmove', m);
+      document.removeEventListener('touchend', en);
     };
   }, [location.pathname, swipeProgress]);
 
-  const renderNavigation = (isMobile: boolean = false) => (
-    <div className="space-y-6">
-      {navigationSections.map((section, sectionIndex) => {
-        const sectionKey = section.title.toLowerCase().replace(/\s+/g, '-');
-        const isExpanded = expandedSections[sectionKey];
+  const userInitial = user?.email?.[0]?.toUpperCase() ?? '?';
 
-        return (
-          <div key={sectionIndex}>
-            <button
-              onClick={() => toggleSection(sectionKey)}
-              className="w-full flex items-center justify-between mb-2 px-2 py-1 text-xs font-bold tracking-wider text-muted-foreground hover:text-foreground transition-colors"
-            >
-              {section.title}
-              {isExpanded ? (
-                <ChevronDown className="w-3 h-3" />
-              ) : (
-                <ChevronRight className="w-3 h-3" />
-              )}
-            </button>
-
-            {isExpanded && (
-              <div className="space-y-1">
-                {section.items.map((item) => {
-                  const Icon = item.icon;
-                  const active = isActive(item.path);
-
-                  return (
-                    <Link
-                      key={item.path}
-                      to={item.path}
-                      onClick={isMobile ? closeBottomNav : undefined}
-                      className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all ${
-                        active
-                          ? 'bg-accent text-accent-foreground'
-                          : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
-                      }`}
-                    >
-                      <Icon className="w-4 h-4 flex-shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium">{item.label}</div>
-                        {item.description && (
-                          <div className="text-xs opacity-70 truncate">{item.description}</div>
-                        )}
-                      </div>
-                    </Link>
-                  );
-                })}
-              </div>
-            )}
-
-            {sectionIndex < navigationSections.length - 1 && (
-              <div className="mt-4 border-t border-border" />
+  const renderNavLinks = (section: NavSection, onClick?: () => void) =>
+    section.items.map((item) => {
+      const Icon = item.icon;
+      const active = isActive(item.path);
+      return (
+        <Link
+          key={item.path}
+          to={item.path}
+          onClick={onClick}
+          className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-sm font-medium ${
+            active
+              ? 'bg-violet-100 text-violet-700'
+              : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
+          }`}
+        >
+          <Icon className={`w-4 h-4 flex-shrink-0 ${active ? 'text-violet-600' : ''}`} />
+          <div className="flex-1 min-w-0">
+            <div>{item.label}</div>
+            {item.description && (
+              <div className="text-xs font-normal opacity-60 truncate">{item.description}</div>
             )}
           </div>
-        );
-      })}
-    </div>
-  );
+        </Link>
+      );
+    });
 
   const renderBottomNavContent = () => {
     if (!activeBottomTab) return null;
 
-    let content;
-    let title = '';
-
-    if (activeBottomTab === 'content') {
-      title = 'The Studio';
-      content = navigationSections[1];
-    } else if (activeBottomTab === 'office') {
-      title = 'The Office';
-      content = navigationSections[2];
-    } else if (activeBottomTab === 'settings') {
-      title = 'Settings';
-      content = navigationSections[3];
-    }
+    const sectionMap: Record<NonNullable<BottomNavTab>, NavSection> = {
+      studio: navigationSections[1],
+      settings: navigationSections[2],
+    };
+    const section = sectionMap[activeBottomTab];
+    const title = activeBottomTab === 'studio' ? 'The Studio' : 'Settings';
 
     return (
       <>
-        <div
-          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
-          onClick={closeBottomNav}
-        />
-        <div className="fixed bottom-16 left-0 right-0 bg-card border-t border-border z-50 lg:hidden max-h-[60vh] overflow-y-auto">
-          <div className="p-4">
+        <div className="fixed inset-0 bg-black/30 z-40 lg:hidden" onClick={closeBottomNav} />
+        <div className="fixed bottom-16 left-0 right-0 bg-white border-t border-gray-100 z-50 lg:hidden max-h-[65vh] overflow-y-auto rounded-t-3xl shadow-xl">
+          <div className="p-5">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-foreground">{title}</h3>
+              <h3 className="text-lg font-black text-gray-900">{title}</h3>
               <button
                 onClick={closeBottomNav}
-                className="p-2 rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
-                aria-label="Close menu"
+                className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
-
-            {activeBottomTab === 'settings' ? (
-              <div className="space-y-2">
-                {content?.items.map((item) => {
-                  const Icon = item.icon;
-                  const active = isActive(item.path);
-                  return (
-                    <Link
-                      key={item.path}
-                      to={item.path}
-                      onClick={closeBottomNav}
-                      className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all ${
-                        active
-                          ? 'bg-accent text-accent-foreground'
-                          : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
-                      }`}
-                    >
-                      <Icon className="w-4 h-4 flex-shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium">{item.label}</div>
-                        {item.description && (
-                          <div className="text-xs opacity-70 truncate">{item.description}</div>
-                        )}
-                      </div>
-                    </Link>
-                  );
-                })}
-                <div className="border-t border-border my-2" />
-                <button
-                  onClick={toggleDarkMode}
-                  className="w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-                >
-                  {darkMode ? <Sun className="w-4 h-4 flex-shrink-0" /> : <Moon className="w-4 h-4 flex-shrink-0" />}
-                  <span>{darkMode ? 'Light Mode' : 'Dark Mode'}</span>
-                </button>
-                <button
-                  onClick={() => {
-                    signOut();
-                    closeBottomNav();
-                  }}
-                  className="w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-                >
-                  <LogOut className="w-4 h-4 flex-shrink-0" />
-                  <span>Sign Out</span>
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {content?.items.map((item) => {
-                  const Icon = item.icon;
-                  const active = isActive(item.path);
-                  return (
-                    <Link
-                      key={item.path}
-                      to={item.path}
-                      onClick={closeBottomNav}
-                      className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all ${
-                        active
-                          ? 'bg-accent text-accent-foreground'
-                          : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
-                      }`}
-                    >
-                      <Icon className="w-4 h-4 flex-shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium">{item.label}</div>
-                        {item.description && (
-                          <div className="text-xs opacity-70 truncate">{item.description}</div>
-                        )}
-                      </div>
-                    </Link>
-                  );
-                })}
-              </div>
-            )}
+            <div className="space-y-1">
+              {renderNavLinks(section, closeBottomNav)}
+              {activeBottomTab === 'settings' && (
+                <>
+                  <div className="border-t border-gray-100 my-3" />
+                  <button
+                    onClick={() => { signOut(); closeBottomNav(); }}
+                    className="flex items-center gap-3 px-3 py-2.5 rounded-xl w-full text-sm font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-all"
+                  >
+                    <LogOut className="w-4 h-4 flex-shrink-0" />
+                    Sign Out
+                  </button>
+                </>
+              )}
+            </div>
           </div>
         </div>
       </>
@@ -377,132 +207,131 @@ export function Layout({ children }: LayoutProps) {
   };
 
   return (
-    <div className="min-h-screen bg-background pb-16 lg:pb-0">
-      {/* Swipe back indicator */}
+    <div className="min-h-screen bg-[#f7f5ff] pb-16 lg:pb-0">
+      {/* Swipe-back indicator */}
       {swipeProgress > 0 && (
         <>
           <div
-            className="fixed inset-0 bg-black z-[60] pointer-events-none transition-opacity duration-150"
-            style={{ opacity: swipeProgress * 0.3 }}
+            className="fixed inset-0 bg-black z-[60] pointer-events-none"
+            style={{ opacity: swipeProgress * 0.2 }}
           />
           <div
-            className="fixed left-0 top-0 bottom-0 w-1 bg-primary z-[61] pointer-events-none transition-all duration-150"
-            style={{
-              transform: `translateX(${swipeProgress * 50}px)`,
-              opacity: swipeProgress,
-            }}
-          />
-          <div
-            className="fixed left-4 top-1/2 -translate-y-1/2 z-[61] pointer-events-none transition-all duration-150"
+            className="fixed left-4 top-1/2 z-[61] pointer-events-none"
             style={{
               transform: `translateX(${swipeProgress * 60 - 40}px) translateY(-50%)`,
               opacity: swipeProgress,
             }}
           >
-            <ChevronRight className="w-8 h-8 text-primary rotate-180" />
+            <ChevronRight className="w-8 h-8 text-violet-600 rotate-180" />
           </div>
         </>
       )}
 
-      <nav className="bg-card border-b border-border sticky top-0 z-50">
+      {/* ── Top header ─────────────────────────────────── */}
+      <header className="bg-white border-b border-gray-100 sticky top-0 z-50">
         <div className="px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-3">
-              <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-primary">
-                <Briefcase className="w-6 h-6 text-primary-foreground" />
-              </div>
-              <div>
-                <h1 className="text-xl font-bold tracking-tight text-foreground">
-                  Creator Command
-                </h1>
-                <p className="text-xs text-muted-foreground hidden sm:block">
-                  Studio + Office
-                </p>
-              </div>
-            </div>
+            {/* Logo */}
+            <Link to="/dashboard" className="flex items-center gap-2.5 select-none">
+              <div className="w-2.5 h-2.5 rounded-full bg-violet-600" />
+              <span className="text-lg font-black tracking-tight text-gray-900">
+                Creator Command
+              </span>
+            </Link>
 
+            {/* Desktop right side */}
             <div className="hidden lg:flex items-center gap-3">
-              <button
-                onClick={toggleDarkMode}
-                className="p-2 rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
-                title={darkMode ? 'Light mode' : 'Dark mode'}
-              >
-                {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-              </button>
-              <span className="text-sm text-muted-foreground hidden md:block truncate max-w-[150px] lg:max-w-none">
+              <span className="text-sm text-gray-400 truncate max-w-[180px]">
                 {user?.email}
               </span>
               <button
                 onClick={() => signOut()}
-                className="p-2 rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+                className="p-2 rounded-xl hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-colors"
                 title="Sign out"
               >
-                <LogOut className="w-5 h-5" />
+                <LogOut className="w-4 h-4" />
               </button>
+              <div className="w-8 h-8 rounded-full bg-violet-600 flex items-center justify-center text-white text-sm font-bold select-none">
+                {userInitial}
+              </div>
+            </div>
+
+            {/* Mobile avatar */}
+            <div className="lg:hidden">
+              <div className="w-8 h-8 rounded-full bg-violet-600 flex items-center justify-center text-white text-sm font-bold select-none">
+                {userInitial}
+              </div>
             </div>
           </div>
         </div>
-      </nav>
+      </header>
 
       {renderBottomNavContent()}
 
       <div className="flex overflow-x-hidden">
-        <aside className="w-64 bg-card border-r border-border min-h-[calc(100vh-4rem)] hidden lg:block">
-          <div className="p-4">
-            {renderNavigation()}
-          </div>
+        {/* ── Desktop sidebar ─────────────────────────── */}
+        <aside className="w-60 bg-white border-r border-gray-100 min-h-[calc(100vh-4rem)] hidden lg:block flex-shrink-0">
+          <nav className="p-4 space-y-6">
+            {navigationSections.map((section) => (
+              <div key={section.title}>
+                <p className="text-[10px] font-black tracking-widest text-gray-400 uppercase px-3 mb-2">
+                  {section.title}
+                </p>
+                <div className="space-y-0.5">
+                  {renderNavLinks(section)}
+                </div>
+              </div>
+            ))}
+
+            <div className="border-t border-gray-100 pt-4">
+              <button
+                onClick={() => signOut()}
+                className="flex items-center gap-3 px-3 py-2.5 rounded-xl w-full text-sm font-medium text-gray-400 hover:bg-gray-100 hover:text-gray-900 transition-all"
+              >
+                <LogOut className="w-4 h-4 flex-shrink-0" />
+                Sign Out
+              </button>
+            </div>
+          </nav>
         </aside>
 
+        {/* ── Main content ─────────────────────────────── */}
         <main className="flex-1 p-4 sm:p-6 lg:p-8 min-w-0 overflow-x-hidden">
           {children}
         </main>
       </div>
 
-      <nav className="fixed bottom-0 left-0 right-0 bg-card border-t border-border z-50 lg:hidden">
+      {/* ── Mobile bottom nav ────────────────────────── */}
+      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 z-50 lg:hidden">
         <div className="flex items-center justify-around h-16">
           <Link
             to="/dashboard"
-            className={`flex flex-col items-center justify-center flex-1 h-full transition-colors ${
-              isActive('/dashboard')
-                ? 'text-primary'
-                : 'text-muted-foreground hover:text-foreground'
+            className={`flex flex-col items-center justify-center flex-1 h-full gap-1 transition-colors ${
+              isActive('/dashboard') ? 'text-violet-600' : 'text-gray-400 hover:text-gray-700'
             }`}
           >
-            <Home className="w-5 h-5 mb-1" />
-            <span className="text-xs font-medium">HQ</span>
+            <Home className="w-5 h-5" />
+            <span className="text-[10px] font-bold">HQ</span>
           </Link>
+
           <button
-            onClick={() => openBottomTab('content')}
-            className={`flex flex-col items-center justify-center flex-1 h-full transition-colors ${
-              activeBottomTab === 'content'
-                ? 'text-primary'
-                : 'text-muted-foreground hover:text-foreground'
+            onClick={() => openBottomTab('studio')}
+            className={`flex flex-col items-center justify-center flex-1 h-full gap-1 transition-colors ${
+              activeBottomTab === 'studio' ? 'text-violet-600' : 'text-gray-400 hover:text-gray-700'
             }`}
           >
-            <Sparkles className="w-5 h-5 mb-1" />
-            <span className="text-xs font-medium">Studio</span>
+            <Sparkles className="w-5 h-5" />
+            <span className="text-[10px] font-bold">Studio</span>
           </button>
-          <button
-            onClick={() => openBottomTab('office')}
-            className={`flex flex-col items-center justify-center flex-1 h-full transition-colors ${
-              activeBottomTab === 'office'
-                ? 'text-primary'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            <GitBranch className="w-5 h-5 mb-1" />
-            <span className="text-xs font-medium">Office</span>
-          </button>
+
           <button
             onClick={() => openBottomTab('settings')}
-            className={`flex flex-col items-center justify-center flex-1 h-full transition-colors ${
-              activeBottomTab === 'settings'
-                ? 'text-primary'
-                : 'text-muted-foreground hover:text-foreground'
+            className={`flex flex-col items-center justify-center flex-1 h-full gap-1 transition-colors ${
+              activeBottomTab === 'settings' ? 'text-violet-600' : 'text-gray-400 hover:text-gray-700'
             }`}
           >
-            <SettingsIcon className="w-5 h-5 mb-1" />
-            <span className="text-xs font-medium">Settings</span>
+            <SettingsIcon className="w-5 h-5" />
+            <span className="text-[10px] font-bold">Settings</span>
           </button>
         </div>
       </nav>

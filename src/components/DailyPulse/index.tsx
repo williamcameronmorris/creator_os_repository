@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { useDailyPulse } from '../../hooks/useDailyPulse';
@@ -7,25 +7,148 @@ import { EngagementCard } from './EngagementCard';
 import { ComingUpCard } from './ComingUpCard';
 import { SmartTipsCard } from './SmartTipsCard';
 import { DealPipelineCard } from './DealPipelineCard';
-import { CheckCircle, PartyPopper, Plug, ArrowRight, Instagram, Youtube, Video } from 'lucide-react';
+import {
+  CheckCircle,
+  PartyPopper,
+  Plug,
+  ArrowRight,
+  Instagram,
+  Youtube,
+  Video,
+  ChevronRight,
+  TrendingUp,
+  Calendar,
+  Lightbulb,
+  GitBranch,
+} from 'lucide-react';
 
 type ExpandedCard = 'content' | 'engagement' | 'schedule' | 'tips' | 'deals' | null;
 
+// ── Mobile slide definitions ────────────────────────────────────────────────
+const SLIDES = ['home', 'content', 'deals', 'schedule', 'tips'] as const;
+type Slide = typeof SLIDES[number];
+
+const SLIDE_COLORS: Record<Slide, string> = {
+  home:     '#ede9fe',   // lavender
+  content:  '#ddd6fe',   // purple-200
+  deals:    '#fde68a',   // amber-200
+  schedule: '#fecdd3',   // rose-200
+  tips:     '#a7f3d0',   // green-200
+};
+
+// ── Greeting helper ─────────────────────────────────────────────────────────
+function getGreeting() {
+  const h = new Date().getHours();
+  if (h < 12) return 'Good morning';
+  if (h < 17) return 'Good afternoon';
+  return 'Good evening';
+}
+
+function getEmoji() {
+  const h = new Date().getHours();
+  if (h < 12) return '☀️';
+  if (h < 17) return '⚡';
+  return '🌙';
+}
+
+// ── Card summary data for desktop grid headers ───────────────────────────────
+function SummaryChip({ label, color }: { label: string; color: string }) {
+  return (
+    <span
+      className="text-xs font-semibold px-2.5 py-1 rounded-full"
+      style={{ backgroundColor: color + '40', color: color }}
+    >
+      {label}
+    </span>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DESKTOP GRID CARD — colored header + white body summary
+// ═══════════════════════════════════════════════════════════════════════════
+function DesktopPulseCard({
+  label,
+  title,
+  headerClass,
+  icon: Icon,
+  stat,
+  statLabel,
+  chips,
+  isExpanded,
+  onExpand,
+  expandedContent,
+}: {
+  label: string;
+  title: string;
+  headerClass: string;
+  icon: React.ElementType;
+  stat: string;
+  statLabel: string;
+  chips?: { text: string; color: string }[];
+  isExpanded: boolean;
+  onExpand: () => void;
+  expandedContent: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-3xl overflow-hidden shadow-sm bg-white flex flex-col">
+      {/* Colored header */}
+      <div className={`p-5 ${headerClass}`}>
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-[10px] font-black tracking-widest uppercase opacity-60">{label}</p>
+          <Icon className="w-4 h-4 opacity-50" />
+        </div>
+        <h2 className="text-2xl font-black text-gray-900 leading-tight">{title}</h2>
+      </div>
+
+      {/* White body */}
+      <div className="p-5 flex flex-col flex-1">
+        <p className="text-4xl font-black text-gray-900 leading-none">{stat}</p>
+        <p className="text-sm text-gray-400 mt-1 mb-3">{statLabel}</p>
+
+        {chips && chips.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mb-4">
+            {chips.map((c, i) => (
+              <SummaryChip key={i} label={c.text} color={c.color} />
+            ))}
+          </div>
+        )}
+
+        <button
+          onClick={onExpand}
+          className="mt-auto w-full flex items-center justify-center gap-1.5 text-sm font-semibold text-gray-500 hover:text-gray-900 py-2.5 border border-gray-100 rounded-2xl hover:bg-gray-50 transition-all"
+        >
+          {isExpanded ? 'Collapse' : 'Expand'}
+          <ChevronRight className={`w-3.5 h-3.5 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+        </button>
+      </div>
+
+      {/* Expanded inline content */}
+      {isExpanded && (
+        <div className="border-t border-gray-50 px-5 pb-5 pt-4 bg-gray-50/50">
+          {expandedContent}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MAIN COMPONENT
+// ═══════════════════════════════════════════════════════════════════════════
 export function DailyPulse() {
   const navigate = useNavigate();
   const { data, loading, hasConnectedAccounts, dismissAll, markCardReviewed } = useDailyPulse();
   const [expandedCard, setExpandedCard] = useState<ExpandedCard>(null);
 
-  const handleToggleExpand = (card: ExpandedCard) => {
-    setExpandedCard((current) => (current === card ? null : card));
-  };
+  // Mobile swipe state
+  const [slideIndex, setSlideIndex] = useState(0);
+  const touchStartX = useRef<number | null>(null);
+  const touchStartY = useRef<number | null>(null);
+  const isDragging = useRef(false);
+  const [dragOffset, setDragOffset] = useState(0);
 
-  const getGreeting = () => {
-    const hour = new Date().getHours();
-    if (hour < 12) return 'Good morning';
-    if (hour < 17) return 'Good afternoon';
-    return 'Good evening';
-  };
+  const handleToggleExpand = (card: ExpandedCard) =>
+    setExpandedCard((c) => (c === card ? null : card));
 
   const getThingsToReview = () => {
     if (!data) return 0;
@@ -38,11 +161,7 @@ export function DailyPulse() {
     return count;
   };
 
-  const handleSkipAll = async () => {
-    await dismissAll();
-  };
-
-  const handleMarkAllReviewed = async () => {
+  const handleDone = async () => {
     await markCardReviewed('content');
     await markCardReviewed('engagement');
     await markCardReviewed('schedule');
@@ -50,10 +169,41 @@ export function DailyPulse() {
     await markCardReviewed('deals');
   };
 
+  const handleSkipAll = async () => {
+    await dismissAll();
+  };
+
+  // Mobile swipe handlers
+  const onTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+    isDragging.current = true;
+  };
+
+  const onTouchMove = (e: React.TouchEvent) => {
+    if (!isDragging.current || touchStartX.current === null || touchStartY.current === null) return;
+    const dx = e.touches[0].clientX - touchStartX.current;
+    const dy = e.touches[0].clientY - touchStartY.current;
+    if (Math.abs(dy) > Math.abs(dx)) { isDragging.current = false; return; }
+    setDragOffset(dx);
+  };
+
+  const onTouchEnd = () => {
+    if (!isDragging.current) return;
+    const threshold = 60;
+    if (dragOffset < -threshold && slideIndex < SLIDES.length - 1) setSlideIndex(i => i + 1);
+    if (dragOffset > threshold && slideIndex > 0) setSlideIndex(i => i - 1);
+    setDragOffset(0);
+    isDragging.current = false;
+    touchStartX.current = null;
+    touchStartY.current = null;
+  };
+
+  // ── Loading state ──────────────────────────────────────────────────────
   if (loading) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
-        <div className="w-12 h-12 border-4 border-gray-200 dark:border-gray-700 border-t-gray-900 dark:border-t-white rounded-full animate-spin" />
+        <div className="w-10 h-10 border-4 border-violet-200 border-t-violet-600 rounded-full animate-spin" />
       </div>
     );
   }
@@ -61,40 +211,41 @@ export function DailyPulse() {
   if (!data) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
-        <p className="text-gray-500 dark:text-gray-400">Unable to load daily pulse</p>
+        <p className="text-gray-400">Unable to load daily pulse</p>
       </div>
     );
   }
 
   const isCompleted = data.session?.dismissed_all || data.session?.completed_at !== null;
 
+  // ── All-caught-up screen ───────────────────────────────────────────────
   if (isCompleted) {
     return (
-      <div className="max-w-2xl mx-auto">
-        <div className="bg-white dark:bg-gray-900 rounded-3xl shadow-sm border border-gray-200 dark:border-gray-700 p-8 text-center">
-          <div className="w-20 h-20 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mx-auto mb-6">
-            <PartyPopper className="w-10 h-10 text-emerald-600 dark:text-emerald-400" />
+      <div className="max-w-lg mx-auto pt-12 px-4">
+        <div className="bg-white rounded-3xl shadow-sm p-10 text-center">
+          <div className="w-20 h-20 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-6">
+            <PartyPopper className="w-10 h-10 text-green-600" />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">All caught up!</h1>
-          <p className="text-gray-500 dark:text-gray-400 mb-8">
+          <h1 className="text-3xl font-black text-gray-900 mb-2">All caught up!</h1>
+          <p className="text-gray-400 mb-8">
             You've reviewed your daily pulse for today. Check back tomorrow for new updates.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <button
               onClick={() => navigate('/analytics')}
-              className="px-6 py-3 rounded-xl bg-gray-900 dark:bg-white text-white dark:text-gray-900 font-medium hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors"
+              className="px-6 py-3 rounded-2xl bg-violet-600 text-white font-bold hover:bg-violet-700 transition-colors"
             >
               View Analytics
             </button>
             <button
               onClick={() => navigate('/schedule')}
-              className="px-6 py-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-medium hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+              className="px-6 py-3 rounded-2xl bg-gray-100 text-gray-700 font-bold hover:bg-gray-200 transition-colors"
             >
               Content Schedule
             </button>
             <button
               onClick={() => navigate('/studio')}
-              className="px-6 py-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-medium hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+              className="px-6 py-3 rounded-2xl bg-gray-100 text-gray-700 font-bold hover:bg-gray-200 transition-colors"
             >
               Create Content
             </button>
@@ -104,138 +255,425 @@ export function DailyPulse() {
     );
   }
 
-  return (
-    <div className="max-w-6xl mx-auto">
-      <div className="bg-white dark:bg-gray-900 rounded-3xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 sm:p-8 mb-8">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-2">
-          <div>
-            <div className="flex items-center gap-3 mb-1">
-              <div className="w-2 h-2 rounded-full bg-emerald-500" />
-              <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Daily Pulse</span>
+  const currentSlide = SLIDES[slideIndex];
+  const bgColor = SLIDE_COLORS[currentSlide];
+
+  // ── Expanded card content for desktop grid ─────────────────────────────
+  const expandedContentMap: Record<ExpandedCard & string, React.ReactNode> = {
+    content: (
+      <ContentRecapCard
+        data={data.contentRecap}
+        isExpanded={true}
+        onToggleExpand={() => handleToggleExpand('content')}
+        onViewAnalytics={() => navigate('/analytics')}
+      />
+    ),
+    engagement: (
+      <EngagementCard
+        data={data.engagement}
+        isExpanded={true}
+        onToggleExpand={() => handleToggleExpand('engagement')}
+        onViewAnalytics={() => navigate('/analytics')}
+      />
+    ),
+    schedule: (
+      <ComingUpCard
+        data={data.comingUp}
+        isExpanded={true}
+        onToggleExpand={() => handleToggleExpand('schedule')}
+        onEditPost={(id) => navigate(`/schedule?post=${id}&edit=true`)}
+        onReschedule={(id) => navigate(`/schedule?post=${id}&reschedule=true`)}
+        onViewCalendar={() => navigate('/schedule')}
+      />
+    ),
+    tips: (
+      <SmartTipsCard
+        data={data.smartTips}
+        isExpanded={true}
+        onToggleExpand={() => handleToggleExpand('tips')}
+        onTipAction={(tip) => {
+          if (tip.actionUrl) navigate(tip.actionUrl);
+          else if (tip.actionLabel?.toLowerCase().includes('tiktok')) navigate('/studio?platform=tiktok');
+          else if (tip.actionLabel?.toLowerCase().includes('reel')) navigate('/studio?platform=instagram&type=reel');
+          else navigate('/studio');
+        }}
+      />
+    ),
+    deals: (
+      <DealPipelineCard
+        data={data.dealPipeline}
+        isExpanded={true}
+        onToggleExpand={() => handleToggleExpand('deals')}
+        onSendFollowUp={() => {}}
+        onReviewContract={() => {}}
+        onQuickQuote={() => {}}
+        onViewDeal={() => {}}
+      />
+    ),
+  };
+
+  // ── Stat helpers ────────────────────────────────────────────────────────
+  const contentStat = data.contentRecap.totalViews >= 1000
+    ? `${(data.contentRecap.totalViews / 1000).toFixed(1)}K`
+    : String(data.contentRecap.totalViews || 0);
+
+  const dealStat = String(data.dealPipeline.activeDeals || 0);
+
+  const scheduleStat = String(data.comingUp.thisWeekCount || 0);
+
+  const tipsStat = String(data.smartTips.tipsCount || 0);
+
+  // ── Platform connect banner ────────────────────────────────────────────
+  const ConnectBanner = () =>
+    !hasConnectedAccounts ? (
+      <div className="bg-gradient-to-r from-violet-50 to-purple-50 border border-violet-200 rounded-3xl p-5 mb-6">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+          <div className="w-11 h-11 rounded-2xl bg-violet-100 flex items-center justify-center flex-shrink-0">
+            <Plug className="w-5 h-5 text-violet-600" />
+          </div>
+          <div className="flex-1">
+            <h3 className="text-sm font-black text-gray-900 mb-1">
+              Connect a platform to see your real data
+            </h3>
+            <p className="text-xs text-gray-500 mb-3">
+              You're viewing demo data. Connect Instagram, TikTok, or YouTube to pull in your actual metrics.
+            </p>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-1.5">
+                <Instagram className="w-3.5 h-3.5 text-pink-500" />
+                <span className="text-xs text-gray-400">Instagram</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Video className="w-3.5 h-3.5 text-gray-400" />
+                <span className="text-xs text-gray-400">TikTok</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Youtube className="w-3.5 h-3.5 text-red-400" />
+                <span className="text-xs text-gray-400">YouTube</span>
+              </div>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">
-              {getGreeting()}, {data.userName}
+          </div>
+          <button
+            onClick={() => navigate('/settings')}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-violet-600 hover:bg-violet-700 text-white font-bold text-sm transition-colors flex-shrink-0"
+          >
+            Connect
+            <ArrowRight className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+    ) : null;
+
+  // ═════════════════════════════════════════════════════════════════════════
+  // RENDER
+  // ═════════════════════════════════════════════════════════════════════════
+  return (
+    <>
+      {/* ── DESKTOP (lg+) ──────────────────────────────────────────────── */}
+      <div className="hidden lg:block max-w-5xl mx-auto">
+        {/* Header */}
+        <div className="flex items-start justify-between mb-8">
+          <div>
+            <h1 className="text-4xl font-black text-gray-900">
+              {getGreeting()}, {data.userName} {getEmoji()}
             </h1>
-            <p className="text-gray-500 dark:text-gray-400 mt-1">
+            <p className="text-gray-400 mt-1 text-base">
               You have {getThingsToReview()} things to review
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 px-3 py-1.5 rounded-full">
-              {format(new Date(), 'EEEE, MMMM d')}
-            </span>
-          </div>
+          <span className="text-sm text-gray-400 bg-white px-4 py-2 rounded-full shadow-sm font-medium">
+            {format(new Date(), 'EEEE, MMMM d')}
+          </span>
+        </div>
+
+        <ConnectBanner />
+
+        {/* 4-card grid */}
+        <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
+          <DesktopPulseCard
+            label="WEEKLY REVIEW"
+            title={`Content\nRecap`}
+            headerClass="pulse-card-purple"
+            icon={TrendingUp}
+            stat={contentStat}
+            statLabel="views this week"
+            chips={[
+              data.contentRecap.viewsChange > 0
+                ? { text: `+${data.contentRecap.viewsChange}% ↑`, color: '#059669' }
+                : { text: `${data.contentRecap.viewsChange}%`, color: '#6b7280' },
+              { text: `${data.contentRecap.postsCount} posts`, color: '#7c3aed' },
+            ]}
+            isExpanded={expandedCard === 'content'}
+            onExpand={() => handleToggleExpand('content')}
+            expandedContent={expandedContentMap.content}
+          />
+
+          <DesktopPulseCard
+            label="PARTNERSHIPS"
+            title={`Deal\nPipeline`}
+            headerClass="pulse-card-amber"
+            icon={GitBranch}
+            stat={dealStat}
+            statLabel="active deals"
+            chips={[
+              ...(data.dealPipeline.stalledCount > 0
+                ? [{ text: `${data.dealPipeline.stalledCount} stalled`, color: '#dc2626' }]
+                : []),
+              ...(data.dealPipeline.totalValue > 0
+                ? [{ text: `$${(data.dealPipeline.totalValue / 1000).toFixed(1)}K`, color: '#d97706' }]
+                : []),
+            ]}
+            isExpanded={expandedCard === 'deals'}
+            onExpand={() => handleToggleExpand('deals')}
+            expandedContent={expandedContentMap.deals}
+          />
+
+          <DesktopPulseCard
+            label="SCHEDULE"
+            title={`Coming\nUp`}
+            headerClass="pulse-card-rose"
+            icon={Calendar}
+            stat={scheduleStat}
+            statLabel="posts this week"
+            chips={[
+              ...(data.comingUp.todayCount > 0
+                ? [{ text: `${data.comingUp.todayCount} today`, color: '#e11d48' }]
+                : []),
+              { text: `${data.comingUp.thisWeekCount} this week`, color: '#f43f5e' },
+            ]}
+            isExpanded={expandedCard === 'schedule'}
+            onExpand={() => handleToggleExpand('schedule')}
+            expandedContent={expandedContentMap.schedule}
+          />
+
+          <DesktopPulseCard
+            label="AI INSIGHTS"
+            title={`Smart\nTips`}
+            headerClass="pulse-card-green"
+            icon={Lightbulb}
+            stat={tipsStat}
+            statLabel="new ideas"
+            chips={[
+              { text: 'AI powered', color: '#059669' },
+            ]}
+            isExpanded={expandedCard === 'tips'}
+            onExpand={() => handleToggleExpand('tips')}
+            expandedContent={expandedContentMap.tips}
+          />
+        </div>
+
+        {/* Footer actions */}
+        <div className="flex flex-col sm:flex-row gap-3 justify-center">
+          <button
+            onClick={handleSkipAll}
+            className="px-6 py-3 rounded-2xl border border-gray-200 bg-white text-gray-500 font-bold hover:bg-gray-50 transition-colors"
+          >
+            Skip All
+          </button>
+          <button
+            onClick={handleDone}
+            className="flex items-center justify-center gap-2 px-6 py-3 rounded-2xl bg-gray-900 text-white font-bold hover:bg-gray-800 transition-colors"
+          >
+            <CheckCircle className="w-5 h-5" />
+            Mark All as Reviewed
+          </button>
         </div>
       </div>
 
-      {/* Platform Connect Banner — shown when no platforms are connected */}
-      {!hasConnectedAccounts && (
-        <div className="bg-gradient-to-r from-blue-600/10 to-purple-600/10 border border-blue-500/20 rounded-2xl p-6 mb-8">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-            <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-blue-500/20 flex-shrink-0">
-              <Plug className="w-6 h-6 text-blue-500" />
-            </div>
-            <div className="flex-1">
-              <h3 className="text-base font-semibold text-foreground mb-1">
-                Connect a platform to see your real data
-              </h3>
-              <p className="text-sm text-muted-foreground mb-3">
-                You're viewing demo data. Connect Instagram, TikTok, or YouTube to pull in your actual metrics and get personalized insights.
+      {/* ── MOBILE (< lg) — swipeable cards ─────────────────────────────── */}
+      <div
+        className="lg:hidden min-h-[calc(100vh-8rem)] flex flex-col transition-colors duration-500"
+        style={{ backgroundColor: bgColor, margin: '-1rem', padding: '1.5rem' }}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+      >
+        {/* Slide 0 — Home greeting */}
+        {currentSlide === 'home' && (
+          <div className="flex-1 flex flex-col">
+            <div className="mb-6">
+              <p className="text-xs font-black tracking-widest text-violet-400 uppercase mb-1">
+                Daily Pulse
               </p>
-              <div className="flex items-center gap-3 flex-wrap">
-                <div className="flex items-center gap-2">
-                  <Instagram className="w-4 h-4 text-pink-500" />
-                  <span className="text-xs text-muted-foreground">Instagram</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Video className="w-4 h-4 text-slate-500 dark:text-teal-400" />
-                  <span className="text-xs text-muted-foreground">TikTok</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Youtube className="w-4 h-4 text-red-500" />
-                  <span className="text-xs text-muted-foreground">YouTube</span>
-                </div>
+              <div className="flex items-start justify-between">
+                <h1 className="text-3xl font-black text-gray-900 leading-tight">
+                  {getGreeting()},<br />{data.userName}
+                  <span className="ml-2">{getEmoji()}</span>
+                </h1>
+                <span className="text-xs text-gray-500 bg-white/70 px-3 py-1.5 rounded-full font-medium mt-1">
+                  {format(new Date(), 'EEE, MMM d')}
+                </span>
               </div>
+              <p className="text-gray-500 mt-2 text-sm">
+                You have {getThingsToReview()} things to review
+              </p>
             </div>
+
+            {/* Mini preview card */}
+            <div className="bg-white rounded-3xl p-5 shadow-sm flex-1 flex flex-col">
+              <div className="flex items-center gap-2 mb-1">
+                <div className="w-1.5 h-1.5 rounded-full bg-violet-500" />
+                <span className="text-xs font-bold text-gray-400 uppercase tracking-wide">Weekly Preview</span>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3 my-4">
+                {[
+                  { label: 'Views', value: contentStat, color: '#ddd6fe' },
+                  { label: 'Posts', value: String(data.contentRecap.postsCount || 0), color: '#fde68a' },
+                  { label: 'Tips', value: tipsStat, color: '#a7f3d0' },
+                ].map((s) => (
+                  <div key={s.label} className="rounded-2xl p-3 text-center" style={{ backgroundColor: s.color }}>
+                    <p className="text-xl font-black text-gray-900">{s.value}</p>
+                    <p className="text-[10px] font-bold text-gray-500 uppercase mt-0.5">{s.label}</p>
+                  </div>
+                ))}
+              </div>
+
+              {!hasConnectedAccounts && (
+                <button
+                  onClick={() => navigate('/settings')}
+                  className="mt-auto flex items-center justify-center gap-2 w-full py-3 rounded-2xl border-2 border-dashed border-violet-200 text-violet-600 text-sm font-bold hover:bg-violet-50 transition-colors"
+                >
+                  <Plug className="w-4 h-4" />
+                  Connect a platform for real data
+                </button>
+              )}
+            </div>
+
+            <p className="text-center text-xs text-gray-400 mt-4 font-medium animate-swipe-hint">
+              Swipe left to continue →
+            </p>
+          </div>
+        )}
+
+        {/* Slide 1 — Content Recap */}
+        {currentSlide === 'content' && (
+          <div className="flex-1 flex flex-col">
+            <p className="text-xs font-black tracking-widest text-purple-400 uppercase mb-1">WEEKLY REVIEW</p>
+            <h2 className="text-4xl font-black text-gray-900 mb-6">Content<br />Recap</h2>
+            <div className="bg-white rounded-3xl shadow-sm flex-1 overflow-auto">
+              <ContentRecapCard
+                data={data.contentRecap}
+                isExpanded={true}
+                onToggleExpand={() => {}}
+                onViewAnalytics={() => navigate('/analytics')}
+              />
+            </div>
+            <p className="text-center text-xs text-gray-500 mt-4 font-medium animate-swipe-hint">
+              Swipe right to continue →
+            </p>
+          </div>
+        )}
+
+        {/* Slide 2 — Deal Pipeline */}
+        {currentSlide === 'deals' && (
+          <div className="flex-1 flex flex-col">
+            <p className="text-xs font-black tracking-widest text-amber-500 uppercase mb-1">PARTNERSHIPS</p>
+            <h2 className="text-4xl font-black text-gray-900 mb-6">Deal<br />Pipeline</h2>
+            <div className="bg-white rounded-3xl shadow-sm flex-1 overflow-auto">
+              <DealPipelineCard
+                data={data.dealPipeline}
+                isExpanded={true}
+                onToggleExpand={() => {}}
+                onSendFollowUp={() => {}}
+                onReviewContract={() => {}}
+                onQuickQuote={() => {}}
+                onViewDeal={() => {}}
+              />
+            </div>
+            <p className="text-center text-xs text-gray-500 mt-4 font-medium animate-swipe-hint">
+              Swipe right to continue →
+            </p>
+          </div>
+        )}
+
+        {/* Slide 3 — Coming Up */}
+        {currentSlide === 'schedule' && (
+          <div className="flex-1 flex flex-col">
+            <p className="text-xs font-black tracking-widest text-rose-400 uppercase mb-1">SCHEDULE</p>
+            <h2 className="text-4xl font-black text-gray-900 mb-6">Coming<br />Up</h2>
+            <div className="bg-white rounded-3xl shadow-sm flex-1 overflow-auto">
+              <ComingUpCard
+                data={data.comingUp}
+                isExpanded={true}
+                onToggleExpand={() => {}}
+                onEditPost={(id) => navigate(`/schedule?post=${id}&edit=true`)}
+                onReschedule={(id) => navigate(`/schedule?post=${id}&reschedule=true`)}
+                onViewCalendar={() => navigate('/schedule')}
+              />
+            </div>
+            <p className="text-center text-xs text-gray-500 mt-4 font-medium animate-swipe-hint">
+              Swipe right to continue →
+            </p>
+          </div>
+        )}
+
+        {/* Slide 4 — Smart Tips */}
+        {currentSlide === 'tips' && (
+          <div className="flex-1 flex flex-col">
+            <p className="text-xs font-black tracking-widest text-emerald-500 uppercase mb-1">AI INSIGHTS</p>
+            <h2 className="text-4xl font-black text-gray-900 mb-6">Smart<br />Tips</h2>
+            <div className="bg-white rounded-3xl shadow-sm flex-1 overflow-auto">
+              <SmartTipsCard
+                data={data.smartTips}
+                isExpanded={true}
+                onToggleExpand={() => {}}
+                onTipAction={(tip) => {
+                  if (tip.actionUrl) navigate(tip.actionUrl);
+                  else navigate('/studio');
+                }}
+              />
+            </div>
+            <div className="mt-4 flex items-center justify-center gap-2">
+              <span className="text-sm font-bold text-emerald-600">🎉 All caught up!</span>
+            </div>
+          </div>
+        )}
+
+        {/* Dot indicators + action buttons */}
+        <div className="mt-6 flex flex-col items-center gap-4">
+          {/* Dots */}
+          <div className="flex items-center gap-2">
+            {SLIDES.map((_, i) => (
+              <button
+                key={i}
+                onClick={() => setSlideIndex(i)}
+                className={`rounded-full transition-all ${
+                  i === slideIndex
+                    ? 'w-6 h-2.5 bg-gray-900'
+                    : 'w-2.5 h-2.5 bg-gray-300 hover:bg-gray-400'
+                }`}
+              />
+            ))}
+          </div>
+
+          {/* Skip / Done */}
+          <div className="flex items-center gap-3 w-full">
             <button
-              onClick={() => navigate('/settings')}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm transition-colors flex-shrink-0"
+              onClick={handleSkipAll}
+              className="flex-1 py-3.5 rounded-2xl border-2 border-gray-200 bg-white/60 text-gray-600 font-bold text-sm hover:bg-white transition-colors"
             >
-              Connect Now
-              <ArrowRight className="w-4 h-4" />
+              Skip All
             </button>
+            {slideIndex === SLIDES.length - 1 ? (
+              <button
+                onClick={handleDone}
+                className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-gray-900 text-white font-bold text-sm hover:bg-gray-800 transition-colors"
+              >
+                Done <ArrowRight className="w-4 h-4" />
+              </button>
+            ) : (
+              <button
+                onClick={() => setSlideIndex(i => i + 1)}
+                className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-gray-900 text-white font-bold text-sm hover:bg-gray-800 transition-colors"
+              >
+                Next <ArrowRight className="w-4 h-4" />
+              </button>
+            )}
           </div>
         </div>
-      )}
-
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
-        <ContentRecapCard
-          data={data.contentRecap}
-          isExpanded={expandedCard === 'content'}
-          onToggleExpand={() => handleToggleExpand('content')}
-          onViewAnalytics={() => navigate('/analytics')}
-        />
-
-        <EngagementCard
-          data={data.engagement}
-          isExpanded={expandedCard === 'engagement'}
-          onToggleExpand={() => handleToggleExpand('engagement')}
-          onViewAnalytics={() => navigate('/analytics')}
-        />
-
-        <ComingUpCard
-          data={data.comingUp}
-          isExpanded={expandedCard === 'schedule'}
-          onToggleExpand={() => handleToggleExpand('schedule')}
-          onEditPost={(postId) => navigate(`/schedule?post=${postId}&edit=true`)}
-          onReschedule={(postId) => navigate(`/schedule?post=${postId}&reschedule=true`)}
-          onViewCalendar={() => navigate('/schedule')}
-        />
-
-        <SmartTipsCard
-          data={data.smartTips}
-          isExpanded={expandedCard === 'tips'}
-          onToggleExpand={() => handleToggleExpand('tips')}
-          onTipAction={(tip) => {
-            if (tip.actionUrl) {
-              navigate(tip.actionUrl);
-            } else if (tip.actionLabel?.toLowerCase().includes('tiktok')) {
-              navigate('/studio?platform=tiktok');
-            } else if (tip.actionLabel?.toLowerCase().includes('reel')) {
-              navigate('/studio?platform=instagram&type=reel');
-            } else {
-              navigate('/studio');
-            }
-          }}
-        />
-
-        <DealPipelineCard
-          data={data.dealPipeline}
-          isExpanded={expandedCard === 'deals'}
-          onToggleExpand={() => handleToggleExpand('deals')}
-          onSendFollowUp={(dealId) => navigate(`/pipeline?deal=${dealId}&action=followup`)}
-          onReviewContract={(dealId) => navigate(`/pipeline?deal=${dealId}&action=contract`)}
-          onQuickQuote={(dealId) => navigate(`/quick-quote?deal=${dealId}`)}
-          onViewDeal={(dealId) => navigate(`/pipeline?deal=${dealId}`)}
-        />
       </div>
-
-      <div className="flex flex-col sm:flex-row gap-3 justify-center">
-        <button
-          onClick={handleSkipAll}
-          className="px-6 py-3 rounded-xl border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 font-medium hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-        >
-          Skip All
-        </button>
-        <button
-          onClick={handleMarkAllReviewed}
-          className="flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-gray-900 dark:bg-white text-white dark:text-gray-900 font-medium hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors"
-        >
-          <CheckCircle className="w-5 h-5" />
-          Mark All as Reviewed
-        </button>
-      </div>
-    </div>
+    </>
   );
 }
 
