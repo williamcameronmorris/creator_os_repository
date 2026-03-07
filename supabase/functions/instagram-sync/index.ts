@@ -62,8 +62,9 @@ Deno.serve(async (req: Request) => {
       throw new Error(`IG account fetch failed: ${accountData.error.message}`);
 
     // ── Fetch recent media ────────────────────────────────────────────────────
+    // video_views is populated for VIDEO and REEL types; null/absent for images
     const mediaRes = await fetch(
-      `${GRAPH}/${igUserId}/media?fields=id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,like_count,comments_count&limit=50&access_token=${accessToken}`
+      `${GRAPH}/${igUserId}/media?fields=id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,like_count,comments_count,video_views&limit=50&access_token=${accessToken}`
     );
     const mediaData = await mediaRes.json();
     if (mediaData.error)
@@ -98,10 +99,12 @@ Deno.serve(async (req: Request) => {
     // ── Sync each post ────────────────────────────────────────────────────────
     let totalLikes = 0;
     let totalComments = 0;
+    let totalViews = 0;
 
     for (const item of media) {
       totalLikes += item.like_count || 0;
       totalComments += item.comments_count || 0;
+      totalViews += item.video_views || 0;
 
       const { data: existingPost } = await supabase
         .from("content_posts")
@@ -113,7 +116,7 @@ Deno.serve(async (req: Request) => {
       const mediaType =
         item.media_type === "CAROUSEL_ALBUM"
           ? "carousel"
-          : item.media_type === "VIDEO"
+          : item.media_type === "VIDEO" || item.media_type === "REEL"
           ? "video"
           : "image";
 
@@ -128,6 +131,7 @@ Deno.serve(async (req: Request) => {
         status: "published",
         likes: item.like_count || 0,
         comments: item.comments_count || 0,
+        views: item.video_views || 0,
       };
 
       if (!existingPost) {
@@ -138,25 +142,41 @@ Deno.serve(async (req: Request) => {
     }
 
     // ── Upsert platform_metrics ───────────────────────────────────────────────
-    await supabase.from("platform_metrics").upsert(
+    // NOTE: views/likes/comments are GENERATED columns — do NOT write to them.
+    // Only write to total_views/total_likes/total_comments (the source columns).
+    const followersCount = accountData.followers_count || 0;
+    const engagementRate =
+      media.length > 0 && followersCount > 0
+        ? ((totalLikes + totalComments) / media.length / followersCount) * 100
+        : 0;
+
+    const { error: metricsError } = await supabase.from("platform_metrics").upsert(
       {
         user_id: userId,
         platform: "instagram",
         date: new Date().toISOString().split("T")[0],
-        followers_count: accountData.followers_count || 0,
+        followers_count: followersCount,
         total_posts: accountData.media_count || 0,
+        total_views: totalViews,
         total_likes: totalLikes,
         total_comments: totalComments,
-        avg_engagement_rate:
-          media.length > 0 && (accountData.followers_count || 0) > 0
-            ? ((totalLikes + totalComments) / media.length / accountData.followers_count) * 100
-            : 0,
+        avg_engagement_rate: engagementRate,
       },
       { onConflict: "user_id,platform,date" }
     );
 
+    if (metricsError) {
+      console.error("platform_metrics upsert error:", metricsError);
+    }
+
     return new Response(
-      JSON.stringify({ success: true, mediaCount: media.length }),
+      JSON.stringify({
+        success: true,
+        mediaCount: media.length,
+        followersCount,
+        totalViews,
+        metricsError: metricsError?.message || null,
+      }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {

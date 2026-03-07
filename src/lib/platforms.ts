@@ -81,7 +81,7 @@ export async function getPlatformStatus(userId: string): Promise<PlatformStatus[
 export function getInstagramAuthUrl(): string {
   const appId = import.meta.env.VITE_INSTAGRAM_APP_ID || '';
   const redirectUri = import.meta.env.VITE_INSTAGRAM_REDIRECT_URI || `${window.location.origin}/settings?platform=instagram`;
-  const scope = 'instagram_basic,instagram_content_publish,pages_show_list,pages_read_engagement';
+  const scope = 'instagram_basic,instagram_content_publish,pages_show_list,pages_read_engagement,instagram_manage_insights';
   return `https://www.facebook.com/v25.0/dialog/oauth?client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${scope}&response_type=code`;
 }
 
@@ -107,16 +107,16 @@ export async function disconnectPlatform(
 
   switch (platform) {
     case 'facebook':
-      // Disconnecting Facebook also clears Instagram Business (they share Meta token)
+      // Disconnecting Facebook clears tokens but preserves page/account IDs.
+      // facebook_page_id and instagram_business_account_id are stable identifiers
+      // needed by the New Pages Experience fallback on reconnect — do not clear them.
       updates.meta_user_id = '';
       updates.meta_access_token = '';
       updates.meta_token_expires_at = null;
-      updates.facebook_page_id = '';
       updates.facebook_page_access_token = '';
-      updates.facebook_page_name = '';
-      updates.facebook_page_followers = 0;
-      updates.instagram_business_account_id = '';
+      updates.instagram_access_token = '';
       updates.last_facebook_sync = null;
+      updates.last_instagram_sync = null;
       break;
     case 'instagram':
       updates.instagram_access_token = '';
