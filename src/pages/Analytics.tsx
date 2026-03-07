@@ -26,7 +26,7 @@ interface PlatformMetric {
   likes: number;
   comments: number;
   shares: number;
-  followers: number;
+  followers_count: number;
 }
 
 interface PostPerformance {
