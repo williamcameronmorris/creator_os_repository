@@ -168,8 +168,6 @@ export function getMetaAuthUrl(): string {
     'pages_manage_metadata',
     'pages_read_user_content',
     'pages_manage_engagement',
-    // Messenger
-    'pages_messaging',
     // Instagram Business
     'instagram_basic',
     'instagram_content_publish',
