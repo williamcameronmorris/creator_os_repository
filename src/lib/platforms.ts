@@ -22,7 +22,7 @@ export async function getPlatformStatus(userId: string): Promise<PlatformStatus[
       'threads_access_token', 'threads_handle', 'threads_followers', 'last_threads_sync',
       // TikTok / YouTube
       'tiktok_handle', 'tiktok_followers', 'tiktok_access_token', 'last_tiktok_sync',
-      'youtube_handle', 'youtube_followers', 'youtube_access_token', 'last_youtube_sync',
+      'youtube_handle', 'youtue_followers', 'youtube_access_token', 'last_youtube_sync',
     ].join(', '))
     .eq('id', userId)
     .maybeSingle();
@@ -107,16 +107,16 @@ export async function disconnectPlatform(
 
   switch (platform) {
     case 'facebook':
-      // Disconnecting Facebook also clears Instagram Business (they share Meta token)
-      updates.meta_user_id = '';
-      updates.meta_access_token = '';
-      updates.meta_token_expires_at = null;
-      updates.facebook_page_id = '';
-      updates.facebook_page_access_token = '';
-      updates.facebook_page_name = '';
-      updates.facebook_page_followers = 0;
-      updates.instagram_business_account_id = '';
-      updates.last_facebook_sync = null;
+      // Disconnecting Facebook clears tokens but preserves page/account IDs.
+            // facebook_page_id and instagram_business_account_id are stable identifiers
+            // needed by the New Pages Experience fallback on reconnect - do not clear them.
+            updates.meta_user_id = '';
+            updates.meta_access_token = '';
+            updates.meta_token_expires_at = null;
+            updates.facebook_page_access_token = '';
+            updates.instagram_access_token = '';
+            updates.last_facebook_sync = null;
+            updates.last_instagram_sync = null;
       break;
     case 'instagram':
       updates.instagram_access_token = '';
