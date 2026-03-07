@@ -16,7 +16,7 @@ interface Metrics {
   viewsChange: number;
   likesChange: number;
   commentsChange: number;
-  followersChange: number;
+  followersChange: number
 }
 
 interface PlatformMetric {
@@ -117,7 +117,7 @@ export function Analytics() {
       const totalViews = metricsRes.data.reduce((sum, m) => sum + (m.views || 0), 0);
       const totalLikes = metricsRes.data.reduce((sum, m) => sum + (m.likes || 0), 0);
       const totalComments = metricsRes.data.reduce((sum, m) => sum + (m.comments || 0), 0);
-      const latestFollowers = metricsRes.data[metricsRes.data.length - 1]?.followers || 0;
+      const latestFollowers = metricsRes.data[metricsRes.data.length - 1]?.followers_count || 0;
       const engagementRate = totalViews > 0 ? ((totalLikes + totalComments) / totalViews) * 100 : 0;
 
       const midpoint = Math.floor(metricsRes.data.length / 2);
