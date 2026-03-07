@@ -89,7 +89,7 @@ export function Settings() {
   const handleSyncPlatform = async (platform: PlatformStatus['platform']) => {
     if (!user) return;
     setSyncing(platform);
-    try {
+    try{
       await syncPlatform(user.id, platform);
       await loadPlatforms();
       setSuccess(`${platform} synced successfully`);
@@ -259,7 +259,7 @@ export function Settings() {
               >
                 <div className="flex items-center gap-4 flex-1 min-w-0">
                   <div className={`flex items-center justify-center w-12 h-12 rounded-xl flex-shrink-0 ${config.iconBg}`}>
-                    {config.icon}
+              {config.icon}
                   </div>
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
@@ -299,6 +299,10 @@ export function Settings() {
                       </span>
                     ) : (
                       <>
+                        <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-emerald-600 bg-emerald-50 font-medium">
+                          <CheckCircle className="w-3.5 h-3.5" />
+                          Connected
+                        </span>
                         {/* No sync for facebook/threads (done via dedicated pages) */}
                         {!['facebook', 'threads'].includes(platform.platform) && (
                           <button
@@ -306,7 +310,7 @@ export function Settings() {
                             disabled={syncing === platform.platform}
                             className="px-3 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center gap-2 disabled:opacity-50 text-muted-foreground hover:text-foreground hover:bg-accent"
                           >
-                            <RefreshCw className={`w-4 h-4 ${syncing === platform.platform ? 'animate-spin' : ''}`} />
+<RefreshCw className={`w-4 h-4 ${syncing === platform.platform ? 'animate-spin' : ''}`} />
                             Sync
                           </button>
                         )}
@@ -341,6 +345,7 @@ export function Settings() {
         </div>
       </div>
 
+      {/* ARCHIVED: CPM Tier — part of Brand Deals feature, re-enable when Brand Deals is active
       <div className="p-6 rounded-xl bg-card border border-border">
         <h3 className="text-xl font-bold text-foreground mb-6 flex items-center gap-2">
           <DollarSign className="w-5 h-5" />
@@ -402,7 +407,9 @@ export function Settings() {
           </div>
         </div>
       </div>
+      END ARCHIVED: CPM Tier */}
 
+      {/* ARCHIVED: Performance Averages — part of Brand Deals feature, re-enable when Brand Deals is active
       <div className="p-6 rounded-xl bg-card border border-border">
         <h3 className="text-xl font-bold text-foreground mb-6 flex items-center gap-2">
           <TrendingUp className="w-5 h-5" />
@@ -479,6 +486,7 @@ export function Settings() {
           </div>
         </div>
       </div>
+      END ARCHIVED: Performance Averages */}
 
       <div className="p-6 rounded-xl bg-card border border-border">
         <h3 className="text-xl font-bold text-foreground mb-6">Default Terms</h3>
