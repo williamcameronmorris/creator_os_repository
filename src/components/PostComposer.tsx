@@ -95,7 +95,7 @@ export function PostComposer({ onClose, onSuccess, editPost }: PostComposerProps
         file_name: file.name,
         file_url: publicUrl,
         file_type: file.type.startsWith('video') ? 'video' : 'image',
-        file_size: file.size,
+        file_size: file.size,   // column now exists after migration
       });
     }
 
@@ -124,10 +124,10 @@ export function PostComposer({ onClose, onSuccess, editPost }: PostComposerProps
         user_id: user.id,
         platform,
         caption: caption.trim(),
-        media_urls: allMediaUrls,
+        media_url: allMediaUrls[0] || null,   // primary URL (backward compat)
+        media_urls: allMediaUrls,              // full array
         scheduled_date: status === 'scheduled' ? new Date(scheduledDate).toISOString() : null,
         status,
-        mentions: caption.match(/@\w+/g) || [],
       };
 
       if (editPost) {
