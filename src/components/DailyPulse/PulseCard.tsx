@@ -1,7 +1,7 @@
 import { ReactNode } from 'react';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 
-export type CardCategory = 'content' | 'engagement' | 'schedule' | 'tips';
+export type CardCategory = 'content' | 'engagement' | 'schedule' | 'tips' | 'deals';
 
 interface PulseCardProps {
   category: CardCategory;
@@ -31,6 +31,10 @@ const categoryStyles: Record<CardCategory, { dot: string; label: string }> = {
   tips: {
     dot: 'bg-emerald-500',
     label: 'AI INSIGHTS',
+  },
+  deals: {
+    dot: 'bg-amber-500',
+    label: 'PARTNERSHIPS',
   },
 };
 
