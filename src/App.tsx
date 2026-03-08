@@ -6,7 +6,6 @@ import { SubscriptionProvider } from './contexts/SubscriptionContext';
 import { Auth } from './components/Auth';
 import { Onboarding } from './components/Onboarding';
 import { Layout } from './components/Layout';
-import { SocialDashboard } from './pages/SocialDashboard';
 import { DailyPulse } from './components/DailyPulse';
 import { Schedule } from './pages/Schedule';
 import { Media } from './pages/Media';
@@ -110,14 +109,7 @@ function AppContent() {
           </ProtectedRoute>
         }
       />
-      <Route
-        path="/command-center"
-        element={
-          <ProtectedRoute>
-            <Layout><SocialDashboard /></Layout>
-          </ProtectedRoute>
-        }
-      />
+      <Route path="/command-center" element={<Navigate to="/dashboard" replace />} />
       <Route
         path="/studio"
         element={

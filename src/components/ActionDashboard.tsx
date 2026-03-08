@@ -24,9 +24,10 @@ import {
 
 interface ActionDashboardProps {
   onNavigate: (path: string) => void;
+  embedded?: boolean;
 }
 
-export default function ActionDashboard({ onNavigate }: ActionDashboardProps) {
+export default function ActionDashboard({ onNavigate, embedded = false }: ActionDashboardProps) {
   const { tier } = useSubscription();
   const [insights, setInsights] = useState<Insight[]>([]);
   const [socialStats, setSocialStats] = useState({
@@ -277,14 +278,16 @@ export default function ActionDashboard({ onNavigate }: ActionDashboardProps) {
   return (
     <div className="space-y-8 overflow-x-hidden">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="min-w-0">
-          <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-2">
-            Command Center
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Real-time insights and action items across your content and deals
-          </p>
-        </div>
+        {!embedded && (
+          <div className="min-w-0">
+            <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-2">
+              Command Center
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              Real-time insights and action items across your content and deals
+            </p>
+          </div>
+        )}
         <div className="flex items-center gap-2 flex-shrink-0">
           {!isPremium && (
             <button

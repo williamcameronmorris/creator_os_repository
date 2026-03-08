@@ -3,7 +3,6 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import {
   Home,
-  LayoutGrid,
   Settings as SettingsIcon,
   LogOut,
   Calendar,
@@ -52,7 +51,6 @@ export function Layout({ children }: LayoutProps) {
       title: 'HEADQUARTERS',
       items: [
         { path: '/dashboard', label: 'Daily Pulse', icon: Home },
-        { path: '/command-center', label: 'Command Center', description: 'Analytics & AI', icon: LayoutGrid },
       ],
     },
     {

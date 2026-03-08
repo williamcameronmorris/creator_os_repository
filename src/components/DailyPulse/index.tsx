@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import ActionDashboard from '../ActionDashboard';
 import { format, parseISO } from 'date-fns';
 import { useDailyPulse } from '../../hooks/useDailyPulse';
 import { ContentRecapCard } from './ContentRecapCard';
@@ -458,6 +459,16 @@ export function DailyPulse() {
               </button>
             </>
           )}
+        </div>
+
+        {/* ── COMMAND CENTER section ──────────────────────────────────── */}
+        <div className="mt-12">
+          <div className="flex items-center gap-4 mb-8">
+            <div className="flex-1 h-px bg-gray-100" />
+            <span className="text-xs font-black tracking-widest text-gray-400 uppercase">Command Center</span>
+            <div className="flex-1 h-px bg-gray-100" />
+          </div>
+          <ActionDashboard onNavigate={navigate} embedded={true} />
         </div>
       </div>
 
