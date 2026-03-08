@@ -5,6 +5,37 @@ import { Briefcase, ArrowLeft } from 'lucide-react';
 
 type AuthView = 'signin' | 'signup' | 'forgot' | 'reset';
 
+// Map raw Supabase error messages to user-friendly copy
+function friendlyAuthError(message: string, view: AuthView): string {
+  const m = message.toLowerCase();
+  if (m.includes('only request this after') || m.includes('for security purposes')) {
+    const seconds = message.match(/after (\d+) second/)?.[1];
+    return seconds
+      ? `Please wait ${seconds} seconds before trying again.`
+      : 'Please wait a moment before trying again.';
+  }
+  if (m.includes('user already registered') || m.includes('already been registered')) {
+    return 'An account with this email already exists. Try signing in instead.';
+  }
+  if (m.includes('invalid login credentials') || m.includes('invalid credentials')) {
+    return 'Incorrect email or password.';
+  }
+  if (m.includes('email not confirmed')) {
+    return 'Please check your inbox and confirm your email before signing in.';
+  }
+  if (m.includes('password should be at least')) {
+    return 'Password must be at least 6 characters.';
+  }
+  if (m.includes('unable to validate email address') || m.includes('invalid email')) {
+    return 'Please enter a valid email address.';
+  }
+  if (m.includes('signup is disabled')) {
+    return 'New sign-ups are temporarily disabled. Please try again later.';
+  }
+  // Fallback: return the original message, but strip Supabase boilerplate
+  return message.replace(/^\[.*?\]\s*/, '');
+}
+
 export function Auth() {
   const [searchParams] = useSearchParams();
   const [view, setView] = useState<AuthView>('signin');
@@ -36,7 +67,7 @@ export function Auth() {
         await signIn(email, password);
       }
     } catch (err: any) {
-      setError(err.message || 'An error occurred');
+      setError(friendlyAuthError(err.message || 'An error occurred', view));
     } finally {
       setLoading(false);
     }
@@ -53,7 +84,7 @@ export function Auth() {
       setSuccess('Password reset instructions sent to your email');
       setEmail('');
     } catch (err: any) {
-      setError(err.message || 'An error occurred');
+      setError(friendlyAuthError(err.message || 'An error occurred', 'forgot'));
     } finally {
       setLoading(false);
     }
@@ -83,7 +114,7 @@ export function Auth() {
         window.location.href = '/dashboard';
       }, 2000);
     } catch (err: any) {
-      setError(err.message || 'An error occurred');
+      setError(friendlyAuthError(err.message || 'An error occurred', 'reset'));
     } finally {
       setLoading(false);
     }
