@@ -672,13 +672,16 @@ export function useDailyPulse() {
     const currentReviewed = data?.session?.cards_reviewed || [];
     const newReviewed = [...currentReviewed, cardId];
 
+    const isComplete = newReviewed.length >= 4;
+    const completedAt = isComplete ? new Date().toISOString() : null;
+
     await supabase
       .from('daily_pulse_sessions')
       .upsert({
         user_id: user.id,
         session_date: today,
         cards_reviewed: newReviewed,
-        completed_at: newReviewed.length >= 5 ? new Date().toISOString() : null,
+        completed_at: completedAt,
       }, {
         onConflict: 'user_id,session_date',
       });
@@ -689,7 +692,7 @@ export function useDailyPulse() {
         id: prev.session?.id || '',
         dismissed_all: prev.session?.dismissed_all || false,
         cards_reviewed: newReviewed,
-        completed_at: newReviewed.length >= 5 ? new Date().toISOString() : null,
+        completed_at: completedAt,
       },
     } : null);
   }, [data]);

@@ -168,6 +168,8 @@ export function DailyPulse() {
     await markCardReviewed('engagement');
     await markCardReviewed('schedule');
     await markCardReviewed('tips');
+    // Snap back to home slide so user sees the completed "Today's Snapshot" view
+    setSlideIndex(0);
   };
 
   const handleSkipAll = async () => {
