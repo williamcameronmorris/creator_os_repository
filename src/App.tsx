@@ -14,6 +14,7 @@ import { SavedIdeasPage } from './pages/SavedIdeasPage';
 import { Profile } from './pages/Profile';
 import { SettingsPage } from './pages/SettingsPage';
 import { Studio } from './pages/Studio';
+import { PostComposerPage } from './pages/PostComposerPage';
 import { MetaCallback } from './components/MetaCallback';
 import { ThreadsCallback } from './components/ThreadsCallback';
 import { YoutubeCallback } from './components/YoutubeCallback';
@@ -123,6 +124,22 @@ function AppContent() {
         element={
           <ProtectedRoute>
             <Layout><Schedule /></Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/schedule/new"
+        element={
+          <ProtectedRoute>
+            <Layout><PostComposerPage /></Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/schedule/edit/:id"
+        element={
+          <ProtectedRoute>
+            <Layout><PostComposerPage /></Layout>
           </ProtectedRoute>
         }
       />

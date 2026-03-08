@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useSubscription } from '../contexts/SubscriptionContext';
 import { supabase } from '../lib/supabase';
 import { Calendar, Clock, Instagram, Youtube, Plus, Sparkles, Edit, Trash2, DollarSign, Info, TrendingUp, Lock, Crown } from 'lucide-react';
 import { format } from 'date-fns';
-import { PostComposer } from '../components/PostComposer';
 
 interface Post {
   id: string;
@@ -20,10 +20,9 @@ interface Post {
 export function Schedule() {
   const { user } = useAuth();
   const { tier } = useSubscription();
+  const navigate = useNavigate();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showComposer, setShowComposer] = useState(false);
-  const [editingPost, setEditingPost] = useState<Post | undefined>();
   const [filter, setFilter] = useState<'all' | 'scheduled' | 'draft'>('all');
 
   const isPremium = tier === 'paid';
@@ -69,8 +68,7 @@ export function Schedule() {
   };
 
   const handleEdit = (post: Post) => {
-    setEditingPost(post);
-    setShowComposer(true);
+    navigate(`/schedule/edit/${post.id}`);
   };
 
   const getPlatformIcon = (platform: string) => {
@@ -101,8 +99,7 @@ export function Schedule() {
       alert(`You've reached the limit of ${schedulingLimit} scheduled posts on the free plan. Upgrade to schedule unlimited posts.`);
       return;
     }
-    setEditingPost(undefined);
-    setShowComposer(true);
+    navigate('/schedule/new');
   };
 
   const now = new Date();
@@ -375,18 +372,6 @@ export function Schedule() {
         </div>
       </div>
 
-      {showComposer && (
-        <PostComposer
-          onClose={() => {
-            setShowComposer(false);
-            setEditingPost(undefined);
-          }}
-          onSuccess={() => {
-            loadPosts();
-          }}
-          editPost={editingPost}
-        />
-      )}
     </div>
   );
 }

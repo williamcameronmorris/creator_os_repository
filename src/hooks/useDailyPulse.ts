@@ -590,7 +590,7 @@ export function useDailyPulse() {
         tipsCount: tips.length || defaultTips.length,
         trendingCount: tips.filter((t) => t.type === 'opportunity').length,
         tips: tips.length > 0 ? tips : defaultTips,
-        allCaughtUp: sessionResult.data?.completed_at !== null,
+        allCaughtUp: !!(sessionResult.data?.completed_at),
       };
 
       // ── Deal Pipeline ─────────────────────────────────────────────────────

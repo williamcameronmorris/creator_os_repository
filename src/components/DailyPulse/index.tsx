@@ -291,7 +291,7 @@ export function DailyPulse() {
   ];
 
   const ConnectBanner = () =>
-    !bannerDismissed && !allConnected ? (
+    !bannerDismissed && !hasConnectedAccounts ? (
       <div className="bg-white border border-gray-100 rounded-3xl p-5 mb-6 shadow-sm">
         <div className="flex items-start justify-between mb-4">
           <div className="flex items-center gap-3">
