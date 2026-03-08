@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useSubscription } from '../contexts/SubscriptionContext';
 import { supabase } from '../lib/supabase';
-import { Calendar, Clock, Instagram, Youtube, Plus, Sparkles, Edit, Trash2, DollarSign, Info, TrendingUp, Lock, Crown, CheckCircle2, XCircle, Loader2, ExternalLink, RefreshCw, AlertTriangle } from 'lucide-react';
+import { Calendar, Clock, Instagram, Youtube, Plus, Sparkles, Edit, Trash2, DollarSign, Info, TrendingUp, Lock, Crown, CheckCircle2, XCircle, Loader2, ExternalLink, RefreshCw, AlertTriangle, AtSign } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface Post {
@@ -82,6 +82,8 @@ export function Schedule() {
         return Youtube;
       case 'tiktok':
         return Sparkles;
+      case 'threads':
+        return AtSign;
       default:
         return Calendar;
     }
@@ -95,6 +97,7 @@ export function Schedule() {
       case 'youtube': return `https://www.youtube.com/watch?v=${platformPostId}`;
       case 'instagram': return `https://www.instagram.com/p/${platformPostId}/`;
       case 'tiktok': return null; // TikTok uses publish_id, not a shareable URL
+      case 'threads': return `https://www.threads.net/post/${platformPostId}`;
       default: return null;
     }
   };

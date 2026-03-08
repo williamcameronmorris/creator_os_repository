@@ -142,6 +142,38 @@ async function publishTikTok(
   return data.publishId || "ok";
 }
 
+async function publishThreads(
+  supabaseUrl: string,
+  serviceKey: string,
+  userId: string,
+  mediaUrls: string[],
+  caption: string
+): Promise<string> {
+  const body: Record<string, any> = { userId, caption };
+
+  if (mediaUrls.length > 1) {
+    body.mediaUrls = mediaUrls;
+  } else if (mediaUrls.length === 1) {
+    body.mediaUrl = mediaUrls[0];
+  }
+  // No media = text-only post
+
+  const res = await fetch(`${supabaseUrl}/functions/v1/threads-publish`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${serviceKey}`,
+    },
+    body: JSON.stringify(body),
+  });
+
+  const data = await res.json();
+  if (!data.id && !data.success) {
+    throw new Error(data.error || "Threads publish returned no ID");
+  }
+  return data.id || "ok";
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
@@ -207,6 +239,9 @@ Deno.serve(async (req: Request) => {
             break;
           case "tiktok":
             platformPostId = await publishTikTok(supabaseUrl, supabaseKey, userId, urls, caption || "");
+            break;
+          case "threads":
+            platformPostId = await publishThreads(supabaseUrl, supabaseKey, userId, urls, caption || "");
             break;
           default:
             throw new Error(`Unsupported platform: ${platform}`);
