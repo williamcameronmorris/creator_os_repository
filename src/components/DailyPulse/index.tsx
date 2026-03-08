@@ -27,13 +27,12 @@ import {
 type ExpandedCard = 'content' | 'engagement' | 'schedule' | 'tips' | 'deals' | null;
 
 // ── Mobile slide definitions ────────────────────────────────────────────────
-const SLIDES = ['home', 'content', 'deals', 'schedule', 'tips'] as const;
+const SLIDES = ['home', 'content', 'schedule', 'tips'] as const;
 type Slide = typeof SLIDES[number];
 
 const SLIDE_COLORS: Record<Slide, string> = {
   home:     '#ede9fe',   // lavender
   content:  '#ddd6fe',   // purple-200
-  deals:    '#fde68a',   // amber-200
   schedule: '#fecdd3',   // rose-200
   tips:     '#a7f3d0',   // green-200
 };
@@ -669,29 +668,7 @@ export function DailyPulse() {
           </div>
         )}
 
-        {/* Slide 2 — Deal Pipeline */}
-        {currentSlide === 'deals' && (
-          <div className="flex-1 flex flex-col">
-            <p className="text-xs font-black tracking-widest text-amber-500 uppercase mb-1">PARTNERSHIPS</p>
-            <h2 className="text-4xl font-black text-gray-900 mb-6">Deal<br />Pipeline</h2>
-            <div className="bg-white rounded-3xl shadow-sm flex-1 overflow-auto">
-              <DealPipelineCard
-                data={data.dealPipeline}
-                isExpanded={true}
-                onToggleExpand={() => {}}
-                onSendFollowUp={() => {}}
-                onReviewContract={() => {}}
-                onQuickQuote={() => {}}
-                onViewDeal={() => {}}
-              />
-            </div>
-            <p className="text-center text-xs text-gray-500 mt-4 font-medium animate-swipe-hint">
-              Swipe right to continue →
-            </p>
-          </div>
-        )}
-
-        {/* Slide 3 — Coming Up */}
+        {/* Slide 2 — Coming Up */}
         {currentSlide === 'schedule' && (
           <div className="flex-1 flex flex-col">
             <p className="text-xs font-black tracking-widest text-rose-400 uppercase mb-1">SCHEDULE</p>
