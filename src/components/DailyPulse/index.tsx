@@ -776,6 +776,16 @@ export function DailyPulse() {
           </div>
         </div>
       </div>
+
+      {/* ── MOBILE: Command Center (scrollable below swipe cards) ─── */}
+      <div className="lg:hidden px-4 py-8 bg-gray-50">
+        <div className="flex items-center gap-4 mb-6">
+          <div className="flex-1 h-px bg-gray-200" />
+          <span className="text-xs font-black tracking-widest text-gray-400 uppercase">Command Center</span>
+          <div className="flex-1 h-px bg-gray-200" />
+        </div>
+        <ActionDashboard onNavigate={navigate} embedded={true} />
+      </div>
     </>
   );
 }
