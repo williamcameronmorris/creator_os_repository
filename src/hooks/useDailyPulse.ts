@@ -398,7 +398,10 @@ export function useDailyPulse() {
         (postsResult.data && postsResult.data.length > 0) ||
         (scheduledResult.data && scheduledResult.data.length > 0);
 
-      if (!hasConnectedAccounts && !hasRealData) {
+      // Show demo data whenever there's nothing real to display — whether or not platforms
+      // are connected. Connected users with no synced data yet still get sample content
+      // so the UI feels alive. The connect-platforms banner handles the "not connected" nudge.
+      if (!hasRealData) {
         setData(generateDemoData(userName, sessionResult.data));
         return;
       }

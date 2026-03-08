@@ -669,6 +669,7 @@ export function DailyPulse() {
                 isExpanded={true}
                 onToggleExpand={() => {}}
                 onViewAnalytics={() => navigate('/analytics')}
+                hideCollapseButton={true}
               />
             </div>
             <p className="text-center text-xs text-gray-500 mt-4 font-medium animate-swipe-hint">
@@ -690,6 +691,7 @@ export function DailyPulse() {
                 onEditPost={(id) => navigate(`/schedule?post=${id}&edit=true`)}
                 onReschedule={(id) => navigate(`/schedule?post=${id}&reschedule=true`)}
                 onViewCalendar={() => navigate('/schedule')}
+                hideCollapseButton={true}
               />
             </div>
             <p className="text-center text-xs text-gray-500 mt-4 font-medium animate-swipe-hint">
@@ -712,6 +714,7 @@ export function DailyPulse() {
                   if (tip.actionUrl) navigate(tip.actionUrl);
                   else navigate('/studio');
                 }}
+                hideCollapseButton={true}
               />
             </div>
             <div className="mt-4 flex items-center justify-center gap-2">

@@ -28,6 +28,7 @@ interface ComingUpCardProps {
   onEditPost: (postId: string) => void;
   onReschedule: (postId: string) => void;
   onViewCalendar: () => void;
+  hideCollapseButton?: boolean;
 }
 
 const platformIcons: Record<Platform, typeof Instagram> = {
@@ -56,6 +57,7 @@ export function ComingUpCard({
   onEditPost,
   onReschedule,
   onViewCalendar,
+  hideCollapseButton,
 }: ComingUpCardProps) {
   const formatTime = (dateString: string) => {
     const date = parseISO(dateString);
@@ -161,6 +163,7 @@ export function ComingUpCard({
       badges={badges}
       isExpanded={isExpanded}
       onToggleExpand={onToggleExpand}
+      hideCollapseButton={hideCollapseButton}
     >
       <div className="space-y-4">
         {data.items.length === 0 ? (

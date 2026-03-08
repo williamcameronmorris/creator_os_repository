@@ -13,6 +13,8 @@ interface PulseCardProps {
   children: ReactNode;
   isExpanded: boolean;
   onToggleExpand: () => void;
+  /** When true, hides the Collapse/Expand toggle button (e.g. on mobile full-screen slides) */
+  hideCollapseButton?: boolean;
 }
 
 const categoryStyles: Record<CardCategory, { dot: string; label: string }> = {
@@ -55,6 +57,7 @@ export function PulseCard({
   children,
   isExpanded,
   onToggleExpand,
+  hideCollapseButton = false,
 }: PulseCardProps) {
   const styles = categoryStyles[category];
 
@@ -89,17 +92,19 @@ export function PulseCard({
           </div>
         )}
 
-        <button
-          onClick={onToggleExpand}
-          className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-gray-100 text-sm font-medium text-gray-600 hover:bg-gray-200 transition-colors"
-        >
-          {isExpanded ? 'Collapse' : 'Expand'}
-          {isExpanded ? (
-            <ChevronUp className="w-4 h-4" />
-          ) : (
-            <ChevronDown className="w-4 h-4" />
-          )}
-        </button>
+        {!hideCollapseButton && (
+          <button
+            onClick={onToggleExpand}
+            className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-gray-100 text-sm font-medium text-gray-600 hover:bg-gray-200 transition-colors"
+          >
+            {isExpanded ? 'Collapse' : 'Expand'}
+            {isExpanded ? (
+              <ChevronUp className="w-4 h-4" />
+            ) : (
+              <ChevronDown className="w-4 h-4" />
+            )}
+          </button>
+        )}
 
         <div
           className={`overflow-hidden transition-all duration-300 ease-in-out ${

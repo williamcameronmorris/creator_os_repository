@@ -25,6 +25,7 @@ interface SmartTipsCardProps {
   isExpanded: boolean;
   onToggleExpand: () => void;
   onTipAction: (tip: SmartTip) => void;
+  hideCollapseButton?: boolean;
 }
 
 const tipIcons: Record<TipType, typeof Sparkles> = {
@@ -44,6 +45,7 @@ export function SmartTipsCard({
   isExpanded,
   onToggleExpand,
   onTipAction,
+  hideCollapseButton,
 }: SmartTipsCardProps) {
   const badges = [];
   badges.push({ label: 'AI powered', variant: 'success' as const });
@@ -74,6 +76,7 @@ export function SmartTipsCard({
       badges={badges}
       isExpanded={isExpanded}
       onToggleExpand={onToggleExpand}
+      hideCollapseButton={hideCollapseButton}
     >
       <div className="space-y-4">
         {data.allCaughtUp ? (

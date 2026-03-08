@@ -28,6 +28,7 @@ interface ContentRecapCardProps {
   isExpanded: boolean;
   onToggleExpand: () => void;
   onViewAnalytics: () => void;
+  hideCollapseButton?: boolean;
 }
 
 export function ContentRecapCard({
@@ -35,6 +36,7 @@ export function ContentRecapCard({
   isExpanded,
   onToggleExpand,
   onViewAnalytics,
+  hideCollapseButton,
 }: ContentRecapCardProps) {
   const formatNumber = (num: number) => {
     if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
@@ -65,6 +67,7 @@ export function ContentRecapCard({
       badges={badges}
       isExpanded={isExpanded}
       onToggleExpand={onToggleExpand}
+      hideCollapseButton={hideCollapseButton}
     >
       <div className="space-y-6">
         <div>
