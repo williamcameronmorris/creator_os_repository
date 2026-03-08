@@ -10,6 +10,7 @@ interface ContentPost {
   comments: number;
   published_at: string;
   thumbnail_url?: string;
+  media_url?: string;
 }
 
 interface ContentRecapData {
@@ -90,23 +91,36 @@ export function ContentRecapCard({
         </div>
 
         {data.bestPost && (
-          <div className="bg-gray-100 rounded-xl p-4 border border-gray-200">
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-lg bg-gray-200 flex items-center justify-center flex-shrink-0">
-                <Play className="w-5 h-5 text-gray-600" />
+          <div className="bg-violet-50 rounded-xl p-3 border border-violet-100">
+            <p className="text-[10px] font-black text-violet-400 uppercase tracking-widest mb-2">⭐ Top Post This Week</p>
+            <div className="flex items-center gap-3">
+              <div className="w-16 h-16 rounded-xl bg-gray-200 flex items-center justify-center flex-shrink-0 overflow-hidden">
+                {(data.bestPost.thumbnail_url || data.bestPost.media_url) ? (
+                  <img
+                    src={data.bestPost.thumbnail_url || data.bestPost.media_url}
+                    alt=""
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <Play className="w-6 h-6 text-gray-400" />
+                )}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-900 truncate">
-                  "{data.bestPost.title}"
+                <p className="text-sm font-bold text-gray-900 truncate">
+                  {data.bestPost.title}
                 </p>
-                <p className="text-sm text-gray-600 font-semibold">
-                  {Math.round(
-                    ((data.bestPost.views - data.totalViews / data.postsCount) /
-                      (data.totalViews / data.postsCount)) *
-                      100
-                  )}
-                  % above your average
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {formatNumber(data.bestPost.views)} views · {formatNumber(data.bestPost.likes)} likes
                 </p>
+                {data.postsCount > 1 && (
+                  <p className="text-xs font-semibold text-violet-600 mt-1">
+                    {Math.round(
+                      ((data.bestPost.views - data.totalViews / data.postsCount) /
+                        (data.totalViews / data.postsCount)) *
+                        100
+                    )}% above your average
+                  </p>
+                )}
               </div>
             </div>
           </div>

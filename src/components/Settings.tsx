@@ -299,6 +299,10 @@ export function Settings() {
                       </span>
                     ) : (
                       <>
+                        <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-emerald-600 bg-emerald-50 font-medium">
+                          <CheckCircle className="w-3.5 h-3.5" />
+                          Connected
+                        </span>
                         {/* No sync for facebook/threads (done via dedicated pages) */}
                         {!['facebook', 'threads'].includes(platform.platform) && (
                           <button
@@ -341,6 +345,7 @@ export function Settings() {
         </div>
       </div>
 
+      {/* ARCHIVED: CPM Tier — part of Brand Deals feature, re-enable when Brand Deals is active
       <div className="p-6 rounded-xl bg-card border border-border">
         <h3 className="text-xl font-bold text-foreground mb-6 flex items-center gap-2">
           <DollarSign className="w-5 h-5" />
@@ -402,7 +407,9 @@ export function Settings() {
           </div>
         </div>
       </div>
+      END ARCHIVED: CPM Tier */}
 
+      {/* ARCHIVED: Performance Averages — part of Brand Deals feature, re-enable when Brand Deals is active
       <div className="p-6 rounded-xl bg-card border border-border">
         <h3 className="text-xl font-bold text-foreground mb-6 flex items-center gap-2">
           <TrendingUp className="w-5 h-5" />
@@ -479,7 +486,9 @@ export function Settings() {
           </div>
         </div>
       </div>
+      END ARCHIVED: Performance Averages */}
 
+      {/* ARCHIVED: Default Terms — part of Brand Deals feature, re-enable when Brand Deals is active
       <div className="p-6 rounded-xl bg-card border border-border">
         <h3 className="text-xl font-bold text-foreground mb-6">Default Terms</h3>
 
@@ -525,7 +534,9 @@ export function Settings() {
           </div>
         </div>
       </div>
+      END ARCHIVED: Default Terms */}
 
+      {/* ARCHIVED: Save Settings button — re-enable with Default Terms when Brand Deals is active
       <div className="flex justify-end">
         <button
           onClick={handleSave}
@@ -540,6 +551,7 @@ export function Settings() {
           {loading ? 'Saving...' : 'Save Settings'}
         </button>
       </div>
+      END ARCHIVED: Save Settings button */}
     </div>
   );
 }

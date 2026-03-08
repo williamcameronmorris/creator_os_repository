@@ -100,10 +100,11 @@ export function Analytics() {
         .order('date', { ascending: true }),
 
       supabase
-        .from('post_analytics')
-        .select('*, content_posts!inner(platform, caption, published_at)')
-        .eq('content_posts.user_id', user.id)
-        .order('engagement_rate', { ascending: false })
+        .from('content_posts')
+        .select('id, platform, caption, published_date, likes, comments, views')
+        .eq('user_id', user.id)
+        .eq('status', 'published')
+        .order('likes', { ascending: false })
         .limit(isPremium ? 10 : 3),
 
       supabase
@@ -114,26 +115,26 @@ export function Analytics() {
     ]);
 
     if (metricsRes.data) {
-      const totalViews = metricsRes.data.reduce((sum, m) => sum + (m.views || 0), 0);
-      const totalLikes = metricsRes.data.reduce((sum, m) => sum + (m.likes || 0), 0);
-      const totalComments = metricsRes.data.reduce((sum, m) => sum + (m.comments || 0), 0);
-      const latestFollowers = metricsRes.data[metricsRes.data.length - 1]?.followers || 0;
+      const totalViews = metricsRes.data.reduce((sum, m) => sum + (m.total_views || 0), 0);
+      const totalLikes = metricsRes.data.reduce((sum, m) => sum + (m.total_likes || 0), 0);
+      const totalComments = metricsRes.data.reduce((sum, m) => sum + (m.total_comments || 0), 0);
+      const latestFollowers = metricsRes.data[metricsRes.data.length - 1]?.followers_count || 0;
       const engagementRate = totalViews > 0 ? ((totalLikes + totalComments) / totalViews) * 100 : 0;
 
       const midpoint = Math.floor(metricsRes.data.length / 2);
       const firstHalf = metricsRes.data.slice(0, midpoint);
       const secondHalf = metricsRes.data.slice(midpoint);
 
-      const firstViews = firstHalf.reduce((sum, m) => sum + (m.views || 0), 0);
-      const secondViews = secondHalf.reduce((sum, m) => sum + (m.views || 0), 0);
+      const firstViews = firstHalf.reduce((sum, m) => sum + (m.total_views || 0), 0);
+      const secondViews = secondHalf.reduce((sum, m) => sum + (m.total_views || 0), 0);
       const viewsChange = firstViews > 0 ? ((secondViews - firstViews) / firstViews) * 100 : 0;
 
-      const firstLikes = firstHalf.reduce((sum, m) => sum + (m.likes || 0), 0);
-      const secondLikes = secondHalf.reduce((sum, m) => sum + (m.likes || 0), 0);
+      const firstLikes = firstHalf.reduce((sum, m) => sum + (m.total_likes || 0), 0);
+      const secondLikes = secondHalf.reduce((sum, m) => sum + (m.total_likes || 0), 0);
       const likesChange = firstLikes > 0 ? ((secondLikes - firstLikes) / firstLikes) * 100 : 0;
 
-      const firstComments = firstHalf.reduce((sum, m) => sum + (m.comments || 0), 0);
-      const secondComments = secondHalf.reduce((sum, m) => sum + (m.comments || 0), 0);
+      const firstComments = firstHalf.reduce((sum, m) => sum + (m.total_comments || 0), 0);
+      const secondComments = secondHalf.reduce((sum, m) => sum + (m.total_comments || 0), 0);
       const commentsChange = firstComments > 0 ? ((secondComments - firstComments) / firstComments) * 100 : 0;
 
       const firstFollowers = firstHalf[0]?.followers || 0;
@@ -155,15 +156,15 @@ export function Analytics() {
         const date = format(new Date(curr.date), 'MMM dd');
         const existing = acc.find((d: any) => d.date === date);
         if (existing) {
-          existing.views += curr.views || 0;
-          existing.likes += curr.likes || 0;
-          existing.comments += curr.comments || 0;
+          existing.views += curr.total_views || 0;
+          existing.likes += curr.total_likes || 0;
+          existing.comments += curr.total_comments || 0;
         } else {
           acc.push({
             date,
-            views: curr.views || 0,
-            likes: curr.likes || 0,
-            comments: curr.comments || 0,
+            views: curr.total_views || 0,
+            likes: curr.total_likes || 0,
+            comments: curr.total_comments || 0,
           });
         }
         return acc;
@@ -177,9 +178,9 @@ export function Analytics() {
         if (!acc[platform]) {
           acc[platform] = { platform, views: 0, likes: 0, comments: 0 };
         }
-        acc[platform].views += curr.views || 0;
-        acc[platform].likes += curr.likes || 0;
-        acc[platform].comments += curr.comments || 0;
+        acc[platform].views += curr.total_views || 0;
+        acc[platform].likes += curr.total_likes || 0;
+        acc[platform].comments += curr.total_comments || 0;
         return acc;
       }, {});
       setPlatformData(Object.values(platformTotals));
@@ -187,14 +188,14 @@ export function Analytics() {
 
     if (postsRes.data) {
       setTopPosts(postsRes.data.map((p: any) => ({
-        id: p.post_id,
-        platform: p.content_posts.platform,
-        caption: p.content_posts.caption,
+        id: p.id,
+        platform: p.platform,
+        caption: p.caption,
         views: p.views || 0,
         likes: p.likes || 0,
         comments: p.comments || 0,
-        engagement_rate: p.engagement_rate || 0,
-        published_at: p.content_posts.published_at,
+        engagement_rate: p.views > 0 ? ((p.likes + p.comments) / p.views) * 100 : 0,
+        published_at: p.published_date,
       })));
     }
 

@@ -11,6 +11,7 @@ interface ContentPost {
   comments: number;
   published_at: string;
   thumbnail_url?: string;
+  media_url?: string;
 }
 
 interface ContentRecapData {
@@ -347,7 +348,7 @@ export function useDailyPulse() {
           .lte('date', format(lastWeekEnd, 'yyyy-MM-dd')),
         supabase
           .from('content_posts')
-          .select('id, title, platform, status, scheduled_for, published_at, thumbnail_url')
+          .select('id, title, platform, status, scheduled_for, published_at, thumbnail_url, media_url')
           .eq('user_id', user.id)
           .eq('status', 'published')
           .gte('published_at', format(thisWeekStart, 'yyyy-MM-dd'))
@@ -424,6 +425,7 @@ export function useDailyPulse() {
           comments: metrics?.comments || Math.floor(Math.random() * 50) + 5,
           published_at: post.published_at,
           thumbnail_url: post.thumbnail_url,
+          media_url: post.media_url,
         };
       });
 

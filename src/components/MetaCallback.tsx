@@ -62,6 +62,16 @@ export function MetaCallback() {
             : 'Meta account connected successfully.'
         );
 
+        // Fire-and-forget: trigger instagram-sync so analytics populate immediately
+        fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/instagram-sync`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          },
+          body: JSON.stringify({ userId: user.id }),
+        }).catch(() => {});
+
         setTimeout(() => navigate('/settings'), 3000);
       } catch (err: any) {
         setStatus('error');

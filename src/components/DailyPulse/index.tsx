@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { useDailyPulse } from '../../hooks/useDailyPulse';
 import { ContentRecapCard } from './ContentRecapCard';
 import { EngagementCard } from './EngagementCard';
@@ -9,7 +9,6 @@ import { SmartTipsCard } from './SmartTipsCard';
 import { DealPipelineCard } from './DealPipelineCard';
 import {
   CheckCircle,
-  PartyPopper,
   Plug,
   ArrowRight,
   Instagram,
@@ -20,6 +19,9 @@ import {
   Calendar,
   Lightbulb,
   GitBranch,
+  RefreshCw,
+  AlertCircle,
+  Play,
 } from 'lucide-react';
 
 type ExpandedCard = 'content' | 'engagement' | 'schedule' | 'tips' | 'deals' | null;
@@ -137,8 +139,9 @@ function DesktopPulseCard({
 // ═══════════════════════════════════════════════════════════════════════════
 export function DailyPulse() {
   const navigate = useNavigate();
-  const { data, loading, hasConnectedAccounts, dismissAll, markCardReviewed } = useDailyPulse();
+  const { data, loading, hasConnectedAccounts, dismissAll, markCardReviewed, refetch } = useDailyPulse();
   const [expandedCard, setExpandedCard] = useState<ExpandedCard>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Mobile swipe state
   const [slideIndex, setSlideIndex] = useState(0);
@@ -171,6 +174,12 @@ export function DailyPulse() {
 
   const handleSkipAll = async () => {
     await dismissAll();
+  };
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await refetch();
+    setIsRefreshing(false);
   };
 
   // Mobile swipe handlers
@@ -216,44 +225,7 @@ export function DailyPulse() {
     );
   }
 
-  const isCompleted = data.session?.dismissed_all || data.session?.completed_at !== null;
-
-  // ── All-caught-up screen ───────────────────────────────────────────────
-  if (isCompleted) {
-    return (
-      <div className="max-w-lg mx-auto pt-12 px-4">
-        <div className="bg-white rounded-3xl shadow-sm p-10 text-center">
-          <div className="w-20 h-20 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-6">
-            <PartyPopper className="w-10 h-10 text-green-600" />
-          </div>
-          <h1 className="text-3xl font-black text-gray-900 mb-2">All caught up!</h1>
-          <p className="text-gray-400 mb-8">
-            You've reviewed your daily pulse for today. Check back tomorrow for new updates.
-          </p>
-          <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            <button
-              onClick={() => navigate('/analytics')}
-              className="px-6 py-3 rounded-2xl bg-violet-600 text-white font-bold hover:bg-violet-700 transition-colors"
-            >
-              View Analytics
-            </button>
-            <button
-              onClick={() => navigate('/schedule')}
-              className="px-6 py-3 rounded-2xl bg-gray-100 text-gray-700 font-bold hover:bg-gray-200 transition-colors"
-            >
-              Content Schedule
-            </button>
-            <button
-              onClick={() => navigate('/studio')}
-              className="px-6 py-3 rounded-2xl bg-gray-100 text-gray-700 font-bold hover:bg-gray-200 transition-colors"
-            >
-              Create Content
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const isCompleted = !!(data.session?.dismissed_all || data.session?.completed_at);
 
   const currentSlide = SLIDES[slideIndex];
   const bgColor = SLIDE_COLORS[currentSlide];
@@ -378,7 +350,7 @@ export function DailyPulse() {
               {getGreeting()}, {data.userName} {getEmoji()}
             </h1>
             <p className="text-gray-400 mt-1 text-base">
-              You have {getThingsToReview()} things to review
+              {isCompleted ? "Here's how today is tracking" : `You have ${getThingsToReview()} things to review`}
             </p>
           </div>
           <span className="text-sm text-gray-400 bg-white px-4 py-2 rounded-full shadow-sm font-medium">
@@ -464,19 +436,32 @@ export function DailyPulse() {
 
         {/* Footer actions */}
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
-          <button
-            onClick={handleSkipAll}
-            className="px-6 py-3 rounded-2xl border border-gray-200 bg-white text-gray-500 font-bold hover:bg-gray-50 transition-colors"
-          >
-            Skip All
-          </button>
-          <button
-            onClick={handleDone}
-            className="flex items-center justify-center gap-2 px-6 py-3 rounded-2xl bg-violet-600 text-white font-bold hover:bg-violet-700 transition-colors"
-          >
-            <CheckCircle className="w-5 h-5" />
-            Mark All as Reviewed
-          </button>
+          {isCompleted ? (
+            <button
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              className="flex items-center justify-center gap-2 px-6 py-3 rounded-2xl bg-white border border-gray-200 text-gray-700 font-bold hover:bg-gray-50 transition-colors disabled:opacity-50"
+            >
+              <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+              {isRefreshing ? 'Refreshing...' : 'Refresh Metrics'}
+            </button>
+          ) : (
+            <>
+              <button
+                onClick={handleSkipAll}
+                className="px-6 py-3 rounded-2xl border border-gray-200 bg-white text-gray-500 font-bold hover:bg-gray-50 transition-colors"
+              >
+                Skip All
+              </button>
+              <button
+                onClick={handleDone}
+                className="flex items-center justify-center gap-2 px-6 py-3 rounded-2xl bg-violet-600 text-white font-bold hover:bg-violet-700 transition-colors"
+              >
+                <CheckCircle className="w-5 h-5" />
+                Mark All as Reviewed
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -505,43 +490,162 @@ export function DailyPulse() {
                 </span>
               </div>
               <p className="text-gray-500 mt-2 text-sm">
-                You have {getThingsToReview()} things to review
+                {isCompleted ? "Here's how today is tracking" : `You have ${getThingsToReview()} things to review`}
               </p>
             </div>
 
-            {/* Mini preview card */}
-            <div className="bg-white rounded-3xl p-5 shadow-sm flex-1 flex flex-col">
-              <div className="flex items-center gap-2 mb-1">
-                <div className="w-1.5 h-1.5 rounded-full bg-violet-500" />
-                <span className="text-xs font-bold text-gray-400 uppercase tracking-wide">Weekly Preview</span>
-              </div>
-
-              <div className="grid grid-cols-3 gap-3 my-4">
-                {[
-                  { label: 'Views', value: contentStat, color: '#ddd6fe' },
-                  { label: 'Posts', value: String(data.contentRecap.postsCount || 0), color: '#fde68a' },
-                  { label: 'Tips', value: tipsStat, color: '#a7f3d0' },
-                ].map((s) => (
-                  <div key={s.label} className="rounded-2xl p-3 text-center" style={{ backgroundColor: s.color }}>
-                    <p className="text-xl font-black text-gray-900">{s.value}</p>
-                    <p className="text-[10px] font-bold text-gray-500 uppercase mt-0.5">{s.label}</p>
+            {isCompleted ? (
+              /* ── TODAY'S SNAPSHOT (post-session) ─────────────────────── */
+              <div className="bg-white rounded-3xl p-5 shadow-sm flex-1 flex flex-col gap-4">
+                {/* Header row */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-violet-500" />
+                    <span className="text-xs font-bold text-gray-400 uppercase tracking-wide">Today's Snapshot</span>
                   </div>
-                ))}
-              </div>
+                  <button
+                    onClick={handleRefresh}
+                    disabled={isRefreshing}
+                    className="flex items-center gap-1.5 text-xs font-bold text-gray-500 hover:text-violet-600 transition-colors disabled:opacity-40"
+                  >
+                    <RefreshCw className={`w-3 h-3 ${isRefreshing ? 'animate-spin' : ''}`} />
+                    {isRefreshing ? 'Refreshing...' : 'Refresh'}
+                  </button>
+                </div>
 
-              {!hasConnectedAccounts && (
+                {/* Top post with real thumbnail */}
+                {data.contentRecap.bestPost && (
+                  <div className="flex items-center gap-3 bg-violet-50 rounded-2xl p-3">
+                    <div className="w-16 h-16 rounded-xl overflow-hidden bg-gray-200 flex-shrink-0 flex items-center justify-center">
+                      {(data.contentRecap.bestPost.thumbnail_url || data.contentRecap.bestPost.media_url) ? (
+                        <img
+                          src={data.contentRecap.bestPost.thumbnail_url || data.contentRecap.bestPost.media_url}
+                          alt=""
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <Play className="w-6 h-6 text-gray-400" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[10px] font-black text-violet-400 uppercase tracking-wide mb-0.5">Top Post This Week</p>
+                      <p className="text-sm font-bold text-gray-900 truncate">{data.contentRecap.bestPost.title}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        {data.contentRecap.bestPost.views >= 1000
+                          ? `${(data.contentRecap.bestPost.views / 1000).toFixed(1)}K`
+                          : data.contentRecap.bestPost.views} views
+                        {' · '}
+                        {data.contentRecap.bestPost.likes} likes
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Quick metrics row */}
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { label: 'Views', value: contentStat, color: '#ddd6fe' },
+                    {
+                      label: 'Engage',
+                      value: data.engagement.totalEngagement >= 1000
+                        ? `${(data.engagement.totalEngagement / 1000).toFixed(1)}K`
+                        : String(data.engagement.totalEngagement || 0),
+                      color: '#fde68a',
+                    },
+                    { label: 'Posts', value: String(data.contentRecap.postsCount || 0), color: '#a7f3d0' },
+                  ].map((s) => (
+                    <div key={s.label} className="rounded-2xl p-3 text-center" style={{ backgroundColor: s.color }}>
+                      <p className="text-lg font-black text-gray-900">{s.value}</p>
+                      <p className="text-[10px] font-bold text-gray-500 uppercase mt-0.5">{s.label}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Time-sensitive: next post going live */}
+                {data.comingUp.items[0] && (
+                  <button
+                    onClick={() => navigate('/schedule')}
+                    className="flex items-center gap-2 bg-rose-50 rounded-xl px-3 py-2.5 w-full text-left"
+                  >
+                    <Calendar className="w-3.5 h-3.5 text-rose-400 flex-shrink-0" />
+                    <span className="text-xs text-gray-700 font-medium flex-1 truncate">
+                      Next: <strong>{data.comingUp.items[0].title}</strong>
+                    </span>
+                    <span className="text-xs text-rose-500 font-bold flex-shrink-0">
+                      {format(parseISO(data.comingUp.items[0].scheduledTime), 'h:mm a')}
+                    </span>
+                  </button>
+                )}
+
+                {/* Time-sensitive: stalled deals */}
+                {data.dealPipeline.stalledCount > 0 && (
+                  <button
+                    onClick={() => navigate('/deals')}
+                    className="flex items-center gap-2 bg-amber-50 rounded-xl px-3 py-2.5 w-full text-left"
+                  >
+                    <AlertCircle className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
+                    <span className="text-xs text-gray-700 font-medium flex-1">
+                      {data.dealPipeline.stalledCount} deal{data.dealPipeline.stalledCount > 1 ? 's' : ''} need{data.dealPipeline.stalledCount === 1 ? 's' : ''} attention
+                    </span>
+                    <ChevronRight className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                  </button>
+                )}
+
+                {/* Connect banner if no accounts */}
+                {!hasConnectedAccounts && (
+                  <button
+                    onClick={() => navigate('/settings')}
+                    className="flex items-center justify-center gap-2 w-full py-2.5 rounded-2xl border-2 border-dashed border-violet-200 text-violet-600 text-sm font-bold hover:bg-violet-50 transition-colors"
+                  >
+                    <Plug className="w-4 h-4" />
+                    Connect a platform for real data
+                  </button>
+                )}
+
+                {/* Analytics CTA */}
                 <button
-                  onClick={() => navigate('/settings')}
-                  className="mt-auto flex items-center justify-center gap-2 w-full py-3 rounded-2xl border-2 border-dashed border-violet-200 text-violet-600 text-sm font-bold hover:bg-violet-50 transition-colors"
+                  onClick={() => navigate('/analytics')}
+                  className="mt-auto w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-violet-600 text-white font-bold text-sm hover:bg-violet-700 transition-colors"
                 >
-                  <Plug className="w-4 h-4" />
-                  Connect a platform for real data
+                  View Full Analytics
+                  <ArrowRight className="w-4 h-4" />
                 </button>
-              )}
-            </div>
+              </div>
+            ) : (
+              /* ── ORIGINAL PRE-SESSION MINI PREVIEW ───────────────────── */
+              <div className="bg-white rounded-3xl p-5 shadow-sm flex-1 flex flex-col">
+                <div className="flex items-center gap-2 mb-1">
+                  <div className="w-1.5 h-1.5 rounded-full bg-violet-500" />
+                  <span className="text-xs font-bold text-gray-400 uppercase tracking-wide">Weekly Preview</span>
+                </div>
+
+                <div className="grid grid-cols-3 gap-3 my-4">
+                  {[
+                    { label: 'Views', value: contentStat, color: '#ddd6fe' },
+                    { label: 'Posts', value: String(data.contentRecap.postsCount || 0), color: '#fde68a' },
+                    { label: 'Tips', value: tipsStat, color: '#a7f3d0' },
+                  ].map((s) => (
+                    <div key={s.label} className="rounded-2xl p-3 text-center" style={{ backgroundColor: s.color }}>
+                      <p className="text-xl font-black text-gray-900">{s.value}</p>
+                      <p className="text-[10px] font-bold text-gray-500 uppercase mt-0.5">{s.label}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {!hasConnectedAccounts && (
+                  <button
+                    onClick={() => navigate('/settings')}
+                    className="mt-auto flex items-center justify-center gap-2 w-full py-3 rounded-2xl border-2 border-dashed border-violet-200 text-violet-600 text-sm font-bold hover:bg-violet-50 transition-colors"
+                  >
+                    <Plug className="w-4 h-4" />
+                    Connect a platform for real data
+                  </button>
+                )}
+              </div>
+            )}
 
             <p className="text-center text-xs text-gray-400 mt-4 font-medium animate-swipe-hint">
-              Swipe left to continue →
+              {isCompleted ? 'Swipe to review cards →' : 'Swipe left to continue →'}
             </p>
           </div>
         )}
@@ -647,28 +751,41 @@ export function DailyPulse() {
             ))}
           </div>
 
-          {/* Skip / Done */}
+          {/* Skip / Done / Refresh */}
           <div className="flex items-center gap-3 w-full">
-            <button
-              onClick={handleSkipAll}
-              className="flex-1 py-3.5 rounded-2xl border-2 border-gray-200 bg-white/60 text-gray-600 font-bold text-sm hover:bg-white transition-colors"
-            >
-              Skip All
-            </button>
-            {slideIndex === SLIDES.length - 1 ? (
+            {isCompleted ? (
               <button
-                onClick={handleDone}
-                className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-violet-600 text-white font-bold text-sm hover:bg-violet-700 transition-colors"
+                onClick={handleRefresh}
+                disabled={isRefreshing}
+                className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-white border-2 border-gray-200 text-gray-700 font-bold text-sm hover:bg-gray-50 transition-colors disabled:opacity-50"
               >
-                Done <ArrowRight className="w-4 h-4" />
+                <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                {isRefreshing ? 'Refreshing...' : 'Refresh'}
               </button>
             ) : (
-              <button
-                onClick={() => setSlideIndex(i => i + 1)}
-                className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-violet-600 text-white font-bold text-sm hover:bg-violet-700 transition-colors"
-              >
-                Next <ArrowRight className="w-4 h-4" />
-              </button>
+              <>
+                <button
+                  onClick={handleSkipAll}
+                  className="flex-1 py-3.5 rounded-2xl border-2 border-gray-200 bg-white/60 text-gray-600 font-bold text-sm hover:bg-white transition-colors"
+                >
+                  Skip All
+                </button>
+                {slideIndex === SLIDES.length - 1 ? (
+                  <button
+                    onClick={handleDone}
+                    className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-violet-600 text-white font-bold text-sm hover:bg-violet-700 transition-colors"
+                  >
+                    Done <ArrowRight className="w-4 h-4" />
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setSlideIndex(i => i + 1)}
+                    className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-violet-600 text-white font-bold text-sm hover:bg-violet-700 transition-colors"
+                  >
+                    Next <ArrowRight className="w-4 h-4" />
+                  </button>
+                )}
+              </>
             )}
           </div>
         </div>
