@@ -6,7 +6,6 @@ import { ContentRecapCard } from './ContentRecapCard';
 import { EngagementCard } from './EngagementCard';
 import { ComingUpCard } from './ComingUpCard';
 import { SmartTipsCard } from './SmartTipsCard';
-import { DealPipelineCard } from './DealPipelineCard';
 import {
   CheckCircle,
   Plug,
@@ -18,13 +17,13 @@ import {
   TrendingUp,
   Calendar,
   Lightbulb,
-  GitBranch,
   RefreshCw,
   AlertCircle,
   Play,
+  X,
 } from 'lucide-react';
 
-type ExpandedCard = 'content' | 'engagement' | 'schedule' | 'tips' | 'deals' | null;
+type ExpandedCard = 'content' | 'engagement' | 'schedule' | 'tips' | null;
 
 // ── Mobile slide definitions ────────────────────────────────────────────────
 const SLIDES = ['home', 'content', 'schedule', 'tips'] as const;
@@ -138,7 +137,8 @@ function DesktopPulseCard({
 // ═══════════════════════════════════════════════════════════════════════════
 export function DailyPulse() {
   const navigate = useNavigate();
-  const { data, loading, hasConnectedAccounts, dismissAll, markCardReviewed, refetch } = useDailyPulse();
+  const { data, loading, hasConnectedAccounts, connectedPlatforms, dismissAll, markCardReviewed, refetch } = useDailyPulse();
+  const [bannerDismissed, setBannerDismissed] = useState(false);
   const [expandedCard, setExpandedCard] = useState<ExpandedCard>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -159,7 +159,6 @@ export function DailyPulse() {
     if (data.engagement.totalEngagement > 0) count++;
     if (data.comingUp.thisWeekCount > 0) count++;
     if (data.smartTips.tipsCount > 0) count++;
-    if (data.dealPipeline.activeDeals > 0) count++;
     return count;
   };
 
@@ -168,7 +167,6 @@ export function DailyPulse() {
     await markCardReviewed('engagement');
     await markCardReviewed('schedule');
     await markCardReviewed('tips');
-    await markCardReviewed('deals');
   };
 
   const handleSkipAll = async () => {
@@ -270,17 +268,6 @@ export function DailyPulse() {
         }}
       />
     ),
-    deals: (
-      <DealPipelineCard
-        data={data.dealPipeline}
-        isExpanded={true}
-        onToggleExpand={() => handleToggleExpand('deals')}
-        onSendFollowUp={() => {}}
-        onReviewContract={() => {}}
-        onQuickQuote={() => {}}
-        onViewDeal={() => {}}
-      />
-    ),
   };
 
   // ── Stat helpers ────────────────────────────────────────────────────────
@@ -288,50 +275,80 @@ export function DailyPulse() {
     ? `${(data.contentRecap.totalViews / 1000).toFixed(1)}K`
     : String(data.contentRecap.totalViews || 0);
 
-  const dealStat = String(data.dealPipeline.activeDeals || 0);
-
   const scheduleStat = String(data.comingUp.thisWeekCount || 0);
 
   const tipsStat = String(data.smartTips.tipsCount || 0);
 
-  // ── Platform connect banner ────────────────────────────────────────────
+  // ── Platform connect checklist ─────────────────────────────────────────
+  const allConnected = connectedPlatforms.instagram && connectedPlatforms.youtube && connectedPlatforms.tiktok;
+  const platforms = [
+    { key: 'instagram' as const, label: 'Instagram', icon: Instagram, iconClass: 'text-pink-500', connected: connectedPlatforms.instagram },
+    { key: 'youtube' as const, label: 'YouTube', icon: Youtube, iconClass: 'text-red-500', connected: connectedPlatforms.youtube },
+    { key: 'tiktok' as const, label: 'TikTok', icon: Video, iconClass: 'text-gray-700', connected: connectedPlatforms.tiktok },
+  ];
+
   const ConnectBanner = () =>
-    !hasConnectedAccounts ? (
-      <div className="bg-gradient-to-r from-violet-50 to-purple-50 border border-violet-200 rounded-3xl p-5 mb-6">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-          <div className="w-11 h-11 rounded-2xl bg-violet-100 flex items-center justify-center flex-shrink-0">
-            <Plug className="w-5 h-5 text-violet-600" />
-          </div>
-          <div className="flex-1">
-            <h3 className="text-sm font-black text-gray-900 mb-1">
-              Connect a platform to see your real data
-            </h3>
-            <p className="text-xs text-gray-500 mb-3">
-              You're viewing demo data. Connect Instagram, TikTok, or YouTube to pull in your actual metrics.
-            </p>
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-1.5">
-                <Instagram className="w-3.5 h-3.5 text-pink-500" />
-                <span className="text-xs text-gray-400">Instagram</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <Video className="w-3.5 h-3.5 text-gray-400" />
-                <span className="text-xs text-gray-400">TikTok</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <Youtube className="w-3.5 h-3.5 text-red-400" />
-                <span className="text-xs text-gray-400">YouTube</span>
-              </div>
+    !bannerDismissed && !allConnected ? (
+      <div className="bg-white border border-gray-100 rounded-3xl p-5 mb-6 shadow-sm">
+        <div className="flex items-start justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-2xl bg-violet-100 flex items-center justify-center flex-shrink-0">
+              <Plug className="w-4 h-4 text-violet-600" />
+            </div>
+            <div>
+              <h3 className="text-sm font-black text-gray-900">Connect your platforms</h3>
+              <p className="text-xs text-gray-400 mt-0.5">Pull in real data from your accounts</p>
             </div>
           </div>
           <button
+            onClick={() => setBannerDismissed(true)}
+            className="text-gray-300 hover:text-gray-500 transition-colors p-1"
+            aria-label="Skip"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+          {platforms.map(({ key, label, icon: Icon, iconClass, connected }) => (
+            <div
+              key={key}
+              className={`flex items-center gap-2.5 flex-1 px-3 py-2.5 rounded-2xl border transition-colors ${
+                connected
+                  ? 'bg-emerald-50 border-emerald-200'
+                  : 'bg-gray-50 border-gray-100'
+              }`}
+            >
+              {connected ? (
+                <CheckCircle className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+              ) : (
+                <div className="w-4 h-4 rounded-full border-2 border-gray-300 flex-shrink-0" />
+              )}
+              <Icon className={`w-3.5 h-3.5 flex-shrink-0 ${connected ? 'text-emerald-500' : iconClass}`} />
+              <span className={`text-xs font-semibold ${connected ? 'text-emerald-700' : 'text-gray-500'}`}>
+                {label}
+              </span>
+              {connected && (
+                <span className="text-[10px] text-emerald-500 font-bold ml-auto">Connected</span>
+              )}
+            </div>
+          ))}
+
+          <button
             onClick={() => navigate('/settings')}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-violet-600 hover:bg-violet-700 text-white font-bold text-sm transition-colors flex-shrink-0"
+            className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl bg-violet-600 hover:bg-violet-700 text-white font-bold text-sm transition-colors flex-shrink-0"
           >
             Connect
             <ArrowRight className="w-4 h-4" />
           </button>
         </div>
+
+        <button
+          onClick={() => setBannerDismissed(true)}
+          className="mt-3 w-full text-xs text-gray-400 hover:text-gray-600 transition-colors py-1"
+        >
+          Skip for now
+        </button>
       </div>
     ) : null;
 
@@ -359,8 +376,8 @@ export function DailyPulse() {
 
         <ConnectBanner />
 
-        {/* 4-card grid */}
-        <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
+        {/* 3-card grid */}
+        <div className="grid grid-cols-3 gap-4 mb-8">
           <DesktopPulseCard
             label="WEEKLY REVIEW"
             title={`Content\nRecap`}
@@ -377,26 +394,6 @@ export function DailyPulse() {
             isExpanded={expandedCard === 'content'}
             onExpand={() => handleToggleExpand('content')}
             expandedContent={expandedContentMap.content}
-          />
-
-          <DesktopPulseCard
-            label="PARTNERSHIPS"
-            title={`Deal\nPipeline`}
-            headerClass="pulse-card-amber"
-            icon={GitBranch}
-            stat={dealStat}
-            statLabel="active deals"
-            chips={[
-              ...(data.dealPipeline.stalledCount > 0
-                ? [{ text: `${data.dealPipeline.stalledCount} stalled`, color: '#dc2626' }]
-                : []),
-              ...(data.dealPipeline.totalValue > 0
-                ? [{ text: `$${(data.dealPipeline.totalValue / 1000).toFixed(1)}K`, color: '#d97706' }]
-                : []),
-            ]}
-            isExpanded={expandedCard === 'deals'}
-            onExpand={() => handleToggleExpand('deals')}
-            expandedContent={expandedContentMap.deals}
           />
 
           <DesktopPulseCard
@@ -576,29 +573,28 @@ export function DailyPulse() {
                   </button>
                 )}
 
-                {/* Time-sensitive: stalled deals */}
-                {data.dealPipeline.stalledCount > 0 && (
-                  <button
-                    onClick={() => navigate('/deals')}
-                    className="flex items-center gap-2 bg-amber-50 rounded-xl px-3 py-2.5 w-full text-left"
-                  >
-                    <AlertCircle className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
-                    <span className="text-xs text-gray-700 font-medium flex-1">
-                      {data.dealPipeline.stalledCount} deal{data.dealPipeline.stalledCount > 1 ? 's' : ''} need{data.dealPipeline.stalledCount === 1 ? 's' : ''} attention
-                    </span>
-                    <ChevronRight className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
-                  </button>
-                )}
-
-                {/* Connect banner if no accounts */}
-                {!hasConnectedAccounts && (
-                  <button
-                    onClick={() => navigate('/settings')}
-                    className="flex items-center justify-center gap-2 w-full py-2.5 rounded-2xl border-2 border-dashed border-violet-200 text-violet-600 text-sm font-bold hover:bg-violet-50 transition-colors"
-                  >
-                    <Plug className="w-4 h-4" />
-                    Connect a platform for real data
-                  </button>
+                {/* Connect checklist if no accounts */}
+                {!hasConnectedAccounts && !bannerDismissed && (
+                  <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-2">Connect platforms</p>
+                    {platforms.map(({ key, label, icon: Icon, iconClass, connected }) => (
+                      <div key={key} className="flex items-center gap-2 py-1">
+                        {connected
+                          ? <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />
+                          : <div className="w-3.5 h-3.5 rounded-full border-2 border-gray-300" />
+                        }
+                        <Icon className={`w-3 h-3 ${connected ? 'text-emerald-500' : iconClass}`} />
+                        <span className={`text-xs ${connected ? 'text-emerald-600 font-semibold' : 'text-gray-500'}`}>{label}</span>
+                      </div>
+                    ))}
+                    <button
+                      onClick={() => navigate('/settings')}
+                      className="mt-2 w-full flex items-center justify-center gap-1.5 py-2 rounded-xl bg-violet-600 text-white text-xs font-bold hover:bg-violet-700 transition-colors"
+                    >
+                      <Plug className="w-3 h-3" /> Connect
+                    </button>
+                    <button onClick={() => setBannerDismissed(true)} className="mt-1.5 w-full text-[10px] text-gray-400 hover:text-gray-500">Skip</button>
+                  </div>
                 )}
 
                 {/* Analytics CTA */}
@@ -631,13 +627,13 @@ export function DailyPulse() {
                   ))}
                 </div>
 
-                {!hasConnectedAccounts && (
+                {!hasConnectedAccounts && !bannerDismissed && (
                   <button
                     onClick={() => navigate('/settings')}
-                    className="mt-auto flex items-center justify-center gap-2 w-full py-3 rounded-2xl border-2 border-dashed border-violet-200 text-violet-600 text-sm font-bold hover:bg-violet-50 transition-colors"
+                    className="mt-auto flex items-center justify-center gap-2 w-full py-2.5 rounded-2xl bg-violet-600 text-white text-sm font-bold hover:bg-violet-700 transition-colors"
                   >
                     <Plug className="w-4 h-4" />
-                    Connect a platform for real data
+                    Connect platforms
                   </button>
                 )}
               </div>

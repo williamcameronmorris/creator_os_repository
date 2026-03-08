@@ -296,6 +296,7 @@ export function useDailyPulse() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [hasConnectedAccounts, setHasConnectedAccounts] = useState(false);
+  const [connectedPlatforms, setConnectedPlatforms] = useState({ instagram: false, youtube: false, tiktok: false });
 
   const fetchData = useCallback(async () => {
     try {
@@ -384,11 +385,13 @@ export function useDailyPulse() {
         user.email?.split('@')[0] ||
         'there';
 
-      const hasConnectedAccounts = !!(
-        profileResult.data?.instagram_access_token ||
-        profileResult.data?.tiktok_access_token ||
-        profileResult.data?.youtube_access_token
-      );
+      const platforms = {
+        instagram: !!(profileResult.data?.instagram_access_token),
+        tiktok: !!(profileResult.data?.tiktok_access_token),
+        youtube: !!(profileResult.data?.youtube_access_token),
+      };
+      setConnectedPlatforms(platforms);
+      const hasConnectedAccounts = platforms.instagram || platforms.tiktok || platforms.youtube;
       setHasConnectedAccounts(hasConnectedAccounts);
 
       const hasRealData = (thisWeekMetrics.data && thisWeekMetrics.data.length > 0) ||
@@ -728,6 +731,7 @@ export function useDailyPulse() {
     loading,
     error,
     hasConnectedAccounts,
+    connectedPlatforms,
     refetch: fetchData,
     markCardReviewed,
     dismissAll,
