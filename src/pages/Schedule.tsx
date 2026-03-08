@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useSubscription } from '../contexts/SubscriptionContext';
 import { supabase } from '../lib/supabase';
-import { Calendar, Clock, Instagram, Youtube, Plus, Sparkles, Edit, Trash2, DollarSign, Info, TrendingUp, Lock, Crown } from 'lucide-react';
+import { Calendar, Clock, Instagram, Youtube, Plus, Sparkles, Edit, Trash2, DollarSign, Info, TrendingUp, Lock, Crown, CheckCircle2, XCircle, Loader2, ExternalLink, RefreshCw, AlertTriangle } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface Post {
@@ -15,6 +15,10 @@ interface Post {
   status: string;
   deal_id?: string | null;
   is_sponsored?: boolean;
+  publish_status: string | null;
+  publish_error: string | null;
+  platform_post_id: string | null;
+  published_at: string | null;
 }
 
 export function Schedule() {
@@ -23,7 +27,7 @@ export function Schedule() {
   const navigate = useNavigate();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<'all' | 'scheduled' | 'draft'>('all');
+  const [filter, setFilter] = useState<'all' | 'scheduled' | 'draft' | 'published'>('all');
 
   const isPremium = tier === 'paid';
 
@@ -36,17 +40,16 @@ export function Schedule() {
   const loadPosts = async () => {
     if (!user) return;
 
-    const query = supabase
+    const statuses = filter === 'all'
+      ? ['scheduled', 'draft', 'published']
+      : [filter];
+
+    const { data, error } = await supabase
       .from('content_posts')
-      .select('*')
+      .select('id, platform, caption, media_urls, scheduled_date, scheduled_for, status, deal_id, is_sponsored, publish_status, publish_error, platform_post_id, published_at')
       .eq('user_id', user.id)
-      .in('status', ['scheduled', 'draft']);
-
-    if (filter !== 'all') {
-      query.eq('status', filter);
-    }
-
-    const { data, error } = await query.order('scheduled_date', { ascending: true, nullsFirst: false });
+      .in('status', statuses)
+      .order('scheduled_date', { ascending: true, nullsFirst: false });
 
     if (!error && data) {
       setPosts(data);
@@ -84,10 +87,17 @@ export function Schedule() {
     }
   };
 
-  const filteredPosts = posts.filter(post => {
-    if (filter === 'all') return true;
-    return post.status === filter;
-  });
+  const filteredPosts = posts;
+
+  const getPlatformPostUrl = (platform: string, platformPostId: string | null): string | null => {
+    if (!platformPostId) return null;
+    switch (platform) {
+      case 'youtube': return `https://www.youtube.com/watch?v=${platformPostId}`;
+      case 'instagram': return `https://www.instagram.com/p/${platformPostId}/`;
+      case 'tiktok': return null; // TikTok uses publish_id, not a shareable URL
+      default: return null;
+    }
+  };
 
   const scheduledPosts = posts.filter(post => post.status === 'scheduled');
   const totalScheduled = scheduledPosts.length;
@@ -172,6 +182,16 @@ export function Schedule() {
           >
             Drafts
           </button>
+          <button
+            onClick={() => setFilter('published')}
+            className={`px-4 py-2 rounded-xl font-medium transition-colors shadow-sm ${
+              filter === 'published'
+                ? 'bg-primary text-primary-foreground'
+                : 'bg-card border border-border text-muted-foreground hover:bg-accent hover:text-foreground'
+            }`}
+          >
+            Published
+          </button>
         </div>
 
         {loading ? (
@@ -182,7 +202,7 @@ export function Schedule() {
           <div className="p-12 rounded-xl text-center bg-card border border-border shadow-md">
             <Calendar className="w-16 h-16 mx-auto mb-4 text-muted-foreground opacity-50" />
             <h3 className="text-xl font-bold mb-2 text-foreground">
-              {filter === 'all' ? 'No posts yet' : filter === 'scheduled' ? 'No scheduled posts' : 'No drafts'}
+              {filter === 'all' ? 'No posts yet' : filter === 'scheduled' ? 'No scheduled posts' : filter === 'draft' ? 'No drafts' : 'No published posts'}
             </h3>
             <p className="mb-6 text-muted-foreground">
               Create your first post to get started with content scheduling
@@ -212,7 +232,7 @@ export function Schedule() {
                     </div>
 
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-2">
+                      <div className="flex items-center gap-2 mb-2 flex-wrap">
                         <h3 className="font-semibold text-foreground">
                           {post.platform.charAt(0).toUpperCase() + post.platform.slice(1)} Post
                         </h3>
@@ -222,13 +242,35 @@ export function Schedule() {
                             Sponsored
                           </span>
                         )}
-                        <span className={`px-2 py-1 text-xs rounded-full ${
-                          post.status === 'scheduled'
-                            ? 'bg-emerald-500/10 text-emerald-600'
-                            : 'bg-amber-500/10 text-amber-600'
-                        }`}>
-                          {post.status}
-                        </span>
+                        {/* Base status badge */}
+                        {post.status !== 'published' && (
+                          <span className={`px-2 py-1 text-xs rounded-full ${
+                            post.status === 'scheduled'
+                              ? 'bg-emerald-500/10 text-emerald-600'
+                              : 'bg-amber-500/10 text-amber-600'
+                          }`}>
+                            {post.status}
+                          </span>
+                        )}
+                        {/* Publish status overlay */}
+                        {post.publish_status === 'publishing' && (
+                          <span className="flex items-center gap-1 px-2 py-1 text-xs rounded-full bg-blue-500/10 text-blue-600 font-semibold">
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                            Publishing…
+                          </span>
+                        )}
+                        {post.publish_status === 'published' && (
+                          <span className="flex items-center gap-1 px-2 py-1 text-xs rounded-full bg-emerald-500/10 text-emerald-600 font-semibold">
+                            <CheckCircle2 className="w-3 h-3" />
+                            Published
+                          </span>
+                        )}
+                        {post.publish_status === 'failed' && (
+                          <span className="flex items-center gap-1 px-2 py-1 text-xs rounded-full bg-red-500/10 text-red-600 font-semibold">
+                            <XCircle className="w-3 h-3" />
+                            Failed
+                          </span>
+                        )}
                       </div>
 
                       <p className="text-sm mb-3 line-clamp-2 text-muted-foreground">
@@ -256,18 +298,62 @@ export function Schedule() {
                       {post.scheduled_date && (
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
                           <Clock className="w-4 h-4" />
-                          {format(new Date(post.scheduled_date), 'MMM d, yyyy h:mm a')}
+                          {post.publish_status === 'published' && post.published_at
+                            ? `Published ${format(new Date(post.published_at), 'MMM d, yyyy h:mm a')}`
+                            : format(new Date(post.scheduled_date), 'MMM d, yyyy h:mm a')}
                         </div>
                       )}
+
+                      {/* Publish error detail */}
+                      {post.publish_status === 'failed' && post.publish_error && (
+                        <div className="flex items-start gap-2 mt-2 p-2 rounded-lg bg-red-50 border border-red-200">
+                          <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+                          <p className="text-xs text-red-600">{post.publish_error}</p>
+                        </div>
+                      )}
+
+                      {/* View on platform link */}
+                      {post.publish_status === 'published' && (() => {
+                        const url = getPlatformPostUrl(post.platform, post.platform_post_id);
+                        return url ? (
+                          <a
+                            href={url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 mt-1 text-xs text-primary hover:underline"
+                          >
+                            <ExternalLink className="w-3 h-3" />
+                            View on {post.platform.charAt(0).toUpperCase() + post.platform.slice(1)}
+                          </a>
+                        ) : null;
+                      })()}
                     </div>
 
                     <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => handleEdit(post)}
-                        className="p-2 rounded-lg transition-colors hover:bg-accent"
-                      >
-                        <Edit className="w-5 h-5 text-muted-foreground hover:text-foreground" />
-                      </button>
+                      {/* Retry failed posts by resetting publish_status */}
+                      {post.publish_status === 'failed' && (
+                        <button
+                          onClick={async () => {
+                            await supabase
+                              .from('content_posts')
+                              .update({ publish_status: null, publish_error: null })
+                              .eq('id', post.id);
+                            loadPosts();
+                          }}
+                          className="p-2 rounded-lg transition-colors hover:bg-accent"
+                          title="Retry publish"
+                        >
+                          <RefreshCw className="w-5 h-5 text-orange-500" />
+                        </button>
+                      )}
+                      {post.status !== 'published' && (
+                        <button
+                          onClick={() => handleEdit(post)}
+                          className="p-2 rounded-lg transition-colors hover:bg-accent"
+                        >
+                          <Edit className="w-5 h-5 text-muted-foreground hover:text-foreground" />
+                        </button>
+                      )}
                       <button
                         onClick={() => handleDelete(post.id)}
                         className="p-2 rounded-lg transition-colors hover:bg-accent"
@@ -361,12 +447,12 @@ export function Schedule() {
           </div>
         </div>
 
-        <div className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-start gap-3">
-          <Info className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
+        <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-start gap-3">
+          <CheckCircle2 className="w-5 h-5 text-emerald-500 flex-shrink-0 mt-0.5" />
           <div>
-            <h4 className="font-semibold text-foreground mb-1">Manual Publishing Note</h4>
+            <h4 className="font-semibold text-foreground mb-1">Auto-Publishing Active</h4>
             <p className="text-sm text-muted-foreground">
-              Posts are currently scheduled for manual publishing. Auto-posting integration with Instagram, TikTok, and YouTube is coming soon. You'll receive notifications when it's time to publish your scheduled content.
+              Scheduled posts are automatically published to Instagram, TikTok, and YouTube at their scheduled time. YouTube posts require a video file and a fresh YouTube reconnect to grant upload permissions. Failed posts can be retried using the refresh button.
             </p>
           </div>
         </div>

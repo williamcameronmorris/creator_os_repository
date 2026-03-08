@@ -97,6 +97,8 @@ export function getYouTubeAuthUrl(): string {
   // Always use the dedicated callback route — never the settings page fallback
   const redirectUri = `${window.location.origin}/auth/youtube/callback`;
   const scope = [
+    'https://www.googleapis.com/auth/youtube',
+    'https://www.googleapis.com/auth/youtube.upload',
     'https://www.googleapis.com/auth/youtube.readonly',
     'https://www.googleapis.com/auth/yt-analytics.readonly',
   ].join(' ');
