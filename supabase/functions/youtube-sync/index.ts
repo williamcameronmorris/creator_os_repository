@@ -7,196 +7,159 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+async function refreshAccessToken(refreshToken: string): Promise<{ accessToken: string; expiresAt: string }> {
+  const clientId = Deno.env.get("YOUTUBE_CLIENT_ID") || "";
+  const clientSecret = Deno.env.get("YOUTUBE_CLIENT_SECRET") || "";
+  const res = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ refresh_token: refreshToken, client_id: clientId, client_secret: clientSecret, grant_type: "refresh_token" }),
+  });
+  const data = await res.json();
+  if (data.error) throw new Error(`Token refresh failed: ${data.error_description || data.error}`);
+  return { accessToken: data.access_token, expiresAt: new Date(Date.now() + (data.expires_in || 3600) * 1000).toISOString() };
+}
+
+function parseDuration(iso: string): number {
+  const match = iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+  if (!match) return 0;
+  return (parseInt(match[1] || "0") * 3600) + (parseInt(match[2] || "0") * 60) + parseInt(match[3] || "0");
+}
+
 Deno.serve(async (req: Request) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, {
-      status: 200,
-      headers: corsHeaders,
-    });
-  }
+  if (req.method === "OPTIONS") return new Response(null, { status: 200, headers: corsHeaders });
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
+    const body = await req.json();
+    const { userId } = body;
+    let { accessToken, refreshToken } = body;
+    if (!userId) throw new Error("Missing userId");
 
-    const { userId, accessToken } = await req.json();
-
-    const channelResponse = await fetch(
-      `https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&mine=true`,
-      {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
+    if (!accessToken) {
+      const { data: profile } = await supabase.from("profiles").select("youtube_access_token, youtube_refresh_token, youtube_token_expires_at").eq("id", userId).maybeSingle();
+      if (!profile?.youtube_access_token && !profile?.youtube_refresh_token) throw new Error("YouTube not connected");
+      accessToken = profile.youtube_access_token;
+      refreshToken = profile.youtube_refresh_token;
+      const expiresAt = profile.youtube_token_expires_at ? new Date(profile.youtube_token_expires_at).getTime() : 0;
+      if ((!accessToken || Date.now() > expiresAt - 5 * 60 * 1000) && refreshToken) {
+        const refreshed = await refreshAccessToken(refreshToken);
+        accessToken = refreshed.accessToken;
+        await supabase.from("profiles").update({ youtube_access_token: accessToken, youtube_token_expires_at: refreshed.expiresAt }).eq("id", userId);
       }
-    );
-
-    if (!channelResponse.ok) {
-      throw new Error(`YouTube API error: ${channelResponse.statusText}`);
     }
 
-    const channelData = await channelResponse.json();
+    const channelRes = await fetch("https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&mine=true", { headers: { Authorization: `Bearer ${accessToken}` } });
+    if (!channelRes.ok) throw new Error(`Channel API error: ${channelRes.statusText}`);
+    const channelData = await channelRes.json();
     const channel = channelData.items?.[0];
+    if (!channel) throw new Error("No YouTube channel found");
 
-    if (!channel) {
-      throw new Error("No YouTube channel found");
+    const channelId = channel.id;
+    const subscriberCount = parseInt(channel.statistics?.subscriberCount || "0");
+    const totalVideoCount = parseInt(channel.statistics?.videoCount || "0");
+    const today = new Date().toISOString().split("T")[0];
+
+    await supabase.from("profiles").update({ youtube_handle: channel.snippet?.title || "", youtube_followers: subscriberCount, youtube_channel_id: channelId, last_youtube_sync: new Date().toISOString() }).eq("id", userId);
+
+    let allVideoItems: any[] = [];
+    let pageToken: string | null = null;
+    let pagesFetched = 0;
+    do {
+      const url = new URL("https://www.googleapis.com/youtube/v3/search");
+      url.searchParams.set("part", "snippet"); url.searchParams.set("forMine", "true");
+      url.searchParams.set("type", "video"); url.searchParams.set("maxResults", "50");
+      url.searchParams.set("order", "date");
+      if (pageToken) url.searchParams.set("pageToken", pageToken);
+      const r = await fetch(url.toString(), { headers: { Authorization: `Bearer ${accessToken}` } });
+      if (!r.ok) break;
+      const d = await r.json();
+      allVideoItems = allVideoItems.concat(d.items || []);
+      pageToken = d.nextPageToken || null;
+      pagesFetched++;
+    } while (pageToken && pagesFetched < 4);
+
+    if (allVideoItems.length === 0) return new Response(JSON.stringify({ success: true, videosCount: 0 }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+
+    const videoStatsMap: Record<string, any> = {};
+    for (let i = 0; i < allVideoItems.length; i += 50) {
+      const ids = allVideoItems.slice(i, i + 50).map((v: any) => v.id.videoId).join(",");
+      const r = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=statistics,contentDetails,snippet&id=${ids}`, { headers: { Authorization: `Bearer ${accessToken}` } });
+      if (r.ok) { const d = await r.json(); for (const item of (d.items || [])) videoStatsMap[item.id] = item; }
     }
 
-    const videosResponse = await fetch(
-      `https://www.googleapis.com/youtube/v3/search?part=snippet&forMine=true&type=video&maxResults=50&order=date`,
-      {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      }
+    const analyticsMap: Record<string, any> = {};
+    const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+    const analyticsRes = await fetch(
+      `https://youtubeanalytics.googleapis.com/v2/reports?ids=channel==${channelId}&startDate=${ninetyDaysAgo}&endDate=${today}&metrics=estimatedMinutesWatched,averageViewDuration,impressions,impressionsClickThroughRate,views,likes,comments&dimensions=video&maxResults=200&sort=-views`,
+      { headers: { Authorization: `Bearer ${accessToken}` } }
     );
-
-    if (!videosResponse.ok) {
-      throw new Error(`YouTube Videos API error: ${videosResponse.statusText}`);
-    }
-
-    const videosData = await videosResponse.json();
-    const videoIds = videosData.items?.map((item: any) => item.id.videoId).join(",") || "";
-
-    let videoStats = [];
-    if (videoIds) {
-      const statsResponse = await fetch(
-        `https://www.googleapis.com/youtube/v3/videos?part=statistics,contentDetails&id=${videoIds}`,
-        {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-          },
-        }
-      );
-
-      if (statsResponse.ok) {
-        const statsData = await statsResponse.json();
-        videoStats = statsData.items || [];
+    if (analyticsRes.ok) {
+      const analyticsData = await analyticsRes.json();
+      const headers: string[] = (analyticsData.columnHeaders || []).map((h: any) => h.name);
+      const videoIdx = headers.indexOf("video");
+      for (const row of (analyticsData.rows || [])) {
+        const videoId = row[videoIdx];
+        const entry: Record<string, any> = {};
+        headers.forEach((h: string, i: number) => { entry[h] = row[i]; });
+        analyticsMap[videoId] = entry;
       }
     }
 
-    await supabase
-      .from("profiles")
-      .update({
-        youtube_handle: channel.snippet.title,
-        youtube_followers: parseInt(channel.statistics.subscriberCount) || 0,
-        youtube_channel_id: channel.id,
-        last_youtube_sync: new Date().toISOString(),
-      })
-      .eq("id", userId);
+    let totalViews = 0, totalLikes = 0, totalComments = 0, processedCount = 0;
 
-    await supabase
-      .from("platform_credentials")
-      .upsert(
-        {
-          user_id: userId,
-          platform: "youtube",
-          access_token: accessToken,
-          platform_user_id: channel.id,
-          platform_username: channel.snippet.title,
-          last_synced_at: new Date().toISOString(),
-          is_active: true,
-        },
-        { onConflict: "user_id,platform" }
-      );
+    for (const video of allVideoItems) {
+      const videoId = video.id.videoId;
+      const details = videoStatsMap[videoId];
+      const analytics = analyticsMap[videoId];
+      const viewCount = parseInt(details?.statistics?.viewCount || "0");
+      const likeCount = parseInt(details?.statistics?.likeCount || "0");
+      const commentCount = parseInt(details?.statistics?.commentCount || "0");
+      const durationSeconds = parseDuration(details?.contentDetails?.duration || "PT0S");
+      const isShort = durationSeconds > 0 && durationSeconds <= 60;
+      const thumbs = details?.snippet?.thumbnails || video.snippet?.thumbnails || {};
+      const thumbnailUrl = thumbs.maxres?.url || thumbs.high?.url || thumbs.medium?.url || thumbs.default?.url || "";
+      const publishedAt = video.snippet?.publishedAt || details?.snippet?.publishedAt || null;
 
-    let totalViews = 0;
-    let totalLikes = 0;
-    let totalComments = 0;
+      totalViews += viewCount; totalLikes += likeCount; totalComments += commentCount;
 
-    for (let i = 0; i < videosData.items?.length; i++) {
-      const video = videosData.items[i];
-      const stats = videoStats.find((s: any) => s.id === video.id.videoId);
-
-      const { data: existingPost } = await supabase
-        .from("content_posts")
-        .select("id")
-        .eq("youtube_video_id", video.id.videoId)
-        .eq("user_id", userId)
-        .maybeSingle();
-
-      const viewCount = parseInt(stats?.statistics?.viewCount || "0");
-      const likeCount = parseInt(stats?.statistics?.likeCount || "0");
-      const commentCount = parseInt(stats?.statistics?.commentCount || "0");
-
+      const { data: existing } = await supabase.from("content_posts").select("id").eq("youtube_video_id", videoId).eq("user_id", userId).maybeSingle();
       const postData = {
-        user_id: userId,
-        platform: "youtube",
-        caption: video.snippet.title || "",
-        media_url: `https://www.youtube.com/watch?v=${video.id.videoId}`,
-        media_type: "video",
-        youtube_video_id: video.id.videoId,
-        published_date: video.snippet.publishedAt,
-        status: "published",
-        views: viewCount,
-        likes: likeCount,
-        comments: commentCount,
-        engagement_rate:
-          viewCount > 0
-            ? ((likeCount + commentCount) / viewCount) * 100
-            : 0,
+        user_id: userId, platform: "youtube",
+        title: details?.snippet?.title || video.snippet?.title || "",
+        caption: details?.snippet?.description || video.snippet?.description || "",
+        media_url: `https://www.youtube.com/watch?v=${videoId}`,
+        thumbnail_url: thumbnailUrl,
+        media_type: isShort ? "short" : "video",
+        content_type: isShort ? "short" : "video",
+        youtube_video_id: videoId,
+        published_date: publishedAt, published_at: publishedAt, status: "published",
+        views: analytics?.views ? parseInt(analytics.views) : viewCount,
+        likes: analytics?.likes ? parseInt(analytics.likes) : likeCount,
+        comments: analytics?.comments ? parseInt(analytics.comments) : commentCount,
+        engagement_rate: viewCount > 0 ? ((likeCount + commentCount) / viewCount) * 100 : 0,
       };
-
-      totalViews += viewCount;
-      totalLikes += likeCount;
-      totalComments += commentCount;
-
-      if (!existingPost) {
-        await supabase.from("content_posts").insert(postData);
-      } else {
-        await supabase
-          .from("content_posts")
-          .update(postData)
-          .eq("id", existingPost.id);
-      }
+      if (!existing) { await supabase.from("content_posts").insert(postData); }
+      else { await supabase.from("content_posts").update(postData).eq("id", existing.id); }
+      processedCount++;
     }
 
-    await supabase.from("platform_metrics").upsert(
-      {
-        user_id: userId,
-        platform: "youtube",
-        date: new Date().toISOString().split("T")[0],
-        followers_count: parseInt(channel.statistics.subscriberCount) || 0,
-        total_posts: parseInt(channel.statistics.videoCount) || 0,
-        total_views: totalViews,
-        total_likes: totalLikes,
-        total_comments: totalComments,
-        avg_engagement_rate:
-          videosData.items?.length > 0
-            ? videoStats.reduce(
-                (sum: number, v: any) => {
-                  const views = parseInt(v.statistics?.viewCount || "0");
-                  const likes = parseInt(v.statistics?.likeCount || "0");
-                  const comments = parseInt(v.statistics?.commentCount || "0");
-                  return sum + (views > 0 ? ((likes + comments) / views) * 100 : 0);
-                },
-                0
-              ) / videosData.items.length
-            : 0,
-      },
-      { onConflict: "user_id,platform,date" }
-    );
+    await supabase.from("platform_metrics").upsert({
+      user_id: userId, platform: "youtube", date: today,
+      followers_count: subscriberCount, total_posts: totalVideoCount,
+      views: totalViews, likes: totalLikes, comments: totalComments,
+      avg_engagement_rate: processedCount > 0 ? allVideoItems.reduce((sum: number, v: any) => {
+        const s = videoStatsMap[v.id.videoId]?.statistics;
+        const vw = parseInt(s?.viewCount || "0"); const lk = parseInt(s?.likeCount || "0"); const cm = parseInt(s?.commentCount || "0");
+        return sum + (vw > 0 ? ((lk + cm) / vw) * 100 : 0);
+      }, 0) / processedCount : 0,
+    }, { onConflict: "user_id,platform,date" });
 
-    return new Response(
-      JSON.stringify({ success: true, videosCount: videosData.items?.length || 0 }),
-      {
-        headers: {
-          ...corsHeaders,
-          "Content-Type": "application/json",
-        },
-      }
-    );
-  } catch (error) {
+    return new Response(JSON.stringify({ success: true, videosCount: processedCount }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  } catch (error: any) {
     console.error("YouTube sync error:", error);
-    return new Response(
-      JSON.stringify({ error: error.message }),
-      {
-        status: 400,
-        headers: {
-          ...corsHeaders,
-          "Content-Type": "application/json",
-        },
-      }
-    );
+    return new Response(JSON.stringify({ error: error.message }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 });

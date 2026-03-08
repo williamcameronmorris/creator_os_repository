@@ -17,6 +17,7 @@ import { SettingsPage } from './pages/SettingsPage';
 import { Studio } from './pages/Studio';
 import { MetaCallback } from './components/MetaCallback';
 import { ThreadsCallback } from './components/ThreadsCallback';
+import { YoutubeCallback } from './components/YoutubeCallback';
 import { supabase, type Profile as ProfileType } from './lib/supabase';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -174,7 +175,7 @@ function AppContent() {
         }
       />
 
-      {/* ── Meta / Threads OAuth Callbacks ── */}
+      {/* ── OAuth Callbacks ── */}
       <Route
         path="/auth/meta/callback"
         element={
@@ -188,6 +189,14 @@ function AppContent() {
         element={
           <ProtectedRoute>
             <ThreadsCallback />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/auth/youtube/callback"
+        element={
+          <ProtectedRoute>
+            <YoutubeCallback />
           </ProtectedRoute>
         }
       />

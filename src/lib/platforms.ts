@@ -22,7 +22,7 @@ export async function getPlatformStatus(userId: string): Promise<PlatformStatus[
       'threads_access_token', 'threads_handle', 'threads_followers', 'last_threads_sync',
       // TikTok / YouTube
       'tiktok_handle', 'tiktok_followers', 'tiktok_access_token', 'last_tiktok_sync',
-      'youtube_handle', 'youtue_followers', 'youtube_access_token', 'last_youtube_sync',
+      'youtube_handle', 'youtube_followers', 'youtube_access_token', 'last_youtube_sync',
     ].join(', '))
     .eq('id', userId)
     .maybeSingle();
@@ -94,9 +94,23 @@ export function getTikTokAuthUrl(): string {
 
 export function getYouTubeAuthUrl(): string {
   const clientId = import.meta.env.VITE_YOUTUBE_CLIENT_ID || '';
-  const redirectUri = import.meta.env.VITE_YOUTUBE_REDIRECT_URI || `${window.location.origin}/settings?platform=youtube`;
-  const scope = 'https://www.googleapis.com/auth/youtube.readonly https://www.googleapis.com/auth/youtube.upload';
-  return `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent(scope)}&access_type=offline`;
+  // Always use the dedicated callback route — never the settings page fallback
+  const redirectUri = `${window.location.origin}/auth/youtube/callback`;
+  const scope = [
+    'https://www.googleapis.com/auth/youtube.readonly',
+    'https://www.googleapis.com/auth/yt-analytics.readonly',
+  ].join(' ');
+  const params = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    response_type: 'code',
+    scope,
+    access_type: 'offline',
+    // prompt=consent forces Google to re-issue a refresh_token every time.
+    // Without this, refresh_token is only returned on the very first authorization.
+    prompt: 'consent',
+  });
+  return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
 }
 
 export async function disconnectPlatform(

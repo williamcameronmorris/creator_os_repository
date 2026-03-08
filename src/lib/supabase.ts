@@ -61,6 +61,8 @@ export type Profile = {
 
   // ── YouTube ───────────────────────────────────────────────────────────────
   youtube_access_token?: string;
+  youtube_refresh_token?: string;
+  youtube_token_expires_at?: string | null;
   youtube_channel_id?: string;
   youtube_handle?: string;
   youtube_followers?: number;
