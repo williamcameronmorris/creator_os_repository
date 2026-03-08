@@ -5,6 +5,7 @@ import { startOfWeek, endOfWeek, subWeeks, format, parseISO, isToday, isThisWeek
 interface ContentPost {
   id: string;
   title: string;
+  caption?: string;
   platform: string;
   views: number;
   likes: number;
@@ -348,7 +349,7 @@ export function useDailyPulse() {
           .lte('date', format(lastWeekEnd, 'yyyy-MM-dd')),
         supabase
           .from('content_posts')
-          .select('id, title, platform, status, scheduled_for, published_at, thumbnail_url, media_url')
+          .select('id, title, caption, platform, status, scheduled_for, published_at, thumbnail_url, media_url, views, likes, comments')
           .eq('user_id', user.id)
           .eq('status', 'published')
           .gte('published_at', format(thisWeekStart, 'yyyy-MM-dd'))
@@ -413,16 +414,14 @@ export function useDailyPulse() {
       });
 
       const postsWithAnalytics = (postsResult.data || []).map((post) => {
-        const metrics = (thisWeekMetrics.data || []).find(
-          (m) => format(parseISO(m.date), 'yyyy-MM-dd') === format(parseISO(post.published_at), 'yyyy-MM-dd')
-        );
         return {
           id: post.id,
           title: post.title || 'Untitled Post',
+          caption: post.caption || undefined,
           platform: post.platform || 'instagram',
-          views: metrics?.views || Math.floor(Math.random() * 5000) + 500,
-          likes: metrics?.likes || Math.floor(Math.random() * 500) + 50,
-          comments: metrics?.comments || Math.floor(Math.random() * 50) + 5,
+          views: (post as any).views || 0,
+          likes: (post as any).likes || 0,
+          comments: (post as any).comments || 0,
           published_at: post.published_at,
           thumbnail_url: post.thumbnail_url,
           media_url: post.media_url,

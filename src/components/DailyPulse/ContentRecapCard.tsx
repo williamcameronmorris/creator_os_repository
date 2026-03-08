@@ -4,6 +4,7 @@ import { PulseCard } from './PulseCard';
 interface ContentPost {
   id: string;
   title: string;
+  caption?: string;
   platform: string;
   views: number;
   likes: number;
@@ -128,29 +129,40 @@ export function ContentRecapCard({
 
         {data.recentPosts.length > 0 && (
           <div>
-            <p className="text-sm font-medium text-gray-700 mb-3">Recent Posts</p>
+            <p className="text-sm font-medium text-gray-700 mb-3">This Week's Posts</p>
             <div className="space-y-3">
-              {data.recentPosts.slice(0, 3).map((post) => (
-                <div key={post.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
-                  <div className="w-12 h-12 rounded-lg bg-gray-200 flex items-center justify-center flex-shrink-0 overflow-hidden">
-                    {post.thumbnail_url ? (
-                      <img
-                        src={post.thumbnail_url}
-                        alt=""
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <Play className="w-5 h-5 text-gray-400" />
+              {data.recentPosts.slice(0, 5).map((post) => {
+                const imgSrc = post.thumbnail_url || post.media_url;
+                return (
+                  <div key={post.id} className="bg-gray-50 rounded-xl overflow-hidden">
+                    {imgSrc && (
+                      <div className="w-full aspect-video bg-gray-200 overflow-hidden">
+                        <img
+                          src={imgSrc}
+                          alt=""
+                          className="w-full h-full object-cover"
+                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                        />
+                      </div>
                     )}
+                    <div className="p-3">
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <span className="text-[10px] font-bold uppercase tracking-wide text-gray-400">{post.platform}</span>
+                      </div>
+                      {post.caption ? (
+                        <p className="text-xs text-gray-700 line-clamp-2 mb-2">{post.caption}</p>
+                      ) : (
+                        <p className="text-xs font-medium text-gray-900 truncate mb-2">{post.title}</p>
+                      )}
+                      <div className="flex items-center gap-3 text-xs text-gray-500">
+                        <span>{formatNumber(post.views)} views</span>
+                        <span>{formatNumber(post.likes)} likes</span>
+                        <span>{formatNumber(post.comments)} comments</span>
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 truncate">{post.title}</p>
-                    <p className="text-xs text-gray-500">
-                      {formatNumber(post.views)} views · {formatNumber(post.likes)} likes
-                    </p>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
