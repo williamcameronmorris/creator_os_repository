@@ -14,6 +14,7 @@ import {
   Instagram,
   Youtube,
   Video,
+  MessageCircle,
   ChevronRight,
   TrendingUp,
   Calendar,
@@ -283,15 +284,17 @@ export function DailyPulse() {
   const tipsStat = String(data.smartTips.tipsCount || 0);
 
   // ── Platform connect checklist ─────────────────────────────────────────
-  const allConnected = connectedPlatforms.instagram && connectedPlatforms.youtube && connectedPlatforms.tiktok;
+  const allConnected = connectedPlatforms.instagram && connectedPlatforms.youtube && connectedPlatforms.tiktok && connectedPlatforms.threads;
   const platforms = [
     { key: 'instagram' as const, label: 'Instagram', icon: Instagram, iconClass: 'text-pink-500', connected: connectedPlatforms.instagram },
     { key: 'youtube' as const, label: 'YouTube', icon: Youtube, iconClass: 'text-red-500', connected: connectedPlatforms.youtube },
     { key: 'tiktok' as const, label: 'TikTok', icon: Video, iconClass: 'text-gray-700', connected: connectedPlatforms.tiktok },
+    { key: 'threads' as const, label: 'Threads', icon: MessageCircle, iconClass: 'text-gray-900', connected: connectedPlatforms.threads },
   ];
 
+  // null = still loading; don't flash the banner before data arrives
   const ConnectBanner = () =>
-    !bannerDismissed && !hasConnectedAccounts ? (
+    !bannerDismissed && hasConnectedAccounts === false ? (
       <div className="bg-white border border-gray-100 rounded-3xl p-5 mb-6 shadow-sm">
         <div className="flex items-start justify-between mb-4">
           <div className="flex items-center gap-3">

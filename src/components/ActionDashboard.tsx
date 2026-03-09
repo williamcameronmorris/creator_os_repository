@@ -22,6 +22,15 @@ import {
   Crown,
 } from 'lucide-react';
 
+// Threads icon (lucide doesn't have one)
+function ThreadsIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M12.186 24h-.007c-3.581-.024-6.334-1.205-8.184-3.509C2.35 18.44 1.5 15.586 1.5 12.068c0-3.512.85-6.367 2.495-8.423C5.845 1.34 8.598.16 12.18.136h.014c2.746.018 5.113.854 6.832 2.417 1.681 1.527 2.604 3.606 2.769 6.18l.004.09h-2.507l-.004-.077c-.133-1.973-.832-3.534-2.083-4.638-1.212-1.069-2.897-1.645-5.01-1.658-2.685.018-4.766.923-6.189 2.694-1.371 1.705-2.064 4.128-2.064 7.199 0 3.077.693 5.499 2.064 7.203 1.423 1.77 3.504 2.676 6.189 2.694 2.11-.014 3.73-.59 4.812-1.71.941-.978 1.428-2.338 1.498-4.155v-.09h-7.34v-2.254h9.79v.09c-.068 2.598-.82 4.65-2.273 6.1-1.51 1.508-3.668 2.285-6.494 2.303z"/>
+    </svg>
+  );
+}
+
 interface ActionDashboardProps {
   onNavigate: (path: string) => void;
   embedded?: boolean;
@@ -185,6 +194,8 @@ export default function ActionDashboard({ onNavigate, embedded = false }: Action
         return Youtube;
       case 'tiktok':
         return Video;
+      case 'threads':
+        return ThreadsIcon;
       default:
         return TrendingUp;
     }
@@ -240,6 +251,14 @@ export default function ActionDashboard({ onNavigate, embedded = false }: Action
       color: 'from-red-600 to-red-700',
       iconBg: 'bg-gradient-to-br from-red-600/20 to-red-700/20',
       iconColor: 'text-red-600',
+    },
+    {
+      id: 'threads',
+      name: 'Threads',
+      icon: ThreadsIcon,
+      color: 'from-gray-800 to-gray-900',
+      iconBg: 'bg-gray-100',
+      iconColor: 'text-gray-800',
     },
   ];
 
@@ -384,9 +403,15 @@ export default function ActionDashboard({ onNavigate, embedded = false }: Action
           <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-chart-3/20 mb-3">
             <Eye className="w-5 h-5 text-chart-3" />
           </div>
-          <p className="text-xs text-muted-foreground mb-1">Total Views</p>
+          <p className="text-xs text-muted-foreground mb-1">
+            {socialStats.totalViews > 0 ? 'Total Views' : 'Activity'}
+          </p>
           <p className="text-xl font-bold text-foreground">
-            {(socialStats.totalViews / 1000).toFixed(1)}k
+            {socialStats.totalViews > 0
+              ? `${(socialStats.totalViews / 1000).toFixed(1)}k`
+              : socialStats.totalEngagement > 0
+                ? `${(socialStats.totalEngagement / 1000).toFixed(1)}k`
+                : '—'}
           </p>
         </button>
 
@@ -441,7 +466,7 @@ export default function ActionDashboard({ onNavigate, embedded = false }: Action
         <h2 className="text-2xl font-bold text-foreground mb-4">Platform Priorities</h2>
         <p className="text-muted-foreground mb-6">Select a platform to view AI-powered content suggestions and priorities</p>
 
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           {platforms.map((platform) => {
             const Icon = platform.icon;
             const platformInsights = getPlatformInsights(platform.id);

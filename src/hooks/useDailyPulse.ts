@@ -295,8 +295,8 @@ export function useDailyPulse() {
   const [data, setData] = useState<DailyPulseData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [hasConnectedAccounts, setHasConnectedAccounts] = useState(false);
-  const [connectedPlatforms, setConnectedPlatforms] = useState({ instagram: false, youtube: false, tiktok: false });
+  const [hasConnectedAccounts, setHasConnectedAccounts] = useState<boolean | null>(null); // null = loading
+  const [connectedPlatforms, setConnectedPlatforms] = useState({ instagram: false, youtube: false, tiktok: false, threads: false });
 
   const fetchData = useCallback(async () => {
     try {
@@ -327,7 +327,7 @@ export function useDailyPulse() {
       ] = await Promise.all([
         supabase
           .from('profiles')
-          .select('display_name, first_name, instagram_access_token, tiktok_access_token, youtube_access_token')
+          .select('display_name, first_name, instagram_access_token, tiktok_access_token, youtube_access_token, threads_access_token')
           .eq('id', user.id)
           .maybeSingle(),
         supabase
@@ -389,9 +389,10 @@ export function useDailyPulse() {
         instagram: !!(profileResult.data?.instagram_access_token),
         tiktok: !!(profileResult.data?.tiktok_access_token),
         youtube: !!(profileResult.data?.youtube_access_token),
+        threads: !!(profileResult.data?.threads_access_token),
       };
       setConnectedPlatforms(platforms);
-      const hasConnectedAccounts = platforms.instagram || platforms.tiktok || platforms.youtube;
+      const hasConnectedAccounts = platforms.instagram || platforms.tiktok || platforms.youtube || platforms.threads;
       setHasConnectedAccounts(hasConnectedAccounts);
 
       const hasRealData = (thisWeekMetrics.data && thisWeekMetrics.data.length > 0) ||
@@ -408,15 +409,30 @@ export function useDailyPulse() {
 
       const thisWeekViews = (thisWeekMetrics.data || []).reduce((sum, m) => sum + (m.views || 0), 0);
       const lastWeekViews = (lastWeekMetrics.data || []).reduce((sum, m) => sum + (m.views || 0), 0);
-      const viewsChange = lastWeekViews > 0
-        ? Math.round(((thisWeekViews - lastWeekViews) / lastWeekViews) * 100)
+
+      // Instagram doesn't expose video views via the basic API — fall back to engagement
+      // (likes + comments) as the primary activity metric when views are unavailable.
+      const thisWeekLikesRaw = (thisWeekMetrics.data || []).reduce((sum, m) => sum + (m.likes || 0), 0);
+      const thisWeekCommentsRaw = (thisWeekMetrics.data || []).reduce((sum, m) => sum + (m.comments || 0), 0);
+      const thisWeekEngagementFallback = thisWeekLikesRaw + thisWeekCommentsRaw;
+      const lastWeekLikesRaw = (lastWeekMetrics.data || []).reduce((sum, m) => sum + (m.likes || 0), 0);
+      const lastWeekCommentsRaw = (lastWeekMetrics.data || []).reduce((sum, m) => sum + (m.comments || 0), 0);
+      const lastWeekEngagementFallback = lastWeekLikesRaw + lastWeekCommentsRaw;
+
+      // Use engagement as display value when views = 0 (no video_views permission yet)
+      const displayViews = thisWeekViews > 0 ? thisWeekViews : thisWeekEngagementFallback;
+      const prevDisplayViews = lastWeekViews > 0 ? lastWeekViews : lastWeekEngagementFallback;
+      const viewsChange = prevDisplayViews > 0
+        ? Math.round(((displayViews - prevDisplayViews) / prevDisplayViews) * 100)
         : 0;
 
       const dailyViews = [0, 0, 0, 0, 0, 0, 0];
       (thisWeekMetrics.data || []).forEach((metric) => {
         const date = parseISO(metric.date);
         const dayIndex = (date.getDay() + 6) % 7;
-        dailyViews[dayIndex] += metric.views || 0;
+        // Use likes+comments per day when views not available
+        const dayVal = (metric.views || 0) > 0 ? (metric.views || 0) : ((metric.likes || 0) + (metric.comments || 0));
+        dailyViews[dayIndex] += dayVal;
       });
 
       const postsWithAnalytics = (postsResult.data || []).map((post) => {
@@ -434,12 +450,17 @@ export function useDailyPulse() {
         };
       });
 
+      // Rank by views, fall back to likes+comments when views unavailable
       const bestPost = postsWithAnalytics.length > 0
-        ? postsWithAnalytics.reduce((best, post) => post.views > best.views ? post : best)
+        ? postsWithAnalytics.reduce((best, post) => {
+            const postScore = post.views > 0 ? post.views : (post.likes + post.comments);
+            const bestScore = best.views > 0 ? best.views : (best.likes + best.comments);
+            return postScore > bestScore ? post : best;
+          })
         : undefined;
 
       const contentRecap: ContentRecapData = {
-        totalViews: thisWeekViews,
+        totalViews: displayViews,
         viewsChange,
         postsCount: postsResult.data?.length || 0,
         bestPost,

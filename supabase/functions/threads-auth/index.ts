@@ -62,8 +62,14 @@ Deno.serve(async (req: Request) => {
 
     const shortTokenData = await shortTokenRes.json();
 
+    console.log("Step 1 - Short token response:", JSON.stringify(shortTokenData));
+    console.log("Step 1 - Using client_id:", threadsAppId, "redirect_uri:", redirect_uri);
+
     if (shortTokenData.error) {
-      throw new Error(`Threads token exchange failed: ${shortTokenData.error_message || shortTokenData.error}`);
+      const errMsg = shortTokenData.error_message
+        || (shortTokenData.error?.message)
+        || JSON.stringify(shortTokenData.error);
+      throw new Error(`Threads token exchange failed: ${errMsg} (full: ${JSON.stringify(shortTokenData)})`);
     }
 
     const shortLivedToken: string = shortTokenData.access_token;
@@ -78,8 +84,10 @@ Deno.serve(async (req: Request) => {
     const longTokenRes = await fetch(longTokenUrl.toString());
     const longTokenData = await longTokenRes.json();
 
+    console.log("Step 2 - Long token response:", JSON.stringify(longTokenData));
+
     if (longTokenData.error) {
-      throw new Error(`Threads long-lived token exchange failed: ${longTokenData.error.message}`);
+      throw new Error(`Threads long-lived token exchange failed: ${longTokenData.error?.message || JSON.stringify(longTokenData.error)} (full: ${JSON.stringify(longTokenData)})`);
     }
 
     const longLivedToken: string = longTokenData.access_token;
@@ -87,8 +95,10 @@ Deno.serve(async (req: Request) => {
     const tokenExpiresAt = new Date(Date.now() + expiresIn * 1000).toISOString();
 
     // ─── Step 3: Fetch Threads user profile ──────────────────────────────────
+    // Note: followers_count requires threads_manage_insights (app review).
+    // Use basic fields only during development.
     const profileRes = await fetch(
-      `https://graph.threads.net/v1.0/me?fields=id,username,name,threads_profile_picture_url,threads_biography,followers_count&access_token=${longLivedToken}`
+      `https://graph.threads.net/v1.0/me?fields=id,username,name,threads_profile_picture_url,threads_biography&access_token=${longLivedToken}`
     );
     const profileData = await profileRes.json();
 
