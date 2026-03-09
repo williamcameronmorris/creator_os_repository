@@ -544,16 +544,19 @@ export function useDailyPulse() {
       const mapInsightToTip = (insight: any): SmartTip => {
         let type: TipType = 'optimization';
         if (insight.priority === 'high') type = 'warning';
-        if (insight.type === 'opportunity') type = 'opportunity';
+        if (insight.insight_type === 'opportunity') type = 'opportunity';
+
+        // Content is stored inside insight_data JSON column
+        const data = insight.insight_data || {};
 
         return {
           id: insight.id,
           type,
-          title: insight.title || 'Insight',
-          description: insight.description || '',
-          actionLabel: insight.action_label,
-          actionUrl: insight.action_url,
-          highlightText: insight.highlight_text,
+          title: data.title || insight.title || 'Insight',
+          description: data.description || insight.description || '',
+          actionLabel: data.action || insight.action_label,
+          actionUrl: data.actionUrl || insight.action_url,
+          highlightText: data.highlightText || insight.highlight_text,
         };
       };
 
