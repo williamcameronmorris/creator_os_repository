@@ -13,9 +13,9 @@ import {
   Lightbulb,
   ChevronDown,
   ChevronUp,
-  ExternalLink,
   Send,
 } from 'lucide-react';
+
 
 // ── Icons ──────────────────────────────────────────────────────────────────────
 
@@ -86,11 +86,10 @@ interface ContentPost {
   platform: string;
   caption: string | null;
   thumbnail_url: string | null;
-  permalink: string | null;
   media_type: string | null;
   published_date: string | null;
-  likes_count: number;
-  comments_count: number;
+  likes: number;
+  comments: number;
 }
 
 interface RepurposeResult {
@@ -143,7 +142,7 @@ export function Repurpose() {
     setLoadingPosts(true);
     const { data } = await supabase
       .from('content_posts')
-      .select('id, platform, caption, thumbnail_url, permalink, media_type, published_date, likes_count, comments_count')
+      .select('id, platform, caption, thumbnail_url, media_type, published_date, likes, comments')
       .eq('user_id', user!.id)
       .not('caption', 'is', null)
       .order('published_date', { ascending: false })
@@ -314,7 +313,7 @@ export function Repurpose() {
                             <span className="text-[10px] text-gray-400">{timeAgo(post.published_date)}</span>
                           )}
                           <span className="text-[10px] text-gray-400">
-                            {(post.likes_count || 0) + (post.comments_count || 0)} interactions
+                            {(post.likes || 0) + (post.comments || 0)} interactions
                           </span>
                         </div>
                       </div>
@@ -361,16 +360,6 @@ export function Repurpose() {
                         <span className="text-xs font-semibold text-gray-600 capitalize">
                           {selectedPost.platform}
                         </span>
-                        {selectedPost.permalink && (
-                          <a
-                            href={selectedPost.permalink}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-gray-400 hover:text-gray-600"
-                          >
-                            <ExternalLink className="w-3 h-3" />
-                          </a>
-                        )}
                       </div>
                       <p className="text-xs text-gray-700 line-clamp-2">{selectedPost.caption}</p>
                     </div>

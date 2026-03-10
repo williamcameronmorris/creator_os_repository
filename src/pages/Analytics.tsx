@@ -103,7 +103,7 @@ export function Analytics() {
         .order('date', { ascending: true }),
       supabase
         .from('content_posts')
-        .select('id, platform, caption, published_date, likes, comments, views, saves, shares, media_type, thumbnail_url, permalink')
+        .select('id, platform, caption, published_date, likes, comments, views, saves, shares, media_type, thumbnail_url, instagram_post_id, youtube_video_id, tiktok_post_id')
         .eq('user_id', user.id)
         .eq('status', 'published')
         .gte('published_date', startDate)
@@ -220,13 +220,20 @@ export function Analytics() {
     setBestTimeHeatmap(grid);
 
     // ── Top posts ──
+    const buildPermalink = (p: any): string | null => {
+      if (p.instagram_post_id) return `https://www.instagram.com/p/${p.instagram_post_id}/`;
+      if (p.youtube_video_id) return `https://www.youtube.com/watch?v=${p.youtube_video_id}`;
+      if (p.tiktok_post_id) return `https://www.tiktok.com/@user/video/${p.tiktok_post_id}`;
+      return null;
+    };
+
     setTopPosts(
       posts.slice(0, isPremium ? 10 : 3).map((p: any) => ({
         id: p.id,
         platform: p.platform,
         caption: p.caption || '',
         thumbnail_url: p.thumbnail_url || null,
-        permalink: p.permalink || null,
+        permalink: buildPermalink(p),
         media_type: p.media_type || 'image',
         views: p.views || 0,
         likes: p.likes || 0,
