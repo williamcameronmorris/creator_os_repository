@@ -81,7 +81,7 @@ export async function getPlatformStatus(userId: string): Promise<PlatformStatus[
 export function getInstagramAuthUrl(): string {
   const appId = import.meta.env.VITE_INSTAGRAM_APP_ID || '';
   const redirectUri = import.meta.env.VITE_INSTAGRAM_REDIRECT_URI || `${window.location.origin}/settings?platform=instagram`;
-  const scope = 'instagram_basic,instagram_content_publish,pages_show_list,pages_read_engagement,instagram_manage_insights';
+  const scope = 'instagram_basic,instagram_content_publish,instagram_manage_comments,pages_show_list,pages_read_engagement,instagram_manage_insights';
   return `https://www.facebook.com/v25.0/dialog/oauth?client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${scope}&response_type=code`;
 }
 

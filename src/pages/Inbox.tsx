@@ -96,6 +96,8 @@ export function Inbox() {
   const [selectedComment, setSelectedComment] = useState<Comment | null>(null);
   const [replyText, setReplyText] = useState('');
   const [sendingReply, setSendingReply] = useState(false);
+  const [replyError, setReplyError] = useState<string | null>(null);
+  const [replySuccess, setReplySuccess] = useState(false);
   const [counts, setCounts] = useState({ total: 0, unread: 0, unanswered: 0 });
 
   const loadComments = useCallback(async () => {
@@ -187,22 +189,49 @@ export function Inbox() {
   const sendReply = async () => {
     if (!selectedComment || !replyText.trim()) return;
     setSendingReply(true);
-    try {
-      // Save reply to DB
-      await supabase
-        .from('comments')
-        .update({ is_replied: true, reply_text: replyText.trim(), replied_at: new Date().toISOString() })
-        .eq('id', selectedComment.id);
+    setReplyError(null);
+    setReplySuccess(false);
 
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+
+      // Call the reply-to-comment edge function — posts live to the platform
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/reply-to-comment`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session?.access_token}`,
+          },
+          body: JSON.stringify({
+            commentId: selectedComment.comment_id,
+            platform: selectedComment.platform,
+            replyText: replyText.trim(),
+          }),
+        }
+      );
+
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || 'Reply failed');
+
+      // Update local state
+      const trimmed = replyText.trim();
       setComments((prev) =>
         prev.map((c) =>
           c.id === selectedComment.id
-            ? { ...c, is_replied: true, reply_text: replyText.trim() }
+            ? { ...c, is_replied: true, reply_text: trimmed }
             : c
         )
       );
-      setSelectedComment((prev) => prev ? { ...prev, is_replied: true, reply_text: replyText.trim() } : null);
+      setSelectedComment((prev) =>
+        prev ? { ...prev, is_replied: true, reply_text: trimmed } : null
+      );
       setReplyText('');
+      setReplySuccess(true);
+      setTimeout(() => setReplySuccess(false), 3000);
+    } catch (err: any) {
+      setReplyError(err.message || 'Failed to send reply. Please try again.');
     } finally {
       setSendingReply(false);
     }
@@ -492,7 +521,7 @@ export function Inbox() {
               {/* Previous reply */}
               {selectedComment.is_replied && selectedComment.reply_text && (
                 <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200">
-                  <p className="text-xs font-semibold text-emerald-700 mb-1">Your reply (saved)</p>
+                  <p className="text-xs font-semibold text-emerald-700 mb-1">Your reply</p>
                   <p className="text-sm text-emerald-800">{selectedComment.reply_text}</p>
                 </div>
               )}
@@ -501,11 +530,21 @@ export function Inbox() {
               <div className="space-y-2">
                 <textarea
                   value={replyText}
-                  onChange={(e) => setReplyText(e.target.value)}
+                  onChange={(e) => { setReplyText(e.target.value); setReplyError(null); }}
                   placeholder="Write a reply..."
                   rows={3}
                   className="w-full p-3 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 resize-none"
                 />
+
+                {replyError && (
+                  <p className="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2">{replyError}</p>
+                )}
+                {replySuccess && (
+                  <p className="text-xs text-emerald-600 bg-emerald-50 rounded-lg px-3 py-2">
+                    Reply posted live to {selectedComment.platform}!
+                  </p>
+                )}
+
                 <div className="flex items-center gap-2">
                   <button
                     onClick={sendReply}
@@ -513,18 +552,11 @@ export function Inbox() {
                     className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-primary text-primary-foreground hover:bg-primary/90 transition-all disabled:opacity-40"
                   >
                     <Send className="w-3.5 h-3.5" />
-                    {sendingReply ? 'Saving...' : 'Save Reply'}
+                    {sendingReply ? 'Posting...' : selectedComment.is_replied ? 'Reply Again' : 'Post Reply'}
                   </button>
-                  <p className="text-xs text-muted-foreground">Saved to your records</p>
+                  <p className="text-xs text-muted-foreground">Posts live to {selectedComment.platform}</p>
                 </div>
               </div>
-
-              {/* Platform note */}
-              {selectedComment.platform === 'instagram' && (
-                <p className="text-xs text-muted-foreground bg-muted p-2 rounded-lg">
-                  To post your reply live, open Instagram and reply directly. We save your draft here for reference.
-                </p>
-              )}
             </div>
           ) : (
             <div className="sticky top-24 p-8 rounded-xl bg-card border border-border text-center">

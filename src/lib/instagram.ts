@@ -33,7 +33,7 @@ export interface InstagramProfile {
 }
 
 export function getInstagramAuthUrl(): string {
-  const scope = 'instagram_basic,instagram_content_publish,pages_show_list,pages_read_engagement';
+  const scope = 'instagram_basic,instagram_content_publish,instagram_manage_comments,pages_show_list,pages_read_engagement';
   return `https://www.facebook.com/v18.0/dialog/oauth?client_id=${INSTAGRAM_APP_ID}&redirect_uri=${encodeURIComponent(INSTAGRAM_REDIRECT_URI)}&scope=${scope}&response_type=code`;
 }
 
