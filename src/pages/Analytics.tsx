@@ -2,78 +2,80 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useSubscription } from '../contexts/SubscriptionContext';
 import { supabase } from '../lib/supabase';
-import { TrendingUp, Eye, Heart, MessageCircle, Users, Instagram, Youtube, Sparkles, ArrowUp, ArrowDown, Calendar, Lock, Crown } from 'lucide-react';
-import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { format, subDays } from 'date-fns';
+import {
+  TrendingUp, Eye, Heart, MessageCircle, Users, Instagram, Youtube,
+  ArrowUp, ArrowDown, Lock, Crown, ExternalLink, Film, Image as ImageIcon, Layers,
+} from 'lucide-react';
+import {
+  LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, PieChart, Pie, Cell, Legend,
+} from 'recharts';
+import { format, subDays, parseISO, getDay, getHours } from 'date-fns';
 import { PaywallModal } from '../components/PaywallModal';
 
-interface Metrics {
-  totalViews: number;
-  totalLikes: number;
-  totalComments: number;
-  totalFollowers: number;
-  engagementRate: number;
-  viewsChange: number;
-  likesChange: number;
-  commentsChange: number;
-  followersChange: number;
+function ThreadsIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M12.186 24h-.007c-3.581-.024-6.334-1.205-8.184-3.509C2.35 18.44 1.5 15.586 1.5 12.068c0-3.512.85-6.367 2.495-8.423C5.845 1.34 8.598.16 12.18.136h.014c2.746.018 5.113.854 6.832 2.417 1.681 1.527 2.604 3.606 2.769 6.18l.004.09h-2.507l-.004-.077c-.133-1.973-.832-3.534-2.083-4.638-1.212-1.069-2.897-1.645-5.01-1.658-2.685.018-4.766.923-6.189 2.694-1.371 1.705-2.064 4.128-2.064 7.199 0 3.077.693 5.499 2.064 7.203 1.423 1.77 3.504 2.676 6.189 2.694 2.11-.014 3.73-.59 4.812-1.71.941-.978 1.428-2.338 1.498-4.155v-.09h-7.34v-2.254h9.79v.09c-.068 2.598-.82 4.65-2.273 6.1-1.51 1.508-3.668 2.285-6.494 2.303z"/>
+    </svg>
+  );
 }
 
-interface PlatformMetric {
-  platform: string;
-  date: string;
-  views: number;
-  likes: number;
-  comments: number;
-  shares: number;
-  followers: number;
-}
+const PLATFORM_COLORS: Record<string, string> = {
+  instagram: '#E4405F',
+  tiktok: '#010101',
+  youtube: '#FF0000',
+  threads: '#000000',
+};
+
+const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const HOUR_LABELS = ['12a','1a','2a','3a','4a','5a','6a','7a','8a','9a','10a','11a',
+  '12p','1p','2p','3p','4p','5p','6p','7p','8p','9p','10p','11p'];
 
 interface PostPerformance {
   id: string;
   platform: string;
   caption: string;
+  thumbnail_url: string | null;
+  permalink: string | null;
+  media_type: string;
   views: number;
   likes: number;
   comments: number;
+  engagement: number;
   engagement_rate: number;
   published_at: string;
 }
 
-const PLATFORM_COLORS = {
-  instagram: '#E4405F',
-  tiktok: '#000000',
-  youtube: '#FF0000',
-};
-
 export function Analytics() {
   const { user } = useAuth();
   const { tier } = useSubscription();
-  const [metrics, setMetrics] = useState<Metrics>({
-    totalViews: 0,
-    totalLikes: 0,
-    totalComments: 0,
-    totalFollowers: 0,
-    engagementRate: 0,
-    viewsChange: 0,
-    likesChange: 0,
-    commentsChange: 0,
-    followersChange: 0,
-  });
-  const [timelineData, setTimelineData] = useState<any[]>([]);
-  const [platformData, setPlatformData] = useState<any[]>([]);
-  const [topPosts, setTopPosts] = useState<PostPerformance[]>([]);
   const [loading, setLoading] = useState(true);
   const [timeRange, setTimeRange] = useState<'7d' | '30d' | '90d'>('30d');
   const [showPaywall, setShowPaywall] = useState(false);
   const [paywallFeature, setPaywallFeature] = useState('');
 
+  // Stats
+  const [summaryStats, setSummaryStats] = useState({
+    totalEngagement: 0, engagementChange: 0,
+    totalLikes: 0, likesChange: 0,
+    totalComments: 0, commentsChange: 0,
+    totalFollowers: 0, followersChange: 0,
+  });
+
+  // Chart data
+  const [engagementTimeline, setEngagementTimeline] = useState<any[]>([]);
+  const [followerGrowth, setFollowerGrowth] = useState<any[]>([]);
+  const [platformComparison, setPlatformComparison] = useState<any[]>([]);
+  const [formatBreakdown, setFormatBreakdown] = useState<any[]>([]);
+  const [engagementDist, setEngagementDist] = useState<any[]>([]);
+  const [bestTimeHeatmap, setBestTimeHeatmap] = useState<number[][]>([]);
+  const [topPosts, setTopPosts] = useState<PostPerformance[]>([]);
+
   const isPremium = tier === 'paid';
 
   useEffect(() => {
-    if (user) {
-      loadAnalytics();
-    }
+    if (user) loadAnalytics();
   }, [user, timeRange]);
 
   const handleTimeRangeChange = (range: '7d' | '30d' | '90d') => {
@@ -87,369 +89,493 @@ export function Analytics() {
 
   const loadAnalytics = async () => {
     if (!user) return;
+    setLoading(true);
 
     const days = isPremium ? (timeRange === '7d' ? 7 : timeRange === '30d' ? 30 : 90) : 7;
-    const startDate = subDays(new Date(), days).toISOString();
+    const startDate = subDays(new Date(), days).toISOString().split('T')[0];
 
-    const [metricsRes, postsRes, platformMetricsRes] = await Promise.all([
+    const [metricsRes, postsRes] = await Promise.all([
       supabase
         .from('platform_metrics')
         .select('*')
         .eq('user_id', user.id)
         .gte('date', startDate)
         .order('date', { ascending: true }),
-
       supabase
         .from('content_posts')
-        .select('id, platform, caption, published_date, likes, comments, views')
+        .select('id, platform, caption, published_date, likes, comments, views, saves, shares, media_type, thumbnail_url, permalink')
         .eq('user_id', user.id)
         .eq('status', 'published')
+        .gte('published_date', startDate)
         .order('likes', { ascending: false })
-        .limit(isPremium ? 10 : 3),
-
-      supabase
-        .from('platform_metrics')
-        .select('*')
-        .eq('user_id', user.id)
-        .gte('date', startDate)
+        .limit(isPremium ? 20 : 5),
     ]);
 
-    if (metricsRes.data) {
-      const totalViews = metricsRes.data.reduce((sum, m) => sum + (m.total_views || 0), 0);
-      const totalLikes = metricsRes.data.reduce((sum, m) => sum + (m.total_likes || 0), 0);
-      const totalComments = metricsRes.data.reduce((sum, m) => sum + (m.total_comments || 0), 0);
-      const latestFollowers = metricsRes.data[metricsRes.data.length - 1]?.followers_count || 0;
-      const engagementRate = totalViews > 0 ? ((totalLikes + totalComments) / totalViews) * 100 : 0;
+    const metrics = metricsRes.data || [];
+    const posts = postsRes.data || [];
 
-      const midpoint = Math.floor(metricsRes.data.length / 2);
-      const firstHalf = metricsRes.data.slice(0, midpoint);
-      const secondHalf = metricsRes.data.slice(midpoint);
+    // ── Summary stats ──
+    const totalLikes = metrics.reduce((s, m) => s + (m.total_likes || 0), 0);
+    const totalComments = metrics.reduce((s, m) => s + (m.total_comments || 0), 0);
+    const totalEngagement = totalLikes + totalComments;
+    const latestFollowers = metrics[metrics.length - 1]?.followers_count || 0;
 
-      const firstViews = firstHalf.reduce((sum, m) => sum + (m.total_views || 0), 0);
-      const secondViews = secondHalf.reduce((sum, m) => sum + (m.total_views || 0), 0);
-      const viewsChange = firstViews > 0 ? ((secondViews - firstViews) / firstViews) * 100 : 0;
+    const mid = Math.floor(metrics.length / 2);
+    const first = metrics.slice(0, mid);
+    const second = metrics.slice(mid);
+    const calcChange = (a: number, b: number) => (a > 0 ? ((b - a) / a) * 100 : 0);
 
-      const firstLikes = firstHalf.reduce((sum, m) => sum + (m.total_likes || 0), 0);
-      const secondLikes = secondHalf.reduce((sum, m) => sum + (m.total_likes || 0), 0);
-      const likesChange = firstLikes > 0 ? ((secondLikes - firstLikes) / firstLikes) * 100 : 0;
+    const firstLikes = first.reduce((s, m) => s + (m.total_likes || 0), 0);
+    const secondLikes = second.reduce((s, m) => s + (m.total_likes || 0), 0);
+    const firstComments = first.reduce((s, m) => s + (m.total_comments || 0), 0);
+    const secondComments = second.reduce((s, m) => s + (m.total_comments || 0), 0);
+    const firstFollowers = first[0]?.followers_count || 0;
 
-      const firstComments = firstHalf.reduce((sum, m) => sum + (m.total_comments || 0), 0);
-      const secondComments = secondHalf.reduce((sum, m) => sum + (m.total_comments || 0), 0);
-      const commentsChange = firstComments > 0 ? ((secondComments - firstComments) / firstComments) * 100 : 0;
+    setSummaryStats({
+      totalEngagement,
+      engagementChange: calcChange(firstLikes + firstComments, secondLikes + secondComments),
+      totalLikes,
+      likesChange: calcChange(firstLikes, secondLikes),
+      totalComments,
+      commentsChange: calcChange(firstComments, secondComments),
+      totalFollowers: latestFollowers,
+      followersChange: calcChange(firstFollowers, latestFollowers),
+    });
 
-      const firstFollowers = firstHalf[0]?.followers || 0;
-      const followersChange = firstFollowers > 0 ? ((latestFollowers - firstFollowers) / firstFollowers) * 100 : 0;
-
-      setMetrics({
-        totalViews,
-        totalLikes,
-        totalComments,
-        totalFollowers: latestFollowers,
-        engagementRate,
-        viewsChange,
-        likesChange,
-        commentsChange,
-        followersChange,
-      });
-
-      const dailyData = metricsRes.data.reduce((acc: any, curr) => {
-        const date = format(new Date(curr.date), 'MMM dd');
-        const existing = acc.find((d: any) => d.date === date);
-        if (existing) {
-          existing.views += curr.total_views || 0;
-          existing.likes += curr.total_likes || 0;
-          existing.comments += curr.total_comments || 0;
-        } else {
-          acc.push({
-            date,
-            views: curr.total_views || 0,
-            likes: curr.total_likes || 0,
-            comments: curr.total_comments || 0,
-          });
-        }
-        return acc;
-      }, []);
-      setTimelineData(dailyData);
+    // ── Engagement timeline (daily, all platforms combined) ──
+    const dailyMap: Record<string, { date: string; likes: number; comments: number; engagement: number; followers: number }> = {};
+    for (const m of metrics) {
+      const d = format(parseISO(m.date), 'MMM dd');
+      if (!dailyMap[d]) dailyMap[d] = { date: d, likes: 0, comments: 0, engagement: 0, followers: 0 };
+      dailyMap[d].likes += m.total_likes || 0;
+      dailyMap[d].comments += m.total_comments || 0;
+      dailyMap[d].engagement += (m.total_likes || 0) + (m.total_comments || 0);
+      dailyMap[d].followers = Math.max(dailyMap[d].followers, m.followers_count || 0);
     }
+    setEngagementTimeline(Object.values(dailyMap));
 
-    if (platformMetricsRes.data) {
-      const platformTotals = platformMetricsRes.data.reduce((acc: any, curr) => {
-        const platform = curr.platform;
-        if (!acc[platform]) {
-          acc[platform] = { platform, views: 0, likes: 0, comments: 0 };
-        }
-        acc[platform].views += curr.total_views || 0;
-        acc[platform].likes += curr.total_likes || 0;
-        acc[platform].comments += curr.total_comments || 0;
-        return acc;
-      }, {});
-      setPlatformData(Object.values(platformTotals));
+    // ── Follower growth over time by platform ──
+    const followerMap: Record<string, Record<string, number>> = {};
+    for (const m of metrics) {
+      const d = format(parseISO(m.date), 'MMM dd');
+      if (!followerMap[d]) followerMap[d] = { date: d } as any;
+      followerMap[d][m.platform] = m.followers_count || 0;
     }
+    setFollowerGrowth(Object.values(followerMap));
 
-    if (postsRes.data) {
-      setTopPosts(postsRes.data.map((p: any) => ({
+    // ── Platform comparison ──
+    const platMap: Record<string, any> = {};
+    for (const m of metrics) {
+      if (!platMap[m.platform]) platMap[m.platform] = { platform: m.platform, likes: 0, comments: 0, followers: 0 };
+      platMap[m.platform].likes += m.total_likes || 0;
+      platMap[m.platform].comments += m.total_comments || 0;
+      platMap[m.platform].followers = Math.max(platMap[m.platform].followers, m.followers_count || 0);
+    }
+    setPlatformComparison(Object.values(platMap));
+
+    // ── Format breakdown from posts ──
+    const formatMap: Record<string, { name: string; engagement: number; count: number }> = {};
+    for (const p of posts) {
+      const type = p.media_type?.toLowerCase() || 'image';
+      const label = type.includes('video') || type === 'reel' ? 'Video/Reel' : type === 'carousel' ? 'Carousel' : 'Photo';
+      if (!formatMap[label]) formatMap[label] = { name: label, engagement: 0, count: 0 };
+      formatMap[label].engagement += (p.likes || 0) + (p.comments || 0);
+      formatMap[label].count += 1;
+    }
+    // Average engagement per format
+    setFormatBreakdown(
+      Object.values(formatMap).map((f) => ({
+        name: f.name,
+        avgEngagement: f.count > 0 ? Math.round(f.engagement / f.count) : 0,
+        posts: f.count,
+      }))
+    );
+
+    // ── Engagement distribution ──
+    const totalL = posts.reduce((s, p) => s + (p.likes || 0), 0);
+    const totalC = posts.reduce((s, p) => s + (p.comments || 0), 0);
+    const totalS = posts.reduce((s, p) => s + (p.saves || 0), 0);
+    const totalSh = posts.reduce((s, p) => s + (p.shares || 0), 0);
+    const distData = [
+      { name: 'Likes', value: totalL, color: '#E4405F' },
+      { name: 'Comments', value: totalC, color: '#3b82f6' },
+      { name: 'Saves', value: totalS, color: '#8b5cf6' },
+      { name: 'Shares', value: totalSh, color: '#10b981' },
+    ].filter((d) => d.value > 0);
+    setEngagementDist(distData);
+
+    // ── Best time to post heatmap (day × hour grid) ──
+    // 7 days × 24 hours
+    const grid: number[][] = Array.from({ length: 7 }, () => Array(24).fill(0));
+    for (const p of posts) {
+      if (!p.published_date) continue;
+      try {
+        const dt = parseISO(p.published_date);
+        const day = getDay(dt);
+        const hour = getHours(dt);
+        const eng = (p.likes || 0) + (p.comments || 0);
+        grid[day][hour] += eng;
+      } catch (_) { /* skip invalid dates */ }
+    }
+    setBestTimeHeatmap(grid);
+
+    // ── Top posts ──
+    setTopPosts(
+      posts.slice(0, isPremium ? 10 : 3).map((p: any) => ({
         id: p.id,
         platform: p.platform,
-        caption: p.caption,
+        caption: p.caption || '',
+        thumbnail_url: p.thumbnail_url || null,
+        permalink: p.permalink || null,
+        media_type: p.media_type || 'image',
         views: p.views || 0,
         likes: p.likes || 0,
         comments: p.comments || 0,
-        engagement_rate: p.views > 0 ? ((p.likes + p.comments) / p.views) * 100 : 0,
-        published_at: p.published_date,
-      })));
-    }
+        engagement: (p.likes || 0) + (p.comments || 0),
+        engagement_rate: p.views > 0 ? (((p.likes || 0) + (p.comments || 0)) / p.views) * 100 : 0,
+        published_at: p.published_date || '',
+      }))
+    );
 
     setLoading(false);
   };
 
-  const metricCards = [
-    { label: 'Total Views', value: metrics.totalViews, change: metrics.viewsChange, icon: Eye, color: 'sky' },
-    { label: 'Total Likes', value: metrics.totalLikes, change: metrics.likesChange, icon: Heart, color: 'red' },
-    { label: 'Comments', value: metrics.totalComments, change: metrics.commentsChange, icon: MessageCircle, color: 'blue' },
-    { label: 'Followers', value: metrics.totalFollowers, change: metrics.followersChange, icon: Users, color: 'green' },
-  ];
-
-  const getPlatformIcon = (platform: string) => {
-    switch (platform) {
-      case 'instagram': return Instagram;
-      case 'youtube': return Youtube;
-      case 'tiktok': return Sparkles;
-      default: return TrendingUp;
-    }
+  const getPlatformIcon = (p: string) => {
+    if (p === 'instagram') return Instagram;
+    if (p === 'youtube') return Youtube;
+    if (p === 'threads') return ThreadsIcon;
+    return TrendingUp;
   };
+
+  const getFormatIcon = (type: string) => {
+    if (type.toLowerCase().includes('video') || type.toLowerCase() === 'reel') return Film;
+    if (type.toLowerCase() === 'carousel') return Layers;
+    return ImageIcon;
+  };
+
+  // Heatmap max for normalizing cell opacity
+  const heatmapMax = Math.max(1, ...bestTimeHeatmap.flat());
+
+  const hasData = summaryStats.totalEngagement > 0 || summaryStats.totalFollowers > 0 || topPosts.length > 0;
 
   if (loading) {
     return (
-      <div className="max-w-7xl mx-auto">
-        <div className="p-8 rounded-xl text-center bg-card border border-border">
-          <p className="text-muted-foreground">Loading analytics...</p>
-        </div>
+      <div className="flex items-center justify-center h-96">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary" />
       </div>
     );
   }
 
-  const hasData = metrics.totalViews > 0 || metrics.totalLikes > 0 || metrics.totalComments > 0;
-
   return (
-    <div className="max-w-7xl mx-auto">
-      <div className="mb-8">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-foreground mb-2">
-              Audience Growth
-            </h1>
-            <p className="text-muted-foreground">
-              Track your content performance across all platforms
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            {['7d', '30d', '90d'].map((range) => {
-              const isLocked = !isPremium && (range === '30d' || range === '90d');
-              return (
-                <button
-                  key={range}
-                  onClick={() => handleTimeRangeChange(range as any)}
-                  className={`px-4 py-2 rounded-xl font-medium transition-colors shadow-sm relative ${
-                    timeRange === range
-                      ? 'bg-primary text-primary-foreground'
-                      : isLocked
-                      ? 'bg-card border border-border text-muted-foreground hover:bg-accent hover:text-foreground'
-                      : 'bg-card border border-border text-muted-foreground hover:bg-accent hover:text-foreground'
-                  }`}
-                >
-                  <span className="flex items-center gap-2">
-                    {range === '7d' ? '7 Days' : range === '30d' ? '30 Days' : '90 Days'}
-                    {isLocked && <Lock className="w-3.5 h-3.5" />}
-                  </span>
-                </button>
-              );
-            })}
-            {!isPremium && (
+    <div className="max-w-7xl mx-auto space-y-8">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Audience Growth</h1>
+          <p className="text-sm text-muted-foreground mt-1">Deep performance analytics across all connected platforms</p>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          {(['7d', '30d', '90d'] as const).map((range) => {
+            const locked = !isPremium && range !== '7d';
+            return (
               <button
-                onClick={() => {
-                  setPaywallFeature('Full Analytics Access');
-                  setShowPaywall(true);
-                }}
-                className="ml-2 px-4 py-2 rounded-xl font-medium bg-gradient-to-r from-orange-500 to-orange-600 text-white hover:shadow-lg transition-all flex items-center gap-2"
+                key={range}
+                onClick={() => handleTimeRangeChange(range)}
+                className={`px-4 py-2 rounded-xl text-sm font-medium transition-all flex items-center gap-1.5 ${
+                  timeRange === range
+                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    : 'bg-card border border-border text-muted-foreground hover:bg-accent'
+                }`}
               >
-                <Crown className="w-4 h-4" />
-                Upgrade
+                {range === '7d' ? '7 Days' : range === '30d' ? '30 Days' : '90 Days'}
+                {locked && <Lock className="w-3 h-3" />}
               </button>
-            )}
-          </div>
+            );
+          })}
+          {!isPremium && (
+            <button
+              onClick={() => { setPaywallFeature('Full Analytics Access'); setShowPaywall(true); }}
+              className="px-4 py-2 rounded-xl text-sm font-semibold bg-gradient-to-r from-orange-500 to-orange-600 text-white hover:shadow-lg transition-all flex items-center gap-2"
+            >
+              <Crown className="w-4 h-4" />
+              Upgrade
+            </button>
+          )}
         </div>
       </div>
 
       {!hasData ? (
-        <div className="p-12 rounded-xl text-center bg-card border border-border shadow-md">
-          <TrendingUp className="w-16 h-16 mx-auto mb-4 text-muted-foreground opacity-50" />
-          <h3 className="text-xl font-bold mb-2 text-foreground">
-            No analytics data yet
-          </h3>
-          <p className="text-muted-foreground">
-            Connect your social media accounts in Settings to start tracking performance
-          </p>
+        <div className="p-16 rounded-xl text-center bg-card border border-border">
+          <TrendingUp className="w-16 h-16 mx-auto mb-4 text-muted-foreground/40" />
+          <h3 className="text-xl font-bold mb-2 text-foreground">No analytics data yet</h3>
+          <p className="text-muted-foreground">Connect your accounts in Settings and sync to start tracking performance.</p>
         </div>
       ) : (
-        <div className="space-y-8">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {metricCards.map((metric) => {
-              const Icon = metric.icon;
-              const isPositive = metric.change >= 0;
-              return (
-                <div
-                  key={metric.label}
-                  className="p-6 rounded-xl bg-card border border-border shadow-md hover:shadow-lg transition-shadow"
-                >
-                  <div className="flex items-center justify-between mb-4">
-                    <div className={`flex items-center justify-center w-12 h-12 rounded-xl ${
-                      metric.color === 'sky' ? 'bg-chart-1/20' :
-                      metric.color === 'red' ? 'bg-chart-2/20' :
-                      metric.color === 'blue' ? 'bg-chart-3/20' :
-                      'bg-emerald-500/20'
-                    }`}>
-                      <Icon className={`w-6 h-6 ${
-                        metric.color === 'sky' ? 'text-chart-1' :
-                        metric.color === 'red' ? 'text-chart-2' :
-                        metric.color === 'blue' ? 'text-chart-3' :
-                        'text-emerald-500'
-                      }`} />
-                    </div>
-                    {metric.change !== 0 && (
-                      <div className={`flex items-center gap-1 text-sm font-medium ${
-                        isPositive ? 'text-emerald-500' : 'text-red-500'
-                      }`}>
-                        {isPositive ? <ArrowUp className="w-4 h-4" /> : <ArrowDown className="w-4 h-4" />}
-                        {Math.abs(metric.change).toFixed(1)}%
-                      </div>
-                    )}
+        <>
+          {/* Summary cards */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {[
+              { label: 'Total Engagement', value: summaryStats.totalEngagement, change: summaryStats.engagementChange, icon: TrendingUp, color: 'text-primary', bg: 'bg-primary/10' },
+              { label: 'Likes', value: summaryStats.totalLikes, change: summaryStats.likesChange, icon: Heart, color: 'text-pink-500', bg: 'bg-pink-500/10' },
+              { label: 'Comments', value: summaryStats.totalComments, change: summaryStats.commentsChange, icon: MessageCircle, color: 'text-blue-500', bg: 'bg-blue-500/10' },
+              { label: 'Followers', value: summaryStats.totalFollowers, change: summaryStats.followersChange, icon: Users, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
+            ].map(({ label, value, change, icon: Icon, color, bg }) => (
+              <div key={label} className="p-5 rounded-xl bg-card border border-border shadow-sm">
+                <div className="flex items-center justify-between mb-3">
+                  <div className={`w-10 h-10 rounded-xl ${bg} flex items-center justify-center`}>
+                    <Icon className={`w-5 h-5 ${color}`} />
                   </div>
-                  <p className="text-sm text-muted-foreground mb-1">
-                    {metric.label}
-                  </p>
-                  <p className="text-2xl font-bold text-foreground">
-                    {metric.value.toLocaleString()}
-                  </p>
+                  {change !== 0 && (
+                    <span className={`text-xs font-semibold flex items-center gap-0.5 ${change > 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+                      {change > 0 ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />}
+                      {Math.abs(change).toFixed(1)}%
+                    </span>
+                  )}
                 </div>
-              );
-            })}
+                <p className="text-xs text-muted-foreground mb-1">{label}</p>
+                <p className="text-2xl font-bold text-foreground">{value.toLocaleString()}</p>
+              </div>
+            ))}
           </div>
 
-          <div className="p-6 rounded-xl bg-card border border-border shadow-md">
-            <h3 className="text-lg font-bold mb-6 text-foreground">
-              Performance Over Time
-            </h3>
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={timelineData}>
-                <CartesianGrid strokeDasharray="3 3" stroke={'#e2e8f0'} />
-                <XAxis dataKey="date" stroke={'#64748b'} />
-                <YAxis stroke={'#64748b'} />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: '#ffffff',
-                    border: `1px solid #e2e8f0`,
-                    borderRadius: '0.75rem',
-                    color: '#0f172a',
-                  }}
-                />
-                <Line type="monotone" dataKey="views" stroke="#0ea5e9" strokeWidth={2} />
-                <Line type="monotone" dataKey="likes" stroke="#ef4444" strokeWidth={2} />
-                <Line type="monotone" dataKey="comments" stroke="#3b82f6" strokeWidth={2} />
+          {/* Engagement over time */}
+          <div className="p-6 rounded-xl bg-card border border-border shadow-sm">
+            <h3 className="text-lg font-bold text-foreground mb-5">Engagement Over Time</h3>
+            <ResponsiveContainer width="100%" height={280}>
+              <LineChart data={engagementTimeline} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                <XAxis dataKey="date" stroke="#94a3b8" tick={{ fontSize: 11 }} />
+                <YAxis stroke="#94a3b8" tick={{ fontSize: 11 }} />
+                <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '0.75rem' }} />
+                <Legend />
+                <Line type="monotone" dataKey="engagement" name="Total Engagement" stroke="#7c3aed" strokeWidth={2.5} dot={false} />
+                <Line type="monotone" dataKey="likes" name="Likes" stroke="#E4405F" strokeWidth={1.5} dot={false} />
+                <Line type="monotone" dataKey="comments" name="Comments" stroke="#3b82f6" strokeWidth={1.5} dot={false} />
               </LineChart>
             </ResponsiveContainer>
           </div>
 
+          {/* Follower Growth by Platform */}
+          {followerGrowth.length > 1 && (
+            <div className="p-6 rounded-xl bg-card border border-border shadow-sm">
+              <h3 className="text-lg font-bold text-foreground mb-5">Follower Growth by Platform</h3>
+              <ResponsiveContainer width="100%" height={240}>
+                <LineChart data={followerGrowth} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis dataKey="date" stroke="#94a3b8" tick={{ fontSize: 11 }} />
+                  <YAxis stroke="#94a3b8" tick={{ fontSize: 11 }} />
+                  <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '0.75rem' }} />
+                  <Legend />
+                  {Object.keys(PLATFORM_COLORS).map((p) => (
+                    followerGrowth.some((d) => d[p] > 0) && (
+                      <Line key={p} type="monotone" dataKey={p} name={p.charAt(0).toUpperCase() + p.slice(1)}
+                        stroke={PLATFORM_COLORS[p]} strokeWidth={2} dot={false} />
+                    )
+                  ))}
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
+          {/* Platform comparison + Engagement distribution */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="p-6 rounded-xl bg-card border border-border shadow-md">
-              <h3 className="text-lg font-bold mb-6 text-foreground">
-                Platform Performance
-              </h3>
-              <ResponsiveContainer width="100%" height={250}>
-                <BarChart data={platformData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={'#e2e8f0'} />
-                  <XAxis dataKey="platform" stroke={'#64748b'} />
-                  <YAxis stroke={'#64748b'} />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: '#ffffff',
-                      border: `1px solid #e2e8f0`,
-                      borderRadius: '0.75rem',
-                      color: '#0f172a',
-                    }}
-                  />
-                  <Bar dataKey="views" fill="#0ea5e9" />
+            <div className="p-6 rounded-xl bg-card border border-border shadow-sm">
+              <h3 className="text-lg font-bold text-foreground mb-5">Platform Comparison</h3>
+              <ResponsiveContainer width="100%" height={240}>
+                <BarChart data={platformComparison} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis dataKey="platform" stroke="#94a3b8" tick={{ fontSize: 11 }}
+                    tickFormatter={(v) => v.charAt(0).toUpperCase() + v.slice(1)} />
+                  <YAxis stroke="#94a3b8" tick={{ fontSize: 11 }} />
+                  <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '0.75rem' }} />
+                  <Legend />
+                  <Bar dataKey="likes" name="Likes" fill="#E4405F" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="comments" name="Comments" fill="#3b82f6" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
 
-            <div className="p-6 rounded-xl bg-card border border-border shadow-md relative">
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-lg font-bold text-foreground">
-                  Top Performing Posts
-                </h3>
-                {!isPremium && topPosts.length > 0 && (
-                  <span className="text-xs px-2 py-1 rounded-full bg-orange-500/10 text-orange-600 border border-orange-500/20 flex items-center gap-1">
-                    <Lock className="w-3 h-3" />
-                    Limited
-                  </span>
-                )}
+            {engagementDist.length > 0 && (
+              <div className="p-6 rounded-xl bg-card border border-border shadow-sm">
+                <h3 className="text-lg font-bold text-foreground mb-5">Engagement Breakdown</h3>
+                <ResponsiveContainer width="100%" height={240}>
+                  <PieChart>
+                    <Pie data={engagementDist} cx="50%" cy="50%" innerRadius={60} outerRadius={90} paddingAngle={3} dataKey="value">
+                      {engagementDist.map((entry, i) => (
+                        <Cell key={i} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '0.75rem' }}
+                      formatter={(v: any) => v.toLocaleString()} />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
               </div>
-              <div className="space-y-4">
-                {topPosts.length === 0 ? (
-                  <p className="text-center py-8 text-muted-foreground">
-                    No published posts yet
-                  </p>
-                ) : (
-                  topPosts.map((post) => {
-                    const Icon = getPlatformIcon(post.platform);
-                    return (
-                      <div key={post.id} className="p-4 rounded-lg bg-muted hover:bg-muted/80 transition-colors">
-                        <div className="flex items-start gap-3">
-                          <Icon className="w-5 h-5 text-chart-1 flex-shrink-0 mt-1" />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm line-clamp-2 mb-2 text-foreground">
-                              {post.caption}
-                            </p>
-                            <div className="flex items-center gap-4 text-xs">
-                              <span className="text-muted-foreground">
-                                {post.views.toLocaleString()} views
-                              </span>
-                              <span className="text-muted-foreground">
-                                {post.likes.toLocaleString()} likes
-                              </span>
-                              <span className="text-emerald-500 font-medium">
-                                {post.engagement_rate.toFixed(1)}% engagement
-                              </span>
-                            </div>
-                          </div>
+            )}
+          </div>
+
+          {/* Content format performance */}
+          {formatBreakdown.length > 0 && (
+            <div className="p-6 rounded-xl bg-card border border-border shadow-sm">
+              <h3 className="text-lg font-bold text-foreground mb-2">Content Format Performance</h3>
+              <p className="text-sm text-muted-foreground mb-5">Average engagement per post by format</p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+                {formatBreakdown.map((f) => {
+                  const Icon = getFormatIcon(f.name);
+                  return (
+                    <div key={f.name} className="p-4 rounded-xl bg-muted text-center">
+                      <Icon className="w-8 h-8 mx-auto mb-2 text-primary" />
+                      <p className="text-xs text-muted-foreground mb-1">{f.name}</p>
+                      <p className="text-2xl font-bold text-foreground">{f.avgEngagement.toLocaleString()}</p>
+                      <p className="text-xs text-muted-foreground mt-1">avg engagement · {f.posts} posts</p>
+                    </div>
+                  );
+                })}
+              </div>
+              <ResponsiveContainer width="100%" height={180}>
+                <BarChart data={formatBreakdown} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis dataKey="name" stroke="#94a3b8" tick={{ fontSize: 11 }} />
+                  <YAxis stroke="#94a3b8" tick={{ fontSize: 11 }} />
+                  <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '0.75rem' }} />
+                  <Bar dataKey="avgEngagement" name="Avg Engagement" fill="#7c3aed" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
+          {/* Best time to post heatmap */}
+          {topPosts.length > 2 && (
+            <div className="p-6 rounded-xl bg-card border border-border shadow-sm">
+              <h3 className="text-lg font-bold text-foreground mb-1">Best Time to Post</h3>
+              <p className="text-sm text-muted-foreground mb-5">Engagement intensity by day and hour (darker = higher engagement)</p>
+              <div className="overflow-x-auto">
+                <div className="min-w-[640px]">
+                  {/* Hour labels */}
+                  <div className="flex mb-1 ml-10">
+                    {HOUR_LABELS.map((h, i) => (
+                      <div key={i} className="flex-1 text-center text-[9px] text-muted-foreground">{i % 3 === 0 ? h : ''}</div>
+                    ))}
+                  </div>
+                  {bestTimeHeatmap.map((dayRow, dayIdx) => (
+                    <div key={dayIdx} className="flex items-center gap-0 mb-0.5">
+                      <span className="w-10 text-xs text-muted-foreground text-right pr-2 flex-shrink-0">{DAY_LABELS[dayIdx]}</span>
+                      {dayRow.map((val, hourIdx) => {
+                        const intensity = val / heatmapMax;
+                        return (
+                          <div
+                            key={hourIdx}
+                            className="flex-1 h-6 rounded-sm mx-px"
+                            style={{
+                              backgroundColor: intensity > 0
+                                ? `rgba(124, 58, 237, ${0.08 + intensity * 0.85})`
+                                : 'hsl(var(--muted))',
+                            }}
+                            title={`${DAY_LABELS[dayIdx]} ${HOUR_LABELS[hourIdx]}: ${val} engagement`}
+                          />
+                        );
+                      })}
+                    </div>
+                  ))}
+                  {/* Legend */}
+                  <div className="flex items-center gap-2 mt-3 ml-10">
+                    <span className="text-xs text-muted-foreground">Low</span>
+                    {[0.1, 0.3, 0.5, 0.7, 0.9].map((i) => (
+                      <div key={i} className="w-6 h-4 rounded-sm" style={{ backgroundColor: `rgba(124, 58, 237, ${i})` }} />
+                    ))}
+                    <span className="text-xs text-muted-foreground">High</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Top posts */}
+          <div className="p-6 rounded-xl bg-card border border-border shadow-sm">
+            <div className="flex items-center justify-between mb-5">
+              <div>
+                <h3 className="text-lg font-bold text-foreground">Top Performing Posts</h3>
+                <p className="text-sm text-muted-foreground mt-0.5">Ranked by engagement in selected period</p>
+              </div>
+              {!isPremium && (
+                <span className="text-xs px-2 py-1 rounded-full bg-orange-500/10 text-orange-600 border border-orange-500/20 flex items-center gap-1">
+                  <Lock className="w-3 h-3" /> Top 3 only
+                </span>
+              )}
+            </div>
+            {topPosts.length === 0 ? (
+              <p className="text-center py-8 text-muted-foreground text-sm">No published posts found in this period.</p>
+            ) : (
+              <div className="space-y-3">
+                {topPosts.map((post, idx) => {
+                  const PlatIcon = getPlatformIcon(post.platform);
+                  const FmtIcon = getFormatIcon(post.media_type);
+                  return (
+                    <div key={post.id} className="flex items-start gap-4 p-4 rounded-xl bg-muted hover:bg-muted/80 transition-colors">
+                      {/* Rank */}
+                      <div className="w-7 h-7 rounded-full bg-card border border-border flex items-center justify-center text-xs font-bold text-muted-foreground flex-shrink-0">
+                        {idx + 1}
+                      </div>
+                      {/* Thumbnail */}
+                      {post.thumbnail_url ? (
+                        <img
+                          src={post.thumbnail_url}
+                          alt="Post"
+                          className="w-16 h-16 rounded-xl object-cover flex-shrink-0"
+                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                        />
+                      ) : (
+                        <div className="w-16 h-16 rounded-xl bg-card border border-border flex items-center justify-center flex-shrink-0">
+                          <FmtIcon className="w-6 h-6 text-muted-foreground" />
+                        </div>
+                      )}
+                      {/* Info */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <PlatIcon className={`w-4 h-4 flex-shrink-0`}
+                            style={{ color: PLATFORM_COLORS[post.platform] || '#64748b' }} />
+                          <FmtIcon className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                          {post.published_at && (
+                            <span className="text-xs text-muted-foreground">
+                              {format(parseISO(post.published_at), 'MMM d')}
+                            </span>
+                          )}
+                          {post.permalink && (
+                            <a href={post.permalink} target="_blank" rel="noopener noreferrer"
+                              className="ml-auto text-primary hover:text-primary/80 flex-shrink-0"
+                              title="View post">
+                              <ExternalLink className="w-3.5 h-3.5" />
+                            </a>
+                          )}
+                        </div>
+                        <p className="text-sm text-foreground line-clamp-2 mb-2">{post.caption || 'No caption'}</p>
+                        <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                          <span className="flex items-center gap-1"><Heart className="w-3 h-3 text-pink-500" />{post.likes.toLocaleString()}</span>
+                          <span className="flex items-center gap-1"><MessageCircle className="w-3 h-3 text-blue-500" />{post.comments.toLocaleString()}</span>
+                          <span className="font-semibold text-emerald-600">{post.engagement.toLocaleString()} total</span>
+                          {post.engagement_rate > 0 && (
+                            <span className="text-violet-600 font-medium">{post.engagement_rate.toFixed(1)}% rate</span>
+                          )}
                         </div>
                       </div>
-                    );
-                  })
-                )}
-                {!isPremium && topPosts.length > 0 && (
+                    </div>
+                  );
+                })}
+                {!isPremium && (
                   <button
-                    onClick={() => {
-                      setPaywallFeature('Full Top Posts Analytics (10 posts vs 3)');
-                      setShowPaywall(true);
-                    }}
-                    className="w-full py-3 px-4 rounded-lg border-2 border-dashed border-orange-500/30 bg-orange-500/5 text-orange-600 font-medium hover:bg-orange-500/10 transition-colors flex items-center justify-center gap-2"
+                    onClick={() => { setPaywallFeature('Full Top Posts Analytics'); setShowPaywall(true); }}
+                    className="w-full py-3 rounded-xl border-2 border-dashed border-orange-500/30 bg-orange-500/5 text-orange-600 text-sm font-medium hover:bg-orange-500/10 transition-colors flex items-center justify-center gap-2"
                   >
-                    <Lock className="w-4 h-4" />
-                    View All Top Posts (Premium)
+                    <Lock className="w-4 h-4" /> View All Top Posts (Premium)
                   </button>
                 )}
               </div>
-            </div>
+            )}
           </div>
-        </div>
+        </>
       )}
 
-      <PaywallModal
-        isOpen={showPaywall}
-        onClose={() => setShowPaywall(false)}
-        feature={paywallFeature}
-      />
+      <PaywallModal isOpen={showPaywall} onClose={() => setShowPaywall(false)} feature={paywallFeature} />
     </div>
   );
 }
