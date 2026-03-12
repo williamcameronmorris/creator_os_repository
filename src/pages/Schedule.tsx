@@ -401,7 +401,7 @@ export function Schedule() {
               );
             })}
           </div>
-        )}
+        ) : null}
       </div>
 
       <div className="mb-8">
