@@ -3,8 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useSubscription } from '../contexts/SubscriptionContext';
 import { supabase } from '../lib/supabase';
-import { Calendar, Clock, Instagram, Youtube, Plus, Sparkles, Edit, Trash2, DollarSign, Info, TrendingUp, Lock, Crown, CheckCircle2, XCircle, Loader2, ExternalLink, RefreshCw, AlertTriangle, AtSign } from 'lucide-react';
-import { format } from 'date-fns';
+import { Calendar, Clock, Instagram, Youtube, Plus, Sparkles, Edit, Trash2, DollarSign, Info, TrendingUp, Lock, Crown, CheckCircle2, XCircle, Loader2, ExternalLink, RefreshCw, AlertTriangle, AtSign, LayoutGrid, List } from 'lucide-react';
+import { useTimezone } from '../hooks/useTimezone';
+import { formatInTz } from '../lib/timezone';
+import { CalendarView } from '../components/CalendarView';
 
 interface Post {
   id: string;
@@ -28,8 +30,10 @@ export function Schedule() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'scheduled' | 'draft' | 'published'>('all');
+  const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
 
   const isPremium = tier === 'paid';
+  const { timezone } = useTimezone();
 
   useEffect(() => {
     if (user) {
@@ -143,13 +147,32 @@ export function Schedule() {
               Manage your scheduled and draft posts
             </p>
           </div>
-          <button
-            onClick={handleNewPost}
-            className="flex items-center gap-2 px-6 py-3 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl font-medium transition-colors shadow-md"
-          >
-            <Plus className="w-5 h-5" />
-            New Post
-          </button>
+          <div className="flex items-center gap-2">
+            {/* View toggle */}
+            <div className="flex items-center bg-card border border-border rounded-xl overflow-hidden">
+              <button
+                onClick={() => setViewMode('list')}
+                className={`p-2.5 transition-colors ${viewMode === 'list' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-accent'}`}
+                title="List view"
+              >
+                <List className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setViewMode('calendar')}
+                className={`p-2.5 transition-colors ${viewMode === 'calendar' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-accent'}`}
+                title="Calendar view"
+              >
+                <LayoutGrid className="w-4 h-4" />
+              </button>
+            </div>
+            <button
+              onClick={handleNewPost}
+              className="flex items-center gap-2 px-6 py-3 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl font-medium transition-colors shadow-md"
+            >
+              <Plus className="w-5 h-5" />
+              New Post
+            </button>
+          </div>
         </div>
       </div>
 
@@ -197,11 +220,20 @@ export function Schedule() {
           </button>
         </div>
 
-        {loading ? (
+        {/* Calendar view */}
+        {viewMode === 'calendar' && !loading && (
+          <CalendarView
+            posts={posts.filter((p) => p.status === 'scheduled' && p.scheduled_date)}
+            timezone={timezone}
+            onPostClick={(p) => handleEdit(p as Post)}
+          />
+        )}
+
+        {viewMode === 'list' && loading ? (
           <div className="p-8 rounded-xl text-center bg-card border border-border">
             <p className="text-muted-foreground">Loading...</p>
           </div>
-        ) : filteredPosts.length === 0 ? (
+        ) : viewMode === 'list' && filteredPosts.length === 0 ? (
           <div className="p-12 rounded-xl text-center bg-card border border-border shadow-md">
             <Calendar className="w-16 h-16 mx-auto mb-4 text-muted-foreground opacity-50" />
             <h3 className="text-xl font-bold mb-2 text-foreground">
@@ -218,7 +250,7 @@ export function Schedule() {
               Create Post
             </button>
           </div>
-        ) : (
+        ) : viewMode === 'list' ? (
           <div className="grid gap-4">
             {filteredPosts.map((post) => {
               const Icon = getPlatformIcon(post.platform);
@@ -302,8 +334,8 @@ export function Schedule() {
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
                           <Clock className="w-4 h-4" />
                           {post.publish_status === 'published' && post.published_at
-                            ? `Published ${format(new Date(post.published_at), 'MMM d, yyyy h:mm a')}`
-                            : format(new Date(post.scheduled_date), 'MMM d, yyyy h:mm a')}
+                            ? `Published ${formatInTz(post.published_at, timezone)}`
+                            : formatInTz(post.scheduled_date!, timezone)}
                         </div>
                       )}
 

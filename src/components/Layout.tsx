@@ -1,6 +1,7 @@
 import { ReactNode, useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { TokenHealthBanner } from './TokenHealthBanner';
 import {
   Home,
   Settings as SettingsIcon,
@@ -299,6 +300,7 @@ export function Layout({ children }: LayoutProps) {
 
         {/* ── Main content ─────────────────────────────── */}
         <main className="flex-1 p-4 sm:p-6 lg:p-8 min-w-0 overflow-x-hidden">
+          <TokenHealthBanner />
           {children}
         </main>
       </div>

@@ -1,8 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
-import { X, Instagram, Youtube, Video, Calendar, Upload, Sparkles, ArrowLeft, AlertCircle, Crop } from 'lucide-react';
+import { X, Instagram, Youtube, Video, Calendar, Upload, Sparkles, ArrowLeft, AlertCircle, Crop, Eye, EyeOff } from 'lucide-react';
 import { ImageCropper } from './ImageCropper';
+import { PostPreview } from './PostPreview';
+import { useTimezone } from '../hooks/useTimezone';
+import { utcToLocalInput, localInputToUtc, nowAsLocalInput } from '../lib/timezone';
 
 interface PostComposerProps {
   onClose: () => void;
@@ -59,11 +62,13 @@ function getSaveError(error: any): string {
 
 export function PostComposer({ onClose, onSuccess, asPage = false, editPost }: PostComposerProps) {
   const { user } = useAuth();
+  const { timezone } = useTimezone();
 
   const [platform, setPlatform] = useState<Platform>(editPost?.platform as Platform || 'instagram');
   const [caption, setCaption] = useState(editPost?.caption || '');
   const [scheduledDate, setScheduledDate] = useState(
-    editPost?.scheduled_date ? new Date(editPost.scheduled_date).toISOString().slice(0, 16) : ''
+    // Convert stored UTC to local datetime-local value in the user's timezone
+    editPost?.scheduled_date ? utcToLocalInput(editPost.scheduled_date, timezone) : ''
   );
   const [mediaFiles, setMediaFiles] = useState<File[]>([]);
   const [mediaUrls, setMediaUrls] = useState<string[]>(editPost?.media_urls || []);
@@ -71,6 +76,47 @@ export function PostComposer({ onClose, onSuccess, asPage = false, editPost }: P
   const [saving, setSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [cropperFile, setCropperFile] = useState<File | null>(null);
+  const [showPreview, setShowPreview] = useState(false);
+  const [autosaveStatus, setAutosaveStatus] = useState<'idle' | 'saved'>('idle');
+  const [abEnabled, setAbEnabled] = useState(false);
+  const [scheduledDateB, setScheduledDateB] = useState('');
+  const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── Autosave draft to localStorage ──────────────────────────────────────────
+  const DRAFT_KEY = editPost ? `draft_edit_${editPost.id}` : `draft_new_${user?.id}`;
+
+  // Restore draft on mount (only for new posts, not edits)
+  useEffect(() => {
+    if (editPost) return; // don't overwrite edit form with stale draft
+    try {
+      const saved = localStorage.getItem(DRAFT_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.caption && !caption) setCaption(parsed.caption);
+        if (parsed.platform) setPlatform(parsed.platform as Platform);
+        if (parsed.scheduledDate) setScheduledDate(parsed.scheduledDate);
+      }
+    } catch (_) { /* ignore */ }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Debounced autosave whenever caption/platform/scheduledDate changes
+  useEffect(() => {
+    if (editPost) return; // only autosave new posts
+    if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
+    autosaveTimer.current = setTimeout(() => {
+      try {
+        localStorage.setItem(DRAFT_KEY, JSON.stringify({ caption, platform, scheduledDate }));
+        setAutosaveStatus('saved');
+        setTimeout(() => setAutosaveStatus('idle'), 2000);
+      } catch (_) { /* ignore */ }
+    }, 1000);
+    return () => { if (autosaveTimer.current) clearTimeout(autosaveTimer.current); };
+  }, [caption, platform, scheduledDate]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Clear draft on successful save
+  const clearDraft = () => {
+    try { localStorage.removeItem(DRAFT_KEY); } catch (_) { /* ignore */ }
+  };
 
   const limits = PLATFORM_LIMITS[platform];
   const charactersRemaining = limits.caption - caption.length;
@@ -166,6 +212,10 @@ export function PostComposer({ onClose, onSuccess, asPage = false, editPost }: P
       setErrorMessage('Please select a date and time to schedule this post.');
       return;
     }
+    if (status === 'scheduled' && abEnabled && !scheduledDateB) {
+      setErrorMessage('Please select an alternate time for Version B, or disable A/B testing.');
+      return;
+    }
 
     setSaving(true);
     setUploading(mediaFiles.length > 0);
@@ -174,32 +224,57 @@ export function PostComposer({ onClose, onSuccess, asPage = false, editPost }: P
       const newMediaUrls = await uploadMedia();
       const allMediaUrls = [...mediaUrls, ...newMediaUrls];
 
-      const postData = {
+      const basePost = {
         user_id: user.id,
         platform,
         caption: caption.trim(),
         media_url: allMediaUrls[0] || null,
         media_urls: allMediaUrls,
-        scheduled_date: status === 'scheduled' ? new Date(scheduledDate).toISOString() : null,
-        scheduled_for: status === 'scheduled' ? new Date(scheduledDate).toISOString() : null,
         status,
       };
 
-      if (editPost) {
-        const { error } = await supabase
-          .from('content_posts')
-          .update(postData)
-          .eq('id', editPost.id);
-
+      // A/B test: create two posts with shared pair ID
+      if (status === 'scheduled' && abEnabled && scheduledDateB && !editPost) {
+        const pairId = crypto.randomUUID();
+        const { error } = await supabase.from('content_posts').insert([
+          {
+            ...basePost,
+            scheduled_date: localInputToUtc(scheduledDate, timezone),
+            scheduled_for: localInputToUtc(scheduledDate, timezone),
+            ab_test_group: 'A',
+            ab_pair_id: pairId,
+          },
+          {
+            ...basePost,
+            scheduled_date: localInputToUtc(scheduledDateB, timezone),
+            scheduled_for: localInputToUtc(scheduledDateB, timezone),
+            ab_test_group: 'B',
+            ab_pair_id: pairId,
+          },
+        ]);
         if (error) throw error;
       } else {
-        const { error } = await supabase
-          .from('content_posts')
-          .insert([postData]);
+        const postData = {
+          ...basePost,
+          scheduled_date: status === 'scheduled' ? localInputToUtc(scheduledDate, timezone) : null,
+          scheduled_for: status === 'scheduled' ? localInputToUtc(scheduledDate, timezone) : null,
+        };
 
-        if (error) throw error;
+        if (editPost) {
+          const { error } = await supabase
+            .from('content_posts')
+            .update(postData)
+            .eq('id', editPost.id);
+          if (error) throw error;
+        } else {
+          const { error } = await supabase
+            .from('content_posts')
+            .insert([postData]);
+          if (error) throw error;
+        }
       }
 
+      clearDraft();
       onSuccess();
       onClose();
     } catch (error: any) {
@@ -333,8 +408,8 @@ export function PostComposer({ onClose, onSuccess, asPage = false, editPost }: P
       </div>
 
       {/* Schedule */}
-      <div>
-        <label className="block text-sm font-medium mb-3 text-foreground">
+      <div className="space-y-3">
+        <label className="block text-sm font-medium text-foreground">
           <div className="flex items-center gap-2">
             <Calendar className="w-4 h-4" />
             Schedule (Optional)
@@ -344,9 +419,73 @@ export function PostComposer({ onClose, onSuccess, asPage = false, editPost }: P
           type="datetime-local"
           value={scheduledDate}
           onChange={(e) => setScheduledDate(e.target.value)}
-          min={new Date().toISOString().slice(0, 16)}
+          min={nowAsLocalInput(timezone)}
           className="w-full px-4 py-3 rounded-xl border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
         />
+
+        {/* A/B test toggle (only for new scheduled posts) */}
+        {!editPost && scheduledDate && (
+          <div className="rounded-xl border border-border bg-muted/30 p-4 space-y-3">
+            <label className="flex items-center gap-3 cursor-pointer">
+              <div className="relative">
+                <input
+                  type="checkbox"
+                  checked={abEnabled}
+                  onChange={(e) => setAbEnabled(e.target.checked)}
+                  className="sr-only"
+                />
+                <div className={`w-10 h-5 rounded-full transition-colors ${abEnabled ? 'bg-primary' : 'bg-border'}`} />
+                <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${abEnabled ? 'translate-x-5' : ''}`} />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-foreground">A/B Time Test</p>
+                <p className="text-xs text-muted-foreground">Post to two time slots and compare performance after 7 days</p>
+              </div>
+            </label>
+
+            {abEnabled && (
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1.5">
+                  Version B — Alternate time slot
+                </label>
+                <input
+                  type="datetime-local"
+                  value={scheduledDateB}
+                  onChange={(e) => setScheduledDateB(e.target.value)}
+                  min={nowAsLocalInput(timezone)}
+                  className="w-full px-4 py-3 rounded-xl border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
+                />
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Autosave indicator */}
+      {!editPost && autosaveStatus === 'saved' && (
+        <p className="text-xs text-emerald-600 text-right">Draft autosaved</p>
+      )}
+
+      {/* Post preview toggle */}
+      <div>
+        <button
+          type="button"
+          onClick={() => setShowPreview((v) => !v)}
+          className="flex items-center gap-2 text-sm font-medium text-primary hover:text-primary/80 transition-colors"
+        >
+          {showPreview ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+          {showPreview ? 'Hide Preview' : 'Preview Post'}
+        </button>
+        {showPreview && (
+          <div className="mt-4">
+            <PostPreview
+              platform={platform}
+              caption={caption}
+              mediaUrls={mediaUrls}
+              mediaFiles={mediaFiles}
+            />
+          </div>
+        )}
       </div>
 
       {/* Error banner */}

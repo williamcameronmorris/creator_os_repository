@@ -29,6 +29,30 @@ function ThreadsIcon({ className }: { className?: string }) {
 
 type Platform = 'all' | 'instagram' | 'youtube' | 'threads';
 type FilterMode = 'all' | 'unread' | 'unanswered';
+type PriorityFilter = 'all' | 'high_priority' | 'questions' | 'high_engagement';
+
+/**
+ * Compute a priority score for a comment.
+ * Higher = more important to respond to.
+ */
+function priorityScore(c: Comment): number {
+  let score = 0;
+  // Engagement on the comment itself
+  score += Math.min(c.likes_count || 0, 10); // up to 10 pts
+  // Contains a question
+  if (c.text?.includes('?')) score += 5;
+  // Unread
+  if (!c.is_read) score += 3;
+  // Unanswered top-level comment
+  if (!c.is_replied && !c.parent_comment_id) score += 2;
+  return score;
+}
+
+function priorityLabel(score: number): { label: string; color: string } | null {
+  if (score >= 10) return { label: 'High Priority', color: 'text-red-600 bg-red-50' };
+  if (score >= 5) return { label: 'Medium', color: 'text-amber-600 bg-amber-50' };
+  return null;
+}
 
 interface Comment {
   id: string;
@@ -99,6 +123,8 @@ export function Inbox() {
   const [replyError, setReplyError] = useState<string | null>(null);
   const [replySuccess, setReplySuccess] = useState(false);
   const [counts, setCounts] = useState({ total: 0, unread: 0, unanswered: 0 });
+  const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>('all');
+  const [sortByPriority, setSortByPriority] = useState(false);
 
   const loadComments = useCallback(async () => {
     if (!user) return;
@@ -127,7 +153,17 @@ export function Inbox() {
           )
         : all;
 
-      setComments(filtered);
+      // Apply priority filter
+      let priorityFiltered = filtered;
+      if (priorityFilter === 'high_priority') {
+        priorityFiltered = filtered.filter((c) => priorityScore(c) >= 10);
+      } else if (priorityFilter === 'questions') {
+        priorityFiltered = filtered.filter((c) => c.text?.includes('?'));
+      } else if (priorityFilter === 'high_engagement') {
+        priorityFiltered = filtered.filter((c) => (c.likes_count || 0) >= 5);
+      }
+
+      setComments(priorityFiltered);
 
       // Update counts
       const { data: countData } = await supabase
@@ -145,7 +181,7 @@ export function Inbox() {
     } finally {
       setLoading(false);
     }
-  }, [user, platform, filterMode, search]);
+  }, [user, platform, filterMode, search, priorityFilter]);
 
   useEffect(() => {
     loadComments();
@@ -346,6 +382,39 @@ export function Inbox() {
             </div>
           </div>
 
+          {/* Priority filter row */}
+          <div className="flex items-center gap-2 mb-3 flex-wrap">
+            <Filter className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+            {([
+              { key: 'all', label: 'All' },
+              { key: 'high_priority', label: '🔴 High Priority' },
+              { key: 'questions', label: '❓ Questions' },
+              { key: 'high_engagement', label: '💜 High Engagement' },
+            ] as const).map((opt) => (
+              <button
+                key={opt.key}
+                onClick={() => setPriorityFilter(opt.key)}
+                className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
+                  priorityFilter === opt.key
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-muted text-muted-foreground hover:bg-accent'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+            <button
+              onClick={() => setSortByPriority((v) => !v)}
+              className={`ml-auto px-3 py-1 rounded-full text-xs font-medium transition-all flex items-center gap-1 ${
+                sortByPriority ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent'
+              }`}
+              title="Sort by priority score"
+            >
+              <Filter className="w-3 h-3" />
+              Sort by Priority
+            </button>
+          </div>
+
           {/* Comment list */}
           {loading ? (
             <div className="flex items-center justify-center h-64">
@@ -372,13 +441,17 @@ export function Inbox() {
             </div>
           ) : (
             <div className="space-y-1.5">
-              {comments.map((comment) => {
+              {(sortByPriority
+                ? [...comments].sort((a, b) => priorityScore(b) - priorityScore(a))
+                : comments
+              ).map((comment) => {
                 const config = getPlatformConfig(comment.platform);
                 const PlatIcon = config.Icon;
                 const isSelected = selectedComment?.id === comment.id;
                 const timeAgo = comment.comment_created_at
                   ? formatDistanceToNow(parseISO(comment.comment_created_at), { addSuffix: true })
                   : '';
+                const pLabel = priorityLabel(priorityScore(comment));
 
                 return (
                   <button
@@ -426,12 +499,19 @@ export function Inbox() {
                           <span className="text-xs text-muted-foreground ml-auto flex-shrink-0">{timeAgo}</span>
                         </div>
                         <p className="text-sm text-muted-foreground line-clamp-2">{comment.text}</p>
-                        {comment.likes_count > 0 && (
-                          <div className="flex items-center gap-1 mt-1">
-                            <Heart className="w-3 h-3 text-pink-500" />
-                            <span className="text-xs text-muted-foreground">{comment.likes_count}</span>
-                          </div>
-                        )}
+                        <div className="flex items-center gap-2 mt-1">
+                          {comment.likes_count > 0 && (
+                            <div className="flex items-center gap-1">
+                              <Heart className="w-3 h-3 text-pink-500" />
+                              <span className="text-xs text-muted-foreground">{comment.likes_count}</span>
+                            </div>
+                          )}
+                          {pLabel && (
+                            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${pLabel.color}`}>
+                              {pLabel.label}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </button>

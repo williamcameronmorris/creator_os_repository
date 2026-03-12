@@ -4,8 +4,9 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import {
   User, Instagram, Youtube, Video, Edit2, Save, X,
-  Phone, MapPin, Globe, Mail, AtSign, CheckCircle,
+  Phone, MapPin, Globe, Mail, AtSign, CheckCircle, Clock,
 } from 'lucide-react';
+import { COMMON_TIMEZONES, detectBrowserTimezone } from '../lib/timezone';
 
 // Threads icon (SVG inline since lucide doesn't have one)
 function ThreadsIcon({ className }: { className?: string }) {
@@ -36,6 +37,7 @@ interface ProfileData {
   youtube_access_token: string | null;
   tiktok_access_token: string | null;
   threads_access_token: string | null;
+  timezone: string;
 }
 
 const emptyProfile: ProfileData = {
@@ -58,6 +60,7 @@ const emptyProfile: ProfileData = {
   youtube_access_token: null,
   tiktok_access_token: null,
   threads_access_token: null,
+  timezone: 'America/New_York',
 };
 
 export function Profile() {
@@ -94,6 +97,7 @@ export function Profile() {
       city: profile.city,
       state: profile.state,
       website: profile.website,
+      timezone: profile.timezone || detectBrowserTimezone(),
     });
     setEditing(true);
   };
@@ -280,6 +284,30 @@ export function Profile() {
           <Field label="State" icon={MapPin} field="state" placeholder="State" />
           <div className="sm:col-span-2">
             <Field label="Website" icon={Globe} field="website" placeholder="https://yoursite.com" type="url" />
+          </div>
+          <div className="sm:col-span-2">
+            <label className="block text-xs font-semibold text-slate-500 mb-1.5 uppercase tracking-wide">Timezone</label>
+            {editing ? (
+              <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-violet-200 bg-violet-50 focus-within:border-violet-400 transition-colors">
+                <Clock className="w-4 h-4 text-violet-400 flex-shrink-0" />
+                <select
+                  value={(editForm.timezone as string) ?? detectBrowserTimezone()}
+                  onChange={(e) => setEditForm((f) => ({ ...f, timezone: e.target.value }))}
+                  className="flex-1 bg-transparent text-sm text-slate-800 outline-none"
+                >
+                  {COMMON_TIMEZONES.map((tz) => (
+                    <option key={tz.value} value={tz.value}>{tz.label}</option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-slate-100 bg-slate-50">
+                <Clock className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                <span className="text-sm text-slate-800">
+                  {COMMON_TIMEZONES.find((tz) => tz.value === profile.timezone)?.label || profile.timezone || 'Not set'}
+                </span>
+              </div>
+            )}
           </div>
           <div className="sm:col-span-2">
             <label className="block text-xs font-semibold text-slate-500 mb-1.5 uppercase tracking-wide">Bio</label>

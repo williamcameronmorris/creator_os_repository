@@ -10,8 +10,10 @@ import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, PieChart, Pie, Cell, Legend,
 } from 'recharts';
-import { format, subDays, parseISO, getDay, getHours } from 'date-fns';
+import { format, subDays, parseISO } from 'date-fns';
 import { PaywallModal } from '../components/PaywallModal';
+import { useTimezone } from '../hooks/useTimezone';
+import { getLocalDayAndHour } from '../lib/timezone';
 
 function ThreadsIcon({ className }: { className?: string }) {
   return (
@@ -71,8 +73,10 @@ export function Analytics() {
   const [engagementDist, setEngagementDist] = useState<any[]>([]);
   const [bestTimeHeatmap, setBestTimeHeatmap] = useState<number[][]>([]);
   const [topPosts, setTopPosts] = useState<PostPerformance[]>([]);
+  const [abResults, setAbResults] = useState<any[]>([]);
 
   const isPremium = tier === 'paid';
+  const { timezone } = useTimezone();
 
   useEffect(() => {
     if (user) loadAnalytics();
@@ -205,14 +209,12 @@ export function Analytics() {
     setEngagementDist(distData);
 
     // ── Best time to post heatmap (day × hour grid) ──
-    // 7 days × 24 hours
+    // 7 days × 24 hours — uses user's timezone so hours reflect local time
     const grid: number[][] = Array.from({ length: 7 }, () => Array(24).fill(0));
     for (const p of posts) {
       if (!p.published_date) continue;
       try {
-        const dt = parseISO(p.published_date);
-        const day = getDay(dt);
-        const hour = getHours(dt);
+        const { day, hour } = getLocalDayAndHour(p.published_date, timezone);
         const eng = (p.likes || 0) + (p.comments || 0);
         grid[day][hour] += eng;
       } catch (_) { /* skip invalid dates */ }
@@ -244,6 +246,27 @@ export function Analytics() {
       }))
     );
 
+    // ── A/B test results ──
+    // Fetch published posts that have an ab_pair_id and group by pair
+    const { data: abPosts } = await supabase
+      .from('content_posts')
+      .select('id, ab_pair_id, ab_test_group, platform, caption, published_date, likes, comments, views, scheduled_date')
+      .eq('user_id', user.id)
+      .eq('status', 'published')
+      .not('ab_pair_id', 'is', null);
+
+    if (abPosts && abPosts.length > 0) {
+      const pairMap: Record<string, { A?: any; B?: any }> = {};
+      for (const p of abPosts) {
+        if (!pairMap[p.ab_pair_id]) pairMap[p.ab_pair_id] = {};
+        pairMap[p.ab_pair_id][p.ab_test_group as 'A' | 'B'] = p;
+      }
+      const pairs = Object.values(pairMap).filter((pair) => pair.A && pair.B);
+      setAbResults(pairs);
+    } else {
+      setAbResults([]);
+    }
+
     setLoading(false);
   };
 
@@ -262,6 +285,22 @@ export function Analytics() {
 
   // Heatmap max for normalizing cell opacity
   const heatmapMax = Math.max(1, ...bestTimeHeatmap.flat());
+
+  // ── Performance benchmarks ──
+  // Engagement rate benchmarks (engagement / followers) per period
+  const engagementRate = summaryStats.totalFollowers > 0
+    ? (summaryStats.totalEngagement / summaryStats.totalFollowers) * 100
+    : 0;
+
+  const getBenchmark = (rate: number): { label: string; color: string; tip: string } => {
+    if (rate >= 3) return { label: 'Excellent', color: 'text-emerald-600 bg-emerald-50', tip: 'Top 10% of creators. Keep doing what you\'re doing!' };
+    if (rate >= 1) return { label: 'Good', color: 'text-blue-600 bg-blue-50', tip: 'Above average. Posting consistently and engaging with comments will push this higher.' };
+    if (rate >= 0.5) return { label: 'Average', color: 'text-amber-600 bg-amber-50', tip: 'Industry average. Try posting at your best times and experimenting with content formats.' };
+    if (rate > 0) return { label: 'Needs Work', color: 'text-red-600 bg-red-50', tip: 'Below average. Focus on posting when your audience is active and improving captions.' };
+    return { label: 'No data', color: 'text-muted-foreground bg-muted', tip: 'Not enough data yet.' };
+  };
+
+  const benchmark = getBenchmark(engagementRate);
 
   const hasData = summaryStats.totalEngagement > 0 || summaryStats.totalFollowers > 0 || topPosts.length > 0;
 
@@ -344,6 +383,32 @@ export function Analytics() {
               </div>
             ))}
           </div>
+
+          {/* Performance benchmark card */}
+          {summaryStats.totalFollowers > 0 && (
+            <div className={`px-5 py-4 rounded-xl border flex items-start gap-4 ${benchmark.color}`}>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${benchmark.color}`}>
+                    {benchmark.label}
+                  </span>
+                  <span className="text-sm font-semibold">
+                    {engagementRate.toFixed(2)}% engagement rate
+                  </span>
+                </div>
+                <p className="text-xs opacity-80">{benchmark.tip}</p>
+              </div>
+              <div className="text-right flex-shrink-0">
+                <p className="text-[10px] opacity-60 mb-0.5">vs. Industry</p>
+                <div className="flex items-center gap-1 text-[11px] font-medium">
+                  <span className="opacity-60">0.5%</span>
+                  <span className="opacity-40">avg</span>
+                  <span className="opacity-60 ml-1">3%</span>
+                  <span className="opacity-40">top</span>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Engagement over time */}
           <div className="p-6 rounded-xl bg-card border border-border shadow-sm">
@@ -579,6 +644,54 @@ export function Analytics() {
               </div>
             )}
           </div>
+          {/* A/B test results */}
+          {abResults.length > 0 && (
+            <div className="p-6 rounded-xl bg-card border border-border shadow-sm">
+              <h3 className="text-lg font-bold text-foreground mb-1">A/B Time Test Results</h3>
+              <p className="text-sm text-muted-foreground mb-5">Compare engagement between your two scheduled time slots</p>
+              <div className="space-y-4">
+                {abResults.map((pair, idx) => {
+                  const a = pair.A;
+                  const b = pair.B;
+                  const engA = (a.likes || 0) + (a.comments || 0);
+                  const engB = (b.likes || 0) + (b.comments || 0);
+                  const winner = engA > engB ? 'A' : engB > engA ? 'B' : null;
+                  return (
+                    <div key={idx} className="rounded-xl border border-border overflow-hidden">
+                      <div className="px-4 py-2 bg-muted text-xs font-semibold text-muted-foreground uppercase">
+                        Test #{idx + 1} — {a.platform}
+                      </div>
+                      <div className="grid grid-cols-2 divide-x divide-border">
+                        {[a, b].map((post, vi) => {
+                          const label = vi === 0 ? 'A' : 'B';
+                          const eng = (post.likes || 0) + (post.comments || 0);
+                          const isWinner = winner === label;
+                          return (
+                            <div key={label} className={`p-4 ${isWinner ? 'bg-emerald-50' : ''}`}>
+                              <div className="flex items-center gap-2 mb-2">
+                                <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${isWinner ? 'bg-emerald-500 text-white' : 'bg-muted text-muted-foreground'}`}>
+                                  Version {label} {isWinner ? '🏆' : ''}
+                                </span>
+                              </div>
+                              <p className="text-xs text-muted-foreground mb-1">
+                                {post.scheduled_date ? formatInTz(post.scheduled_date, timezone) : 'Unknown time'}
+                              </p>
+                              <p className="text-sm text-foreground line-clamp-2 mb-2">{post.caption || 'No caption'}</p>
+                              <div className="flex gap-3 text-sm">
+                                <span className="text-pink-500 font-semibold">{(post.likes || 0)} likes</span>
+                                <span className="text-blue-500 font-semibold">{(post.comments || 0)} comments</span>
+                                <span className="font-bold text-foreground">{eng} total</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </>
       )}
 
