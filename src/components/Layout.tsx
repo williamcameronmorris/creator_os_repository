@@ -1,6 +1,7 @@
 import { ReactNode, useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useTheme } from '../contexts/ThemeContext';
 import { TokenHealthBanner } from './TokenHealthBanner';
 import {
   Home,
@@ -10,13 +11,15 @@ import {
   Image,
   TrendingUp,
   User,
-  ChevronRight,
+  ChevronLeft,
   X,
   Sparkles,
   Bookmark,
   Video,
   MessageCircle,
   Repeat2,
+  Sun,
+  Moon,
 } from 'lucide-react';
 
 interface LayoutProps {
@@ -31,7 +34,6 @@ interface NavSection {
 interface NavItem {
   path: string;
   label: string;
-  description?: string;
   icon: any;
 }
 
@@ -39,11 +41,11 @@ type BottomNavTab = 'studio' | 'settings' | null;
 
 export function Layout({ children }: LayoutProps) {
   const { user, signOut } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
   const [activeBottomTab, setActiveBottomTab] = useState<BottomNavTab>(null);
 
-  // Swipe back gesture state
   const [swipeProgress, setSwipeProgress] = useState(0);
   const touchStartX = useRef<number | null>(null);
   const touchStartY = useRef<number | null>(null);
@@ -51,27 +53,27 @@ export function Layout({ children }: LayoutProps) {
 
   const navigationSections: NavSection[] = [
     {
-      title: 'HEADQUARTERS',
+      title: 'Headquarters',
       items: [
         { path: '/dashboard', label: 'Daily Pulse', icon: Home },
       ],
     },
     {
-      title: 'THE STUDIO',
+      title: 'Studio',
       items: [
-        { path: '/studio', label: 'Content Workflow', icon: Video },
-        { path: '/schedule', label: 'Content Schedule', icon: Calendar },
-        { path: '/saved-ideas', label: 'Saved Ideas', icon: Bookmark },
-        { path: '/media', label: 'Media Library', icon: Image },
-        { path: '/analytics', label: 'Audience Growth', icon: TrendingUp },
-        { path: '/inbox', label: 'Comment Inbox', icon: MessageCircle },
-        { path: '/repurpose', label: 'Repurpose Content', icon: Repeat2 },
+        { path: '/studio',      label: 'Content Workflow',  icon: Video },
+        { path: '/schedule',    label: 'Content Schedule',  icon: Calendar },
+        { path: '/saved-ideas', label: 'Saved Ideas',       icon: Bookmark },
+        { path: '/media',       label: 'Media Library',     icon: Image },
+        { path: '/analytics',   label: 'Audience Growth',   icon: TrendingUp },
+        { path: '/inbox',       label: 'Comment Inbox',     icon: MessageCircle },
+        { path: '/repurpose',   label: 'Repurpose Content', icon: Repeat2 },
       ],
     },
     {
-      title: 'SYSTEM',
+      title: 'Account',
       items: [
-        { path: '/profile', label: 'Profile', icon: User },
+        { path: '/profile',  label: 'Profile',  icon: User },
         { path: '/settings', label: 'Settings', icon: SettingsIcon },
       ],
     },
@@ -81,20 +83,15 @@ export function Layout({ children }: LayoutProps) {
     location.pathname === path || location.pathname.startsWith(path + '/');
 
   const closeBottomNav = () => setActiveBottomTab(null);
-
   const openBottomTab = (tab: BottomNavTab) =>
     setActiveBottomTab(activeBottomTab === tab ? null : tab);
-
   const canGoBack = () => !['/', '/dashboard'].includes(location.pathname);
 
-  // Swipe-back gesture
   const handleTouchStart = (e: TouchEvent) => {
     const touch = e.touches[0];
     touchStartX.current = touch.clientX;
     touchStartY.current = touch.clientY;
-    if (touch.clientX <= 50 && canGoBack()) {
-      isSwipingBack.current = true;
-    }
+    if (touch.clientX <= 50 && canGoBack()) isSwipingBack.current = true;
   };
 
   const handleTouchMove = (e: TouchEvent) => {
@@ -147,19 +144,14 @@ export function Layout({ children }: LayoutProps) {
           key={item.path}
           to={item.path}
           onClick={onClick}
-          className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-sm font-medium ${
+          className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150 ${
             active
-              ? 'bg-violet-100 text-violet-700'
-              : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
+              ? 'bg-primary/10 text-primary dark:bg-primary/15 dark:text-primary'
+              : 'text-muted-foreground hover:text-foreground hover:bg-accent'
           }`}
         >
-          <Icon className={`w-4 h-4 flex-shrink-0 ${active ? 'text-violet-600' : ''}`} />
-          <div className="flex-1 min-w-0">
-            <div>{item.label}</div>
-            {item.description && (
-              <div className="text-xs font-normal opacity-60 truncate">{item.description}</div>
-            )}
-          </div>
+          <Icon className={`w-4 h-4 flex-shrink-0 ${active ? 'text-primary' : ''}`} />
+          {item.label}
         </Link>
       );
     });
@@ -172,30 +164,30 @@ export function Layout({ children }: LayoutProps) {
       settings: navigationSections[2],
     };
     const section = sectionMap[activeBottomTab];
-    const title = activeBottomTab === 'studio' ? 'The Studio' : 'Settings';
+    const title = activeBottomTab === 'studio' ? 'Studio' : 'Account';
 
     return (
       <>
-        <div className="fixed inset-0 bg-black/30 z-40 lg:hidden" onClick={closeBottomNav} />
-        <div className="fixed bottom-16 left-0 right-0 bg-white border-t border-gray-100 z-50 lg:hidden max-h-[65vh] overflow-y-auto rounded-t-3xl shadow-xl">
+        <div className="fixed inset-0 bg-black/50 z-40 lg:hidden backdrop-blur-sm" onClick={closeBottomNav} />
+        <div className="fixed bottom-16 left-0 right-0 bg-card border-t border-border z-50 lg:hidden max-h-[65vh] overflow-y-auto rounded-t-2xl shadow-2xl">
           <div className="p-5">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-black text-gray-900">{title}</h3>
+              <h3 className="text-base font-semibold text-foreground">{title}</h3>
               <button
                 onClick={closeBottomNav}
-                className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 transition-colors"
+                className="p-1.5 rounded-lg hover:bg-accent text-muted-foreground transition-colors"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
-            <div className="space-y-1">
+            <div className="space-y-0.5">
               {renderNavLinks(section, closeBottomNav)}
               {activeBottomTab === 'settings' && (
                 <>
-                  <div className="border-t border-gray-100 my-3" />
+                  <div className="border-t border-border my-3" />
                   <button
                     onClick={() => { signOut(); closeBottomNav(); }}
-                    className="flex items-center gap-3 px-3 py-2.5 rounded-xl w-full text-sm font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-all"
+                    className="flex items-center gap-3 px-3 py-2 rounded-lg w-full text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-all"
                   >
                     <LogOut className="w-4 h-4 flex-shrink-0" />
                     Sign Out
@@ -210,58 +202,71 @@ export function Layout({ children }: LayoutProps) {
   };
 
   return (
-    <div className="min-h-screen bg-[#f7f5ff] pb-16 lg:pb-0">
+    <div className="min-h-screen bg-background pb-16 lg:pb-0">
       {/* Swipe-back indicator */}
       {swipeProgress > 0 && (
         <>
           <div
             className="fixed inset-0 bg-black z-[60] pointer-events-none"
-            style={{ opacity: swipeProgress * 0.2 }}
+            style={{ opacity: swipeProgress * 0.15 }}
           />
           <div
             className="fixed left-4 top-1/2 z-[61] pointer-events-none"
             style={{
-              transform: `translateX(${swipeProgress * 60 - 40}px) translateY(-50%)`,
+              transform: `translateX(${swipeProgress * 48 - 32}px) translateY(-50%)`,
               opacity: swipeProgress,
             }}
           >
-            <ChevronRight className="w-8 h-8 text-violet-600 rotate-180" />
+            <ChevronLeft className="w-7 h-7 text-primary" />
           </div>
         </>
       )}
 
-      {/* ── Top header ─────────────────────────────────── */}
-      <header className="bg-white border-b border-gray-100 sticky top-0 z-50">
+      {/* ── Top header ──────────────────────────────────── */}
+      <header className="bg-card border-b border-border sticky top-0 z-50">
         <div className="px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
+          <div className="flex items-center justify-between h-14">
             {/* Logo */}
-            <Link to="/dashboard" className="flex items-center gap-2.5 select-none">
-              <div className="w-2.5 h-2.5 rounded-full bg-violet-600" />
-              <span className="text-lg font-black tracking-tight text-gray-900">
+            <Link to="/dashboard" className="flex items-center gap-2 select-none group">
+              <div className="w-2 h-2 rounded-full bg-primary group-hover:scale-110 transition-transform" />
+              <span className="text-[15px] font-semibold tracking-tight text-foreground">
                 Creator Command
               </span>
             </Link>
 
             {/* Desktop right side */}
-            <div className="hidden lg:flex items-center gap-3">
-              <span className="text-sm text-gray-400 truncate max-w-[180px]">
+            <div className="hidden lg:flex items-center gap-2">
+              {/* Theme toggle */}
+              <button
+                onClick={toggleTheme}
+                className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+              >
+                {theme === 'dark'
+                  ? <Sun className="w-4 h-4" />
+                  : <Moon className="w-4 h-4" />
+                }
+              </button>
+              <span className="text-xs text-muted-foreground truncate max-w-[160px]">
                 {user?.email}
               </span>
-              <button
-                onClick={() => signOut()}
-                className="p-2 rounded-xl hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-colors"
-                title="Sign out"
-              >
-                <LogOut className="w-4 h-4" />
-              </button>
-              <div className="w-8 h-8 rounded-full bg-violet-600 flex items-center justify-center text-white text-sm font-bold select-none">
+              <div className="w-7 h-7 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-xs font-semibold select-none">
                 {userInitial}
               </div>
             </div>
 
-            {/* Mobile avatar */}
-            <div className="lg:hidden">
-              <div className="w-8 h-8 rounded-full bg-violet-600 flex items-center justify-center text-white text-sm font-bold select-none">
+            {/* Mobile right side */}
+            <div className="lg:hidden flex items-center gap-2">
+              <button
+                onClick={toggleTheme}
+                className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+              >
+                {theme === 'dark'
+                  ? <Sun className="w-4 h-4" />
+                  : <Moon className="w-4 h-4" />
+                }
+              </button>
+              <div className="w-7 h-7 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-xs font-semibold select-none">
                 {userInitial}
               </div>
             </div>
@@ -272,12 +277,12 @@ export function Layout({ children }: LayoutProps) {
       {renderBottomNavContent()}
 
       <div className="flex overflow-x-hidden">
-        {/* ── Desktop sidebar ─────────────────────────── */}
-        <aside className="w-60 bg-white border-r border-gray-100 min-h-[calc(100vh-4rem)] hidden lg:block flex-shrink-0">
-          <nav className="p-4 space-y-6">
+        {/* ── Desktop sidebar ──────────────────────────── */}
+        <aside className="w-56 bg-sidebar border-r border-sidebar-border min-h-[calc(100vh-3.5rem)] hidden lg:flex flex-col flex-shrink-0">
+          <nav className="flex-1 p-3 space-y-5 overflow-y-auto">
             {navigationSections.map((section) => (
               <div key={section.title}>
-                <p className="text-[10px] font-black tracking-widest text-gray-400 uppercase px-3 mb-2">
+                <p className="text-[10px] font-semibold tracking-widest text-muted-foreground uppercase px-3 mb-1.5">
                   {section.title}
                 </p>
                 <div className="space-y-0.5">
@@ -285,17 +290,18 @@ export function Layout({ children }: LayoutProps) {
                 </div>
               </div>
             ))}
-
-            <div className="border-t border-gray-100 pt-4">
-              <button
-                onClick={() => signOut()}
-                className="flex items-center gap-3 px-3 py-2.5 rounded-xl w-full text-sm font-medium text-gray-400 hover:bg-gray-100 hover:text-gray-900 transition-all"
-              >
-                <LogOut className="w-4 h-4 flex-shrink-0" />
-                Sign Out
-              </button>
-            </div>
           </nav>
+
+          {/* Sidebar footer */}
+          <div className="p-3 border-t border-sidebar-border">
+            <button
+              onClick={() => signOut()}
+              className="flex items-center gap-3 px-3 py-2 rounded-lg w-full text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-all"
+            >
+              <LogOut className="w-4 h-4 flex-shrink-0" />
+              Sign Out
+            </button>
+          </div>
         </aside>
 
         {/* ── Main content ─────────────────────────────── */}
@@ -306,36 +312,36 @@ export function Layout({ children }: LayoutProps) {
       </div>
 
       {/* ── Mobile bottom nav ────────────────────────── */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 z-50 lg:hidden">
-        <div className="flex items-center justify-around h-16">
+      <nav className="fixed bottom-0 left-0 right-0 bg-card border-t border-border z-50 lg:hidden">
+        <div className="flex items-center justify-around h-14">
           <Link
             to="/dashboard"
             className={`flex flex-col items-center justify-center flex-1 h-full gap-1 transition-colors ${
-              isActive('/dashboard') ? 'text-violet-600' : 'text-gray-400 hover:text-gray-700'
+              isActive('/dashboard') ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             <Home className="w-5 h-5" />
-            <span className="text-[10px] font-bold">HQ</span>
+            <span className="text-[9px] font-semibold uppercase tracking-wider">HQ</span>
           </Link>
 
           <button
             onClick={() => openBottomTab('studio')}
             className={`flex flex-col items-center justify-center flex-1 h-full gap-1 transition-colors ${
-              activeBottomTab === 'studio' ? 'text-violet-600' : 'text-gray-400 hover:text-gray-700'
+              activeBottomTab === 'studio' ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             <Sparkles className="w-5 h-5" />
-            <span className="text-[10px] font-bold">Studio</span>
+            <span className="text-[9px] font-semibold uppercase tracking-wider">Studio</span>
           </button>
 
           <button
             onClick={() => openBottomTab('settings')}
             className={`flex flex-col items-center justify-center flex-1 h-full gap-1 transition-colors ${
-              activeBottomTab === 'settings' ? 'text-violet-600' : 'text-gray-400 hover:text-gray-700'
+              activeBottomTab === 'settings' ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             <SettingsIcon className="w-5 h-5" />
-            <span className="text-[10px] font-bold">Settings</span>
+            <span className="text-[9px] font-semibold uppercase tracking-wider">Account</span>
           </button>
         </div>
       </nav>
