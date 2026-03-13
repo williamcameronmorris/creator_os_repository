@@ -2,11 +2,13 @@ import { useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { supabase, type Profile } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { useTheme } from '../contexts/ThemeContext';
 import { Save, TrendingUp, DollarSign, AlertCircle, CheckCircle, Instagram, Youtube, Video, Link2, RefreshCw, X, Palette, Sun, Moon } from 'lucide-react';
 import { getPlatformStatus, getInstagramAuthUrl, getTikTokAuthUrl, getYouTubeAuthUrl, disconnectPlatform, syncPlatform, getMetaAuthUrl, getThreadsAuthUrl, type PlatformStatus } from '../lib/platforms';
 
 export function Settings() {
   const { user } = useAuth();
+  const { theme, setTheme } = useTheme();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -157,30 +159,55 @@ export function Settings() {
         </p>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="p-6 rounded-xl border-2 border-primary bg-secondary text-left">
+          {/* Light Mode */}
+          <button
+            onClick={() => setTheme('light')}
+            className={`p-6 rounded-xl border-2 text-left transition-all ${
+              theme === 'light'
+                ? 'border-primary bg-primary/5'
+                : 'border-border bg-card hover:border-primary/40'
+            }`}
+          >
             <div className="flex items-center gap-3 mb-3">
-              <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-violet-100">
-                <Sun className="w-6 h-6 text-violet-600" />
+              <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-amber-100 dark:bg-amber-500/20">
+                <Sun className="w-6 h-6 text-amber-500" />
               </div>
               <div>
                 <div className="font-semibold text-foreground">Light Mode</div>
                 <div className="text-xs text-muted-foreground">Clean and bright</div>
               </div>
             </div>
-            <div className="text-xs font-semibold text-violet-600">Currently active</div>
-          </div>
+            {theme === 'light' && (
+              <div className="text-xs font-semibold text-primary flex items-center gap-1">
+                <CheckCircle className="w-3 h-3" /> Currently active
+              </div>
+            )}
+          </button>
 
-          <div className="p-6 rounded-xl border-2 border-border bg-card text-left opacity-50 cursor-not-allowed">
+          {/* Dark Mode */}
+          <button
+            onClick={() => setTheme('dark')}
+            className={`p-6 rounded-xl border-2 text-left transition-all ${
+              theme === 'dark'
+                ? 'border-primary bg-primary/5'
+                : 'border-border bg-card hover:border-primary/40'
+            }`}
+          >
             <div className="flex items-center gap-3 mb-3">
-              <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-secondary">
-                <Moon className="w-6 h-6 text-muted-foreground" />
+              <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-indigo-100 dark:bg-indigo-500/20">
+                <Moon className="w-6 h-6 text-indigo-500" />
               </div>
               <div>
                 <div className="font-semibold text-foreground">Dark Mode</div>
-                <div className="text-xs text-muted-foreground">Coming soon</div>
+                <div className="text-xs text-muted-foreground">Deep and premium</div>
               </div>
             </div>
-          </div>
+            {theme === 'dark' && (
+              <div className="text-xs font-semibold text-primary flex items-center gap-1">
+                <CheckCircle className="w-3 h-3" /> Currently active
+              </div>
+            )}
+          </button>
         </div>
       </div>
 

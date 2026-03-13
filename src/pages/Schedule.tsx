@@ -312,24 +312,6 @@ export function Schedule() {
                         {post.caption || 'No caption'}
                       </p>
 
-                      {post.media_urls && post.media_urls.length > 0 && (
-                        <div className="flex items-center gap-2 mb-3">
-                          <div className="flex -space-x-2">
-                            {post.media_urls.slice(0, 3).map((url, idx) => (
-                              <div
-                                key={idx}
-                                className="w-10 h-10 rounded-lg border-2 border-card overflow-hidden"
-                              >
-                                <img src={url} alt="" className="w-full h-full object-cover" />
-                              </div>
-                            ))}
-                          </div>
-                          <span className="text-xs text-muted-foreground">
-                            {post.media_urls.length} {post.media_urls.length === 1 ? 'file' : 'files'}
-                          </span>
-                        </div>
-                      )}
-
                       {post.scheduled_date && (
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
                           <Clock className="w-4 h-4" />
@@ -341,7 +323,7 @@ export function Schedule() {
 
                       {/* Publish error detail */}
                       {post.publish_status === 'failed' && post.publish_error && (
-                        <div className="flex items-start gap-2 mt-2 p-2 rounded-lg bg-red-50 border border-red-200">
+                        <div className="flex items-start gap-2 mt-2 p-2 rounded-lg bg-red-500/10 border border-red-500/20">
                           <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
                           <p className="text-xs text-red-600">{post.publish_error}</p>
                         </div>
@@ -363,6 +345,24 @@ export function Schedule() {
                         ) : null;
                       })()}
                     </div>
+
+                    {/* Prominent media thumbnail */}
+                    {post.media_urls && post.media_urls.length > 0 && (
+                      <div className="relative flex-shrink-0">
+                        <div className="w-20 h-20 rounded-xl overflow-hidden border border-border bg-accent">
+                          <img
+                            src={post.media_urls[0]}
+                            alt=""
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                        {post.media_urls.length > 1 && (
+                          <div className="absolute -bottom-1.5 -right-1.5 px-1.5 py-0.5 bg-card border border-border rounded-md text-xs text-muted-foreground font-semibold shadow-sm">
+                            +{post.media_urls.length - 1}
+                          </div>
+                        )}
+                      </div>
+                    )}
 
                     <div className="flex items-center gap-2">
                       {/* Retry failed posts by resetting publish_status */}

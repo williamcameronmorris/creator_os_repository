@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import ActionDashboard from '../ActionDashboard';
 import { format, parseISO } from 'date-fns';
 import { useDailyPulse } from '../../hooks/useDailyPulse';
+import { useTheme } from '../../contexts/ThemeContext';
 import { ContentRecapCard } from './ContentRecapCard';
 import { EngagementCard } from './EngagementCard';
 import { ComingUpCard } from './ComingUpCard';
@@ -31,11 +32,17 @@ type ExpandedCard = 'content' | 'engagement' | 'schedule' | 'tips' | null;
 const SLIDES = ['home', 'content', 'schedule', 'tips'] as const;
 type Slide = typeof SLIDES[number];
 
-const SLIDE_COLORS: Record<Slide, string> = {
-  home:     '#ede9fe',   // lavender
-  content:  '#ddd6fe',   // purple-200
-  schedule: '#fecdd3',   // rose-200
-  tips:     '#a7f3d0',   // green-200
+const SLIDE_COLORS_LIGHT: Record<Slide, string> = {
+  home:     '#ede9fe',
+  content:  '#ddd6fe',
+  schedule: '#fce7f3',
+  tips:     '#d1fae5',
+};
+const SLIDE_COLORS_DARK: Record<Slide, string> = {
+  home:     '#09090b',
+  content:  '#0d0d0f',
+  schedule: '#0d0d0f',
+  tips:     '#0d0d0f',
 };
 
 // ── Greeting helper ─────────────────────────────────────────────────────────
@@ -92,20 +99,20 @@ function DesktopPulseCard({
   expandedContent: React.ReactNode;
 }) {
   return (
-    <div className="rounded-3xl overflow-hidden shadow-sm bg-white flex flex-col">
+    <div className="rounded-3xl overflow-hidden shadow-sm bg-card border border-border flex flex-col">
       {/* Colored header */}
       <div className={`p-5 ${headerClass}`}>
         <div className="flex items-center justify-between mb-3">
           <p className="text-[10px] font-black tracking-widest uppercase opacity-60">{label}</p>
           <Icon className="w-4 h-4 opacity-50" />
         </div>
-        <h2 className="text-2xl font-black text-gray-900 leading-tight">{title}</h2>
+        <h2 className="text-2xl font-black text-foreground leading-tight">{title}</h2>
       </div>
 
-      {/* White body */}
+      {/* Card body */}
       <div className="p-5 flex flex-col flex-1">
-        <p className="text-4xl font-black text-gray-900 leading-none">{stat}</p>
-        <p className="text-sm text-gray-400 mt-1 mb-3">{statLabel}</p>
+        <p className="text-4xl font-black text-foreground leading-none">{stat}</p>
+        <p className="text-sm text-muted-foreground mt-1 mb-3">{statLabel}</p>
 
         {chips && chips.length > 0 && (
           <div className="flex flex-wrap gap-1.5 mb-4">
@@ -117,7 +124,7 @@ function DesktopPulseCard({
 
         <button
           onClick={onExpand}
-          className="mt-auto w-full flex items-center justify-center gap-1.5 text-sm font-semibold text-gray-500 hover:text-gray-900 py-2.5 border border-gray-100 rounded-2xl hover:bg-gray-50 transition-all"
+          className="mt-auto w-full flex items-center justify-center gap-1.5 text-sm font-semibold text-muted-foreground hover:text-foreground py-2.5 border border-border rounded-2xl hover:bg-accent transition-all"
         >
           {isExpanded ? 'Collapse' : 'Expand'}
           <ChevronRight className={`w-3.5 h-3.5 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
@@ -126,7 +133,7 @@ function DesktopPulseCard({
 
       {/* Expanded inline content */}
       {isExpanded && (
-        <div className="border-t border-gray-50 px-5 pb-5 pt-4 bg-gray-50/50">
+        <div className="border-t border-border px-5 pb-5 pt-4 bg-accent/50">
           {expandedContent}
         </div>
       )}
@@ -139,6 +146,7 @@ function DesktopPulseCard({
 // ═══════════════════════════════════════════════════════════════════════════
 export function DailyPulse() {
   const navigate = useNavigate();
+  const { theme } = useTheme();
   const { data, loading, hasConnectedAccounts, connectedPlatforms, dismissAll, markCardReviewed, refetch } = useDailyPulse();
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [expandedCard, setExpandedCard] = useState<ExpandedCard>(null);
@@ -221,7 +229,7 @@ export function DailyPulse() {
   if (!data) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
-        <p className="text-gray-400">Unable to load daily pulse</p>
+        <p className="text-muted-foreground">Unable to load daily pulse</p>
       </div>
     );
   }
@@ -229,7 +237,8 @@ export function DailyPulse() {
   const isCompleted = !!(data.session?.dismissed_all || data.session?.completed_at);
 
   const currentSlide = SLIDES[slideIndex];
-  const bgColor = SLIDE_COLORS[currentSlide];
+  const slideColors = theme === 'dark' ? SLIDE_COLORS_DARK : SLIDE_COLORS_LIGHT;
+  const bgColor = slideColors[currentSlide];
 
   // ── Expanded card content for desktop grid ─────────────────────────────
   const expandedContentMap: Record<ExpandedCard & string, React.ReactNode> = {
@@ -294,21 +303,21 @@ export function DailyPulse() {
 
   // null = still loading; don't flash the banner before data arrives
   const ConnectBanner = () =>
-    !bannerDismissed && hasConnectedAccounts === false ? (
-      <div className="bg-white border border-gray-100 rounded-3xl p-5 mb-6 shadow-sm">
+    !bannerDismissed && !allConnected ? (
+      <div className="bg-card border border-border rounded-3xl p-5 mb-6 shadow-sm">
         <div className="flex items-start justify-between mb-4">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-2xl bg-violet-100 flex items-center justify-center flex-shrink-0">
-              <Plug className="w-4 h-4 text-violet-600" />
+            <div className="w-9 h-9 rounded-2xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+              <Plug className="w-4 h-4 text-primary" />
             </div>
             <div>
-              <h3 className="text-sm font-black text-gray-900">Connect your platforms</h3>
-              <p className="text-xs text-gray-400 mt-0.5">Pull in real data from your accounts</p>
+              <h3 className="text-sm font-black text-foreground">Connect your platforms</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">Pull in real data from your accounts</p>
             </div>
           </div>
           <button
             onClick={() => setBannerDismissed(true)}
-            className="text-gray-300 hover:text-gray-500 transition-colors p-1"
+            className="text-muted-foreground hover:text-foreground transition-colors p-1"
             aria-label="Skip"
           >
             <X className="w-4 h-4" />
@@ -321,28 +330,28 @@ export function DailyPulse() {
               key={key}
               className={`flex items-center gap-2.5 flex-1 px-3 py-2.5 rounded-2xl border transition-colors ${
                 connected
-                  ? 'bg-emerald-50 border-emerald-200'
-                  : 'bg-gray-50 border-gray-100'
+                  ? 'bg-emerald-500/10 border-emerald-500/30'
+                  : 'bg-accent border-border'
               }`}
             >
               {connected ? (
                 <CheckCircle className="w-4 h-4 text-emerald-500 flex-shrink-0" />
               ) : (
-                <div className="w-4 h-4 rounded-full border-2 border-gray-300 flex-shrink-0" />
+                <div className="w-4 h-4 rounded-full border-2 border-border flex-shrink-0" />
               )}
               <Icon className={`w-3.5 h-3.5 flex-shrink-0 ${connected ? 'text-emerald-500' : iconClass}`} />
-              <span className={`text-xs font-semibold ${connected ? 'text-emerald-700' : 'text-gray-500'}`}>
+              <span className={`text-xs font-semibold ${connected ? 'text-emerald-500' : 'text-muted-foreground'}`}>
                 {label}
               </span>
               {connected && (
-                <span className="text-[10px] text-emerald-500 font-bold ml-auto">Connected</span>
+                <span className="text-[10px] text-emerald-500 font-bold ml-auto">✓</span>
               )}
             </div>
           ))}
 
           <button
             onClick={() => navigate('/settings')}
-            className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl bg-violet-600 hover:bg-violet-700 text-white font-bold text-sm transition-colors flex-shrink-0"
+            className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-sm transition-colors flex-shrink-0"
           >
             Connect
             <ArrowRight className="w-4 h-4" />
@@ -351,7 +360,7 @@ export function DailyPulse() {
 
         <button
           onClick={() => setBannerDismissed(true)}
-          className="mt-3 w-full text-xs text-gray-400 hover:text-gray-600 transition-colors py-1"
+          className="mt-3 w-full text-xs text-muted-foreground hover:text-foreground transition-colors py-1"
         >
           Skip for now
         </button>
@@ -368,14 +377,14 @@ export function DailyPulse() {
         {/* Header */}
         <div className="flex items-start justify-between mb-8">
           <div>
-            <h1 className="text-4xl font-black text-gray-900">
+            <h1 className="text-4xl font-black text-foreground">
               {getGreeting()}, {data.userName} {getEmoji()}
             </h1>
-            <p className="text-gray-400 mt-1 text-base">
+            <p className="text-muted-foreground mt-1 text-base">
               {isCompleted ? "Here's how today is tracking" : `You have ${getThingsToReview()} things to review`}
             </p>
           </div>
-          <span className="text-sm text-gray-400 bg-white px-4 py-2 rounded-full shadow-sm font-medium">
+          <span className="text-sm text-muted-foreground bg-card border border-border px-4 py-2 rounded-full shadow-sm font-medium">
             {format(new Date(), 'EEEE, MMMM d')}
           </span>
         </div>
@@ -442,7 +451,7 @@ export function DailyPulse() {
             <button
               onClick={handleRefresh}
               disabled={isRefreshing}
-              className="flex items-center justify-center gap-2 px-6 py-3 rounded-2xl bg-white border border-gray-200 text-gray-700 font-bold hover:bg-gray-50 transition-colors disabled:opacity-50"
+              className="flex items-center justify-center gap-2 px-6 py-3 rounded-2xl bg-card border border-border text-foreground font-bold hover:bg-accent transition-colors disabled:opacity-50"
             >
               <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
               {isRefreshing ? 'Refreshing...' : 'Refresh Metrics'}
@@ -451,7 +460,7 @@ export function DailyPulse() {
             <>
               <button
                 onClick={handleSkipAll}
-                className="px-6 py-3 rounded-2xl border border-gray-200 bg-white text-gray-500 font-bold hover:bg-gray-50 transition-colors"
+                className="px-6 py-3 rounded-2xl border border-border bg-card text-muted-foreground font-bold hover:bg-accent transition-colors"
               >
                 Skip All
               </button>
@@ -469,9 +478,9 @@ export function DailyPulse() {
         {/* ── COMMAND CENTER section ──────────────────────────────────── */}
         <div className="mt-12">
           <div className="flex items-center gap-4 mb-8">
-            <div className="flex-1 h-px bg-gray-100" />
-            <span className="text-xs font-black tracking-widest text-gray-400 uppercase">Command Center</span>
-            <div className="flex-1 h-px bg-gray-100" />
+            <div className="flex-1 h-px bg-border" />
+            <span className="text-xs font-black tracking-widest text-muted-foreground uppercase">Command Center</span>
+            <div className="flex-1 h-px bg-border" />
           </div>
           <ActionDashboard onNavigate={navigate} embedded={true} />
         </div>
@@ -493,27 +502,27 @@ export function DailyPulse() {
                 Daily Pulse
               </p>
               <div className="flex items-start justify-between">
-                <h1 className="text-3xl font-black text-gray-900 leading-tight">
+                <h1 className="text-3xl font-black text-foreground leading-tight">
                   {getGreeting()},<br />{data.userName}
                   <span className="ml-2">{getEmoji()}</span>
                 </h1>
-                <span className="text-xs text-gray-500 bg-white/70 px-3 py-1.5 rounded-full font-medium mt-1">
+                <span className="text-xs text-muted-foreground bg-card/70 border border-border px-3 py-1.5 rounded-full font-medium mt-1">
                   {format(new Date(), 'EEE, MMM d')}
                 </span>
               </div>
-              <p className="text-gray-500 mt-2 text-sm">
+              <p className="text-muted-foreground mt-2 text-sm">
                 {isCompleted ? "Here's how today is tracking" : `You have ${getThingsToReview()} things to review`}
               </p>
             </div>
 
             {isCompleted ? (
               /* ── TODAY'S SNAPSHOT (post-session) ─────────────────────── */
-              <div className="bg-white rounded-3xl p-5 shadow-sm flex-1 flex flex-col gap-4">
+              <div className="bg-card border border-border rounded-3xl p-5 shadow-sm flex-1 flex flex-col gap-4">
                 {/* Header row */}
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <div className="w-1.5 h-1.5 rounded-full bg-violet-500" />
-                    <span className="text-xs font-bold text-gray-400 uppercase tracking-wide">Today's Snapshot</span>
+                    <span className="text-xs font-bold text-muted-foreground uppercase tracking-wide">Today's Snapshot</span>
                   </div>
                   <button
                     onClick={handleRefresh}
@@ -527,8 +536,8 @@ export function DailyPulse() {
 
                 {/* Top post with real thumbnail */}
                 {data.contentRecap.bestPost && (
-                  <div className="flex items-center gap-3 bg-violet-50 rounded-2xl p-3">
-                    <div className="w-16 h-16 rounded-xl overflow-hidden bg-gray-200 flex-shrink-0 flex items-center justify-center">
+                  <div className="flex items-center gap-3 bg-primary/5 border border-primary/20 rounded-2xl p-3">
+                    <div className="w-16 h-16 rounded-xl overflow-hidden bg-accent flex-shrink-0 flex items-center justify-center">
                       {(data.contentRecap.bestPost.thumbnail_url || data.contentRecap.bestPost.media_url) ? (
                         <img
                           src={data.contentRecap.bestPost.thumbnail_url || data.contentRecap.bestPost.media_url}
@@ -536,13 +545,13 @@ export function DailyPulse() {
                           className="w-full h-full object-cover"
                         />
                       ) : (
-                        <Play className="w-6 h-6 text-gray-400" />
+                        <Play className="w-6 h-6 text-muted-foreground" />
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-[10px] font-black text-violet-400 uppercase tracking-wide mb-0.5">Top Post This Week</p>
-                      <p className="text-sm font-bold text-gray-900 truncate">{data.contentRecap.bestPost.title}</p>
-                      <p className="text-xs text-gray-500 mt-0.5">
+                      <p className="text-sm font-bold text-foreground truncate">{data.contentRecap.bestPost.title}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
                         {data.contentRecap.bestPost.views >= 1000
                           ? `${(data.contentRecap.bestPost.views / 1000).toFixed(1)}K`
                           : data.contentRecap.bestPost.views} views
@@ -566,9 +575,9 @@ export function DailyPulse() {
                     },
                     { label: 'Posts', value: String(data.contentRecap.postsCount || 0), color: '#a7f3d0' },
                   ].map((s) => (
-                    <div key={s.label} className="rounded-2xl p-3 text-center" style={{ backgroundColor: s.color }}>
-                      <p className="text-lg font-black text-gray-900">{s.value}</p>
-                      <p className="text-[10px] font-bold text-gray-500 uppercase mt-0.5">{s.label}</p>
+                    <div key={s.label} className="rounded-2xl p-3 text-center bg-accent border border-border">
+                      <p className="text-lg font-black text-foreground">{s.value}</p>
+                      <p className="text-[10px] font-bold text-muted-foreground uppercase mt-0.5">{s.label}</p>
                     </div>
                   ))}
                 </div>
@@ -577,10 +586,10 @@ export function DailyPulse() {
                 {data.comingUp.items[0] && (
                   <button
                     onClick={() => navigate('/schedule')}
-                    className="flex items-center gap-2 bg-rose-50 rounded-xl px-3 py-2.5 w-full text-left"
+                    className="flex items-center gap-2 bg-rose-500/10 border border-rose-500/20 rounded-xl px-3 py-2.5 w-full text-left"
                   >
                     <Calendar className="w-3.5 h-3.5 text-rose-400 flex-shrink-0" />
-                    <span className="text-xs text-gray-700 font-medium flex-1 truncate">
+                    <span className="text-xs text-foreground font-medium flex-1 truncate">
                       Next: <strong>{data.comingUp.items[0].title}</strong>
                     </span>
                     <span className="text-xs text-rose-500 font-bold flex-shrink-0">
@@ -591,16 +600,16 @@ export function DailyPulse() {
 
                 {/* Connect checklist if no accounts */}
                 {!hasConnectedAccounts && !bannerDismissed && (
-                  <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
-                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-2">Connect platforms</p>
+                  <div className="rounded-2xl border border-border bg-accent p-3">
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide mb-2">Connect platforms</p>
                     {platforms.map(({ key, label, icon: Icon, iconClass, connected }) => (
                       <div key={key} className="flex items-center gap-2 py-1">
                         {connected
                           ? <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />
-                          : <div className="w-3.5 h-3.5 rounded-full border-2 border-gray-300" />
+                          : <div className="w-3.5 h-3.5 rounded-full border-2 border-border" />
                         }
                         <Icon className={`w-3 h-3 ${connected ? 'text-emerald-500' : iconClass}`} />
-                        <span className={`text-xs ${connected ? 'text-emerald-600 font-semibold' : 'text-gray-500'}`}>{label}</span>
+                        <span className={`text-xs ${connected ? 'text-emerald-500 font-semibold' : 'text-muted-foreground'}`}>{label}</span>
                       </div>
                     ))}
                     <button
@@ -609,7 +618,7 @@ export function DailyPulse() {
                     >
                       <Plug className="w-3 h-3" /> Connect
                     </button>
-                    <button onClick={() => setBannerDismissed(true)} className="mt-1.5 w-full text-[10px] text-gray-400 hover:text-gray-500">Skip</button>
+                    <button onClick={() => setBannerDismissed(true)} className="mt-1.5 w-full text-[10px] text-muted-foreground hover:text-foreground">Skip</button>
                   </div>
                 )}
 
@@ -624,10 +633,10 @@ export function DailyPulse() {
               </div>
             ) : (
               /* ── ORIGINAL PRE-SESSION MINI PREVIEW ───────────────────── */
-              <div className="bg-white rounded-3xl p-5 shadow-sm flex-1 flex flex-col">
+              <div className="bg-card border border-border rounded-3xl p-5 shadow-sm flex-1 flex flex-col">
                 <div className="flex items-center gap-2 mb-1">
-                  <div className="w-1.5 h-1.5 rounded-full bg-violet-500" />
-                  <span className="text-xs font-bold text-gray-400 uppercase tracking-wide">Weekly Preview</span>
+                  <div className="w-1.5 h-1.5 rounded-full bg-primary" />
+                  <span className="text-xs font-bold text-muted-foreground uppercase tracking-wide">Weekly Preview</span>
                 </div>
 
                 <div className="grid grid-cols-3 gap-3 my-4">
@@ -636,9 +645,9 @@ export function DailyPulse() {
                     { label: 'Posts', value: String(data.contentRecap.postsCount || 0), color: '#fde68a' },
                     { label: 'Tips', value: tipsStat, color: '#a7f3d0' },
                   ].map((s) => (
-                    <div key={s.label} className="rounded-2xl p-3 text-center" style={{ backgroundColor: s.color }}>
-                      <p className="text-xl font-black text-gray-900">{s.value}</p>
-                      <p className="text-[10px] font-bold text-gray-500 uppercase mt-0.5">{s.label}</p>
+                    <div key={s.label} className="rounded-2xl p-3 text-center bg-accent border border-border">
+                      <p className="text-xl font-black text-foreground">{s.value}</p>
+                      <p className="text-[10px] font-bold text-muted-foreground uppercase mt-0.5">{s.label}</p>
                     </div>
                   ))}
                 </div>
@@ -655,7 +664,7 @@ export function DailyPulse() {
               </div>
             )}
 
-            <p className="text-center text-xs text-gray-400 mt-4 font-medium animate-swipe-hint">
+            <p className="text-center text-xs text-muted-foreground mt-4 font-medium animate-swipe-hint">
               {isCompleted ? 'Swipe to review cards →' : 'Swipe left to continue →'}
             </p>
           </div>
@@ -665,8 +674,8 @@ export function DailyPulse() {
         {currentSlide === 'content' && (
           <div className="flex-1 flex flex-col">
             <p className="text-xs font-black tracking-widest text-purple-400 uppercase mb-1">WEEKLY REVIEW</p>
-            <h2 className="text-4xl font-black text-gray-900 mb-6">Content<br />Recap</h2>
-            <div className="bg-white rounded-3xl shadow-sm flex-1 overflow-auto">
+            <h2 className="text-4xl font-black text-foreground mb-6">Content<br />Recap</h2>
+            <div className="bg-card border border-border rounded-3xl shadow-sm flex-1 overflow-auto">
               <ContentRecapCard
                 data={data.contentRecap}
                 isExpanded={true}
@@ -675,7 +684,7 @@ export function DailyPulse() {
                 hideCollapseButton={true}
               />
             </div>
-            <p className="text-center text-xs text-gray-500 mt-4 font-medium animate-swipe-hint">
+            <p className="text-center text-xs text-muted-foreground mt-4 font-medium animate-swipe-hint">
               Swipe right to continue →
             </p>
           </div>
@@ -685,8 +694,8 @@ export function DailyPulse() {
         {currentSlide === 'schedule' && (
           <div className="flex-1 flex flex-col">
             <p className="text-xs font-black tracking-widest text-rose-400 uppercase mb-1">SCHEDULE</p>
-            <h2 className="text-4xl font-black text-gray-900 mb-6">Coming<br />Up</h2>
-            <div className="bg-white rounded-3xl shadow-sm flex-1 overflow-auto">
+            <h2 className="text-4xl font-black text-foreground mb-6">Coming<br />Up</h2>
+            <div className="bg-card border border-border rounded-3xl shadow-sm flex-1 overflow-auto">
               <ComingUpCard
                 data={data.comingUp}
                 isExpanded={true}
@@ -697,7 +706,7 @@ export function DailyPulse() {
                 hideCollapseButton={true}
               />
             </div>
-            <p className="text-center text-xs text-gray-500 mt-4 font-medium animate-swipe-hint">
+            <p className="text-center text-xs text-muted-foreground mt-4 font-medium animate-swipe-hint">
               Swipe right to continue →
             </p>
           </div>
@@ -707,8 +716,8 @@ export function DailyPulse() {
         {currentSlide === 'tips' && (
           <div className="flex-1 flex flex-col">
             <p className="text-xs font-black tracking-widest text-emerald-500 uppercase mb-1">AI INSIGHTS</p>
-            <h2 className="text-4xl font-black text-gray-900 mb-6">Smart<br />Tips</h2>
-            <div className="bg-white rounded-3xl shadow-sm flex-1 overflow-auto">
+            <h2 className="text-4xl font-black text-foreground mb-6">Smart<br />Tips</h2>
+            <div className="bg-card border border-border rounded-3xl shadow-sm flex-1 overflow-auto">
               <SmartTipsCard
                 data={data.smartTips}
                 isExpanded={true}
@@ -737,7 +746,7 @@ export function DailyPulse() {
                 className={`rounded-full transition-all ${
                   i === slideIndex
                     ? 'w-6 h-2.5 bg-violet-600'
-                    : 'w-2.5 h-2.5 bg-gray-300 hover:bg-gray-400'
+                    : 'w-2.5 h-2.5 bg-border hover:bg-muted-foreground'
                 }`}
               />
             ))}
@@ -749,7 +758,7 @@ export function DailyPulse() {
               <button
                 onClick={handleRefresh}
                 disabled={isRefreshing}
-                className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-white border-2 border-gray-200 text-gray-700 font-bold text-sm hover:bg-gray-50 transition-colors disabled:opacity-50"
+                className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-card border-2 border-border text-foreground font-bold text-sm hover:bg-accent transition-colors disabled:opacity-50"
               >
                 <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
                 {isRefreshing ? 'Refreshing...' : 'Refresh'}
@@ -758,7 +767,7 @@ export function DailyPulse() {
               <>
                 <button
                   onClick={handleSkipAll}
-                  className="flex-1 py-3.5 rounded-2xl border-2 border-gray-200 bg-white/60 text-gray-600 font-bold text-sm hover:bg-white transition-colors"
+                  className="flex-1 py-3.5 rounded-2xl border-2 border-border bg-card/60 text-muted-foreground font-bold text-sm hover:bg-card transition-colors"
                 >
                   Skip All
                 </button>
@@ -784,11 +793,11 @@ export function DailyPulse() {
       </div>
 
       {/* ── MOBILE: Command Center (scrollable below swipe cards) ─── */}
-      <div className="lg:hidden px-4 py-8 bg-gray-50">
+      <div className="lg:hidden px-4 py-8 bg-background">
         <div className="flex items-center gap-4 mb-6">
-          <div className="flex-1 h-px bg-gray-200" />
-          <span className="text-xs font-black tracking-widest text-gray-400 uppercase">Command Center</span>
-          <div className="flex-1 h-px bg-gray-200" />
+          <div className="flex-1 h-px bg-border" />
+          <span className="text-xs font-black tracking-widest text-muted-foreground uppercase">Command Center</span>
+          <div className="flex-1 h-px bg-border" />
         </div>
         <ActionDashboard onNavigate={navigate} embedded={true} />
       </div>

@@ -42,33 +42,33 @@ const PLATFORM_CONFIG: Record<string, {
     label: 'Instagram',
     icon: Instagram,
     color: 'from-pink-500 to-orange-400',
-    bg: 'bg-pink-50',
-    border: 'border-pink-200',
-    textColor: 'text-pink-600',
+    bg: 'bg-pink-500/10',
+    border: 'border-pink-500/20',
+    textColor: 'text-pink-500',
   },
   tiktok: {
     label: 'TikTok',
     icon: TikTokIcon,
-    color: 'from-gray-900 to-gray-700',
-    bg: 'bg-gray-50',
-    border: 'border-gray-200',
-    textColor: 'text-gray-700',
+    color: 'from-gray-700 to-gray-900',
+    bg: 'bg-accent',
+    border: 'border-border',
+    textColor: 'text-foreground',
   },
   youtube: {
     label: 'YouTube',
     icon: Youtube,
     color: 'from-red-600 to-red-500',
-    bg: 'bg-red-50',
-    border: 'border-red-200',
-    textColor: 'text-red-600',
+    bg: 'bg-red-500/10',
+    border: 'border-red-500/20',
+    textColor: 'text-red-500',
   },
   threads: {
     label: 'Threads',
     icon: ThreadsIcon,
-    color: 'from-gray-800 to-gray-900',
-    bg: 'bg-gray-50',
-    border: 'border-gray-200',
-    textColor: 'text-gray-800',
+    color: 'from-gray-600 to-gray-800',
+    bg: 'bg-accent',
+    border: 'border-border',
+    textColor: 'text-foreground',
   },
 };
 
@@ -226,12 +226,12 @@ export function Repurpose() {
       {/* Header */}
       <div className="mb-8">
         <div className="flex items-center gap-3 mb-2">
-          <div className="w-10 h-10 rounded-2xl bg-violet-100 flex items-center justify-center">
-            <Repeat2 className="w-5 h-5 text-violet-600" />
+          <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center">
+            <Repeat2 className="w-5 h-5 text-primary" />
           </div>
           <div>
-            <h1 className="text-2xl font-black text-gray-900">Repurpose Content</h1>
-            <p className="text-sm text-gray-500">Adapt any post for every platform in seconds</p>
+            <h1 className="text-2xl font-black text-foreground">Repurpose Content</h1>
+            <p className="text-sm text-muted-foreground">Adapt any post for every platform in seconds</p>
           </div>
         </div>
       </div>
@@ -239,12 +239,12 @@ export function Repurpose() {
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
         {/* ── Left: Post selector ── */}
         <div className="lg:col-span-2 space-y-4">
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-              <h2 className="font-bold text-gray-900 text-sm">Select a Post</h2>
+          <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+            <div className="px-5 py-4 border-b border-border flex items-center justify-between">
+              <h2 className="font-bold text-foreground text-sm">Select a Post</h2>
               <button
                 onClick={loadPosts}
-                className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 transition-colors"
+                className="p-1.5 rounded-lg hover:bg-accent text-muted-foreground transition-colors"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
               </button>
@@ -256,12 +256,12 @@ export function Repurpose() {
               </div>
             ) : posts.length === 0 ? (
               <div className="text-center py-16 px-6">
-                <Repeat2 className="w-10 h-10 text-gray-200 mx-auto mb-3" />
-                <p className="text-sm text-gray-500">No published posts found.</p>
-                <p className="text-xs text-gray-400 mt-1">Sync your accounts to load posts.</p>
+                <Repeat2 className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
+                <p className="text-sm text-muted-foreground">No published posts found.</p>
+                <p className="text-xs text-muted-foreground/60 mt-1">Sync your accounts to load posts.</p>
               </div>
             ) : (
-              <div className="divide-y divide-gray-50 max-h-[520px] overflow-y-auto">
+              <div className="divide-y divide-border max-h-[520px] overflow-y-auto">
                 {posts.map(post => {
                   const cfg = PLATFORM_CONFIG[post.platform];
                   const PlatformIcon = cfg?.icon;
@@ -270,42 +270,40 @@ export function Repurpose() {
                     <button
                       key={post.id}
                       onClick={() => selectPost(post)}
-                      className={`w-full text-left px-4 py-3 flex gap-3 transition-colors hover:bg-gray-50 ${
-                        isSelected ? 'bg-violet-50 border-l-2 border-violet-500' : ''
+                      className={`w-full text-left px-4 py-3 flex gap-3 transition-colors hover:bg-accent ${
+                        isSelected ? 'bg-primary/5 border-l-2 border-primary' : ''
                       }`}
                     >
-                      {/* Thumbnail */}
-                      <div className="relative flex-shrink-0 w-12 h-12 rounded-xl overflow-hidden bg-gray-100">
-                        {post.thumbnail_url ? (
+                      {/* Thumbnail — gradient always as bg, img overlays when it loads */}
+                      <div className={`relative flex-shrink-0 w-12 h-12 rounded-xl overflow-hidden bg-gradient-to-br ${cfg?.color || 'from-muted to-accent'}`}>
+                        {post.thumbnail_url && (
                           <img
                             src={post.thumbnail_url}
                             alt=""
                             className="w-full h-full object-cover"
                             onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
                           />
-                        ) : (
-                          <div className={`w-full h-full bg-gradient-to-br ${cfg?.color || 'from-gray-200 to-gray-300'}`} />
                         )}
                         {PlatformIcon && (
-                          <div className="absolute bottom-0.5 right-0.5 w-4 h-4 rounded-full bg-white flex items-center justify-center shadow-sm">
-                            <PlatformIcon className={`w-2.5 h-2.5 ${cfg?.textColor || 'text-gray-600'}`} />
+                          <div className="absolute bottom-0.5 right-0.5 w-4 h-4 rounded-full bg-card flex items-center justify-center shadow-sm">
+                            <PlatformIcon className={`w-2.5 h-2.5 ${cfg?.textColor || 'text-foreground'}`} />
                           </div>
                         )}
                       </div>
 
                       {/* Text */}
                       <div className="flex-1 min-w-0">
-                        <p className="text-xs text-gray-800 line-clamp-2 leading-relaxed">
+                        <p className="text-xs text-foreground line-clamp-2 leading-relaxed">
                           {post.caption || '(no caption)'}
                         </p>
                         <div className="flex items-center gap-2 mt-1.5">
-                          <span className={`text-[10px] font-semibold capitalize ${cfg?.textColor || 'text-gray-500'}`}>
+                          <span className={`text-[10px] font-semibold capitalize ${cfg?.textColor || 'text-muted-foreground'}`}>
                             {post.platform}
                           </span>
                           {post.published_date && (
-                            <span className="text-[10px] text-gray-400">{timeAgo(post.published_date)}</span>
+                            <span className="text-[10px] text-muted-foreground">{timeAgo(post.published_date)}</span>
                           )}
-                          <span className="text-[10px] text-gray-400">
+                          <span className="text-[10px] text-muted-foreground">
                             {(post.likes || 0) + (post.comments || 0)} interactions
                           </span>
                         </div>
@@ -321,20 +319,20 @@ export function Repurpose() {
         {/* ── Right: Config + Results ── */}
         <div className="lg:col-span-3 space-y-4">
           {!selectedPost ? (
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm flex items-center justify-center h-64">
+            <div className="bg-card rounded-2xl border border-border shadow-sm flex items-center justify-center h-64">
               <div className="text-center">
-                <Repeat2 className="w-12 h-12 text-gray-200 mx-auto mb-3" />
-                <p className="text-sm font-medium text-gray-400">Select a post to get started</p>
+                <Repeat2 className="w-12 h-12 text-muted-foreground/30 mx-auto mb-3" />
+                <p className="text-sm font-medium text-muted-foreground">Select a post to get started</p>
               </div>
             </div>
           ) : (
             <>
               {/* Config card */}
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-5">
+              <div className="bg-card rounded-2xl border border-border shadow-sm p-5 space-y-5">
                 {/* Source post preview */}
                 <div>
-                  <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Source Post</p>
-                  <div className="flex gap-3 items-start p-3 bg-gray-50 rounded-xl">
+                  <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Source Post</p>
+                  <div className="flex gap-3 items-start p-3 bg-accent rounded-xl">
                     {selectedPost.thumbnail_url && (
                       <img
                         src={selectedPost.thumbnail_url}
@@ -350,11 +348,11 @@ export function Repurpose() {
                           const Icon = cfg?.icon;
                           return Icon ? <Icon className={`w-3.5 h-3.5 ${cfg.textColor}`} /> : null;
                         })()}
-                        <span className="text-xs font-semibold text-gray-600 capitalize">
+                        <span className="text-xs font-semibold text-muted-foreground capitalize">
                           {selectedPost.platform}
                         </span>
                       </div>
-                      <p className="text-xs text-gray-700 line-clamp-2">{selectedPost.caption}</p>
+                      <p className="text-xs text-foreground line-clamp-2">{selectedPost.caption}</p>
                     </div>
                   </div>
                 </div>
@@ -362,10 +360,10 @@ export function Repurpose() {
                 {/* Caption override */}
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Caption to Repurpose</p>
+                    <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Caption to Repurpose</p>
                     <button
                       onClick={() => setUseCustom(!useCustom)}
-                      className={`text-xs font-semibold transition-colors ${useCustom ? 'text-violet-600' : 'text-gray-400 hover:text-gray-600'}`}
+                      className={`text-xs font-semibold transition-colors ${useCustom ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}
                     >
                       {useCustom ? 'Using custom' : 'Edit caption'}
                     </button>
@@ -375,11 +373,11 @@ export function Repurpose() {
                       value={customCaption}
                       onChange={e => setCustomCaption(e.target.value)}
                       rows={4}
-                      className="w-full text-sm text-gray-800 border border-gray-200 rounded-xl p-3 resize-none focus:outline-none focus:ring-2 focus:ring-violet-300"
+                      className="w-full text-sm text-foreground border border-border bg-background rounded-xl p-3 resize-none focus:outline-none focus:ring-2 focus:ring-primary/20"
                       placeholder="Enter or edit the caption to repurpose..."
                     />
                   ) : (
-                    <p className="text-xs text-gray-600 bg-gray-50 rounded-xl p-3 line-clamp-3">
+                    <p className="text-xs text-muted-foreground bg-accent rounded-xl p-3 line-clamp-3">
                       {selectedPost.caption}
                     </p>
                   )}
@@ -387,7 +385,7 @@ export function Repurpose() {
 
                 {/* Target platforms */}
                 <div>
-                  <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Target Platforms</p>
+                  <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Target Platforms</p>
                   <div className="flex flex-wrap gap-2">
                     {ALL_PLATFORMS.map(p => {
                       const cfg = PLATFORM_CONFIG[p];
@@ -401,10 +399,10 @@ export function Repurpose() {
                           disabled={isSource}
                           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
                             isSource
-                              ? 'opacity-40 cursor-not-allowed bg-gray-100 border-gray-200 text-gray-400'
+                              ? 'opacity-40 cursor-not-allowed bg-muted border-border text-muted-foreground'
                               : isSelected
                               ? `${cfg.bg} ${cfg.border} ${cfg.textColor}`
-                              : 'bg-white border-gray-200 text-gray-400 hover:border-gray-300'
+                              : 'bg-card border-border text-muted-foreground hover:border-primary/40 hover:text-foreground'
                           }`}
                         >
                           <Icon className="w-3 h-3" />
@@ -417,13 +415,13 @@ export function Repurpose() {
                 </div>
 
                 {error && (
-                  <p className="text-sm text-red-500 bg-red-50 rounded-xl px-4 py-2.5">{error}</p>
+                  <p className="text-sm text-red-500 bg-red-500/10 rounded-xl px-4 py-2.5">{error}</p>
                 )}
 
                 <button
                   onClick={runRepurpose}
                   disabled={loading || targetPlatforms.filter(p => p !== selectedPost.platform).length === 0}
-                  className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-violet-600 hover:bg-violet-700 disabled:bg-violet-200 text-white text-sm font-bold transition-colors"
+                  className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground text-sm font-bold transition-colors"
                 >
                   {loading ? (
                     <>
@@ -442,7 +440,7 @@ export function Repurpose() {
               {/* Results */}
               {results && (
                 <div className="space-y-3">
-                  <p className="text-xs font-bold text-gray-400 uppercase tracking-wider px-1">
+                  <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider px-1">
                     AI-Adapted Versions
                   </p>
                   {Object.entries(results).map(([platform, result]) => {
@@ -450,14 +448,11 @@ export function Repurpose() {
                     if (!cfg) return null;
                     const Icon = cfg.icon;
                     const tipsOpen = expandedTips[platform];
-                    const fullText = result.hashtags.length > 0
-                      ? `${result.caption}\n\n${result.hashtags.map(h => `#${h}`).join(' ')}`
-                      : result.caption;
 
                     return (
                       <div
                         key={platform}
-                        className={`bg-white rounded-2xl border shadow-sm overflow-hidden ${cfg.border}`}
+                        className={`bg-card rounded-2xl border shadow-sm overflow-hidden ${cfg.border}`}
                       >
                         {/* Platform header */}
                         <div className={`px-5 py-3 flex items-center justify-between ${cfg.bg}`}>
@@ -470,8 +465,8 @@ export function Repurpose() {
                               onClick={() => copyFull(platform, result)}
                               className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full transition-all ${
                                 copiedKey === `full-${platform}`
-                                  ? 'bg-green-100 text-green-600'
-                                  : `bg-white ${cfg.textColor} hover:opacity-80`
+                                  ? 'bg-emerald-500/10 text-emerald-600'
+                                  : `bg-card ${cfg.textColor} hover:opacity-80`
                               } border ${cfg.border}`}
                             >
                               {copiedKey === `full-${platform}` ? (
@@ -486,17 +481,17 @@ export function Repurpose() {
                         <div className="p-5 space-y-4">
                           {/* Caption */}
                           <div>
-                            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Caption</p>
+                            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Caption</p>
                             <div className="relative group">
-                              <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed bg-gray-50 rounded-xl p-4 pr-10">
+                              <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed bg-accent rounded-xl p-4 pr-10">
                                 {result.caption}
                               </p>
                               <button
                                 onClick={() => copyToClipboard(result.caption, `caption-${platform}`)}
-                                className="absolute top-2 right-2 p-1.5 rounded-lg bg-white border border-gray-200 opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 hover:text-gray-700"
+                                className="absolute top-2 right-2 p-1.5 rounded-lg bg-card border border-border opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
                               >
                                 {copiedKey === `caption-${platform}` ? (
-                                  <Check className="w-3 h-3 text-green-500" />
+                                  <Check className="w-3 h-3 text-emerald-500" />
                                 ) : (
                                   <Copy className="w-3 h-3" />
                                 )}
@@ -508,14 +503,14 @@ export function Repurpose() {
                           {result.hashtags.length > 0 && (
                             <div>
                               <div className="flex items-center justify-between mb-2">
-                                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-1">
+                                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
                                   <Hash className="w-3 h-3" />
                                   Hashtags
                                 </p>
                                 <button
                                   onClick={() => copyToClipboard(result.hashtags.map(h => `#${h}`).join(' '), `hashtags-${platform}`)}
                                   className={`text-xs font-semibold flex items-center gap-1 transition-colors ${
-                                    copiedKey === `hashtags-${platform}` ? 'text-green-500' : `${cfg.textColor} hover:opacity-70`
+                                    copiedKey === `hashtags-${platform}` ? 'text-emerald-500' : `${cfg.textColor} hover:opacity-70`
                                   }`}
                                 >
                                   {copiedKey === `hashtags-${platform}` ? (
@@ -543,7 +538,7 @@ export function Repurpose() {
                             <div>
                               <button
                                 onClick={() => toggleTips(platform)}
-                                className="flex items-center gap-1.5 text-xs font-semibold text-gray-400 hover:text-gray-600 transition-colors w-full"
+                                className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors w-full"
                               >
                                 <Lightbulb className="w-3.5 h-3.5" />
                                 Platform Tips
@@ -556,7 +551,7 @@ export function Repurpose() {
                               {tipsOpen && (
                                 <ul className="mt-2 space-y-1.5">
                                   {result.tips.map((tip, i) => (
-                                    <li key={i} className="flex items-start gap-2 text-xs text-gray-600">
+                                    <li key={i} className="flex items-start gap-2 text-xs text-muted-foreground">
                                       <span className={`w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0 ${cfg.textColor} bg-current`} />
                                       {tip}
                                     </li>
@@ -569,7 +564,6 @@ export function Repurpose() {
                           {/* Send to scheduler */}
                           <button
                             onClick={() => {
-                              // Encode caption and platform into scheduler URL for future use
                               const params = new URLSearchParams({
                                 platform,
                                 caption: result.caption,
@@ -577,7 +571,7 @@ export function Repurpose() {
                               });
                               window.location.href = `/schedule/new?${params.toString()}`;
                             }}
-                            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 border-dashed border-gray-200 text-gray-400 hover:border-violet-300 hover:text-violet-600 text-xs font-semibold transition-all"
+                            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 border-dashed border-border text-muted-foreground hover:border-primary/40 hover:text-primary text-xs font-semibold transition-all"
                           >
                             <Send className="w-3.5 h-3.5" />
                             Send to Scheduler
