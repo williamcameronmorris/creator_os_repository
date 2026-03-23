@@ -187,6 +187,33 @@ Deno.serve(async (req: Request) => {
       console.error("platform_metrics upsert error:", metricsError);
     }
 
+    // ── Trigger caption analysis (fire-and-forget) ────────────────────────────
+    // Runs in the background after a successful sync. Skips if analysis is
+    // already fresh (< 24 hours old). Does not block the sync response.
+    const analysisUrl = `${supabaseUrl}/functions/v1/analyze-captions`;
+    fetch(analysisUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${supabaseKey}`,
+      },
+      body: JSON.stringify({ userId }),
+    }).then(async (res) => {
+      if (!res.ok) {
+        const text = await res.text();
+        console.warn(`analyze-captions returned ${res.status}: ${text}`);
+      } else {
+        const data = await res.json();
+        if (data.skipped) {
+          console.log(`analyze-captions skipped: ${data.reason}`);
+        } else {
+          console.log(`analyze-captions completed: ${data.postsAnalyzed} posts analyzed`);
+        }
+      }
+    }).catch((err) => {
+      console.warn("analyze-captions fire-and-forget failed:", err.message);
+    });
+
     return new Response(
       JSON.stringify({
         success: true,
