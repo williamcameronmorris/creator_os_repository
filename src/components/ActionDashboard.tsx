@@ -20,8 +20,6 @@ import {
   Send,
   Lock,
   Crown,
-  MessageCircle,
-  Repeat2,
 } from 'lucide-react';
 import { ThreadsIcon } from './icons/ThreadsIcon';
 
@@ -37,7 +35,6 @@ export default function ActionDashboard({ onNavigate, embedded = false }: Action
     totalViews: 0,
     totalEngagement: 0,
     scheduledPosts: 0,
-    unreadComments: 0,
   });
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -73,7 +70,7 @@ export default function ActionDashboard({ onNavigate, embedded = false }: Action
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const [storedInsights, metricsResult, postsResult, inboxResult] = await Promise.all([
+      const [storedInsights, metricsResult, postsResult] = await Promise.all([
         getStoredInsights(user.id),
         supabase
           .from('platform_metrics')
@@ -85,11 +82,6 @@ export default function ActionDashboard({ onNavigate, embedded = false }: Action
           .select('id')
           .eq('user_id', user.id)
           .eq('status', 'scheduled'),
-        supabase
-          .from('comments')
-          .select('id', { count: 'exact', head: true })
-          .eq('user_id', user.id)
-          .eq('is_read', false),
       ]);
 
       if (storedInsights.length === 0) {
@@ -108,7 +100,6 @@ export default function ActionDashboard({ onNavigate, embedded = false }: Action
           totalViews,
           totalEngagement: totalLikes + totalComments,
           scheduledPosts: postsResult.data?.length || 0,
-          unreadComments: inboxResult.count || 0,
         });
       }
     } catch (error) {
@@ -442,41 +433,10 @@ export default function ActionDashboard({ onNavigate, embedded = false }: Action
           </p>
         </button>
 
-        <button
-          onClick={() => onNavigate('/inbox')}
-          className="relative p-4 rounded-xl bg-card border border-border hover:bg-accent transition-all cursor-pointer text-left shadow-md hover:shadow-lg"
-        >
-          {socialStats.unreadComments > 0 && (
-            <span className="absolute top-2 right-2 min-w-[20px] h-5 px-1 rounded-full bg-violet-600 text-white text-[10px] font-bold flex items-center justify-center">
-              {socialStats.unreadComments > 99 ? '99+' : socialStats.unreadComments}
-            </span>
-          )}
-          <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-violet-500/20 mb-3">
-            <MessageCircle className="w-5 h-5 text-violet-600" />
-          </div>
-          <p className="text-xs text-muted-foreground mb-1">Unread Comments</p>
-          <p className="text-xl font-bold text-foreground">
-            {socialStats.unreadComments}
-          </p>
-        </button>
       </div>
 
       {/* Quick Actions */}
       <div className="grid grid-cols-2 gap-3">
-        <button
-          onClick={() => onNavigate('/repurpose')}
-          className="flex items-center gap-3 p-4 rounded-xl bg-gradient-to-br from-violet-50 to-purple-50 border border-violet-100 hover:border-violet-300 hover:shadow-md transition-all text-left"
-        >
-          <div className="w-9 h-9 rounded-xl bg-violet-100 flex items-center justify-center flex-shrink-0">
-            <Repeat2 className="w-4 h-4 text-violet-600" />
-          </div>
-          <div>
-            <p className="text-sm font-bold text-gray-900">Repurpose Content</p>
-            <p className="text-xs text-gray-500">Adapt posts for every platform</p>
-          </div>
-          <ArrowRight className="w-4 h-4 text-violet-400 ml-auto flex-shrink-0" />
-        </button>
-
         <button
           onClick={() => onNavigate('/analytics')}
           className="flex items-center gap-3 p-4 rounded-xl bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100 hover:border-blue-300 hover:shadow-md transition-all text-left"

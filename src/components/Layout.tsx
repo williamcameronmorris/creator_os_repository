@@ -66,8 +66,6 @@ export function Layout({ children }: LayoutProps) {
         { path: '/saved-ideas', label: 'Saved Ideas',       icon: Bookmark },
         { path: '/media',       label: 'Media Library',     icon: Image },
         { path: '/analytics',   label: 'Audience Growth',   icon: TrendingUp },
-        { path: '/inbox',       label: 'Comment Inbox',     icon: MessageCircle },
-        { path: '/repurpose',   label: 'Repurpose Content', icon: Repeat2 },
       ],
     },
     {

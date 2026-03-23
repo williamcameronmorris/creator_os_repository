@@ -18,8 +18,6 @@ import { PostComposerPage } from './pages/PostComposerPage';
 import { MetaCallback } from './components/MetaCallback';
 import { ThreadsCallback } from './components/ThreadsCallback';
 import { YoutubeCallback } from './components/YoutubeCallback';
-import { Inbox } from './pages/Inbox';
-import { Repurpose } from './pages/Repurpose';
 import { supabase, type Profile as ProfileType } from './lib/supabase';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -185,23 +183,6 @@ function AppContent() {
           </ProtectedRoute>
         }
       />
-      <Route
-        path="/inbox"
-        element={
-          <ProtectedRoute>
-            <Layout><Inbox /></Layout>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/repurpose"
-        element={
-          <ProtectedRoute>
-            <Layout><Repurpose /></Layout>
-          </ProtectedRoute>
-        }
-      />
-
       {/* ── OAuth Callbacks ── */}
       <Route
         path="/auth/meta/callback"
