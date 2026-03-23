@@ -21,7 +21,7 @@ import { supabase } from './supabase';
 const META_APP_ID = import.meta.env.VITE_META_APP_ID || '';
 const THREADS_APP_ID = import.meta.env.VITE_THREADS_APP_ID || META_APP_ID;
 const META_REDIRECT_URI =
-  import.meta.env.VITE_META_REDIRECT_URI || `${windw.location.origin}/auth/meta/callback`;
+  import.meta.env.VITE_META_REDIRECT_URI || `${window.location.origin}/auth/meta/callback`;
 const THREADS_REDIRECT_URI =
   import.meta.env.VITE_THREADS_REDIRECT_URI || `${window.location.origin}/auth/threads/callback`;
 

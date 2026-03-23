@@ -74,7 +74,7 @@ export default function ActionDashboard({ onNavigate, embedded = false }: Action
         getStoredInsights(user.id),
         supabase
           .from('platform_metrics')
-          .select('views, likes, comments')
+          .select('total_views, total_likes, total_comments')
           .eq('user_id', user.id)
           .gte('date', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()),
         supabase
@@ -93,9 +93,9 @@ export default function ActionDashboard({ onNavigate, embedded = false }: Action
       }
 
       if (metricsResult.data) {
-        const totalViews = metricsResult.data.reduce((sum, m) => sum + (m.views || 0), 0);
-        const totalLikes = metricsResult.data.reduce((sum, m) => sum + (m.likes || 0), 0);
-        const totalComments = metricsResult.data.reduce((sum, m) => sum + (m.comments || 0), 0);
+        const totalViews = metricsResult.data.reduce((sum, m) => sum + (m.total_views || 0), 0);
+        const totalLikes = metricsResult.data.reduce((sum, m) => sum + (m.total_likes || 0), 0);
+        const totalComments = metricsResult.data.reduce((sum, m) => sum + (m.total_comments || 0), 0);
         setSocialStats({
           totalViews,
           totalEngagement: totalLikes + totalComments,

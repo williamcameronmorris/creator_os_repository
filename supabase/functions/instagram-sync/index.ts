@@ -37,7 +37,7 @@ Deno.serve(async (req: Request) => {
     // ── Look up IG Business Account ID + Page Access Token from the profile ──
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
-      .select("instagram_business_account_id, instagram_access_token, facebook_page_access_token")
+      .select("instagram_business_account_id, instagram_access_token, facebook_page_access_token, meta_token_expires_at")
       .eq("id", userId)
       .maybeSingle();
 
@@ -51,6 +51,22 @@ Deno.serve(async (req: Request) => {
       throw new Error(
         "Instagram Business Account not connected. Please connect via Meta OAuth first."
       );
+    }
+
+    // ── Check token expiry before making API calls ────────────────────────────
+    if (profile.meta_token_expires_at) {
+      const expiresAt = new Date(profile.meta_token_expires_at).getTime();
+      const now = Date.now();
+      if (expiresAt < now) {
+        throw new Error(
+          "Meta access token has expired. Please reconnect your Instagram account in Settings."
+        );
+      }
+      // Warn if expiring within 7 days (non-blocking — sync still proceeds)
+      const sevenDays = 7 * 24 * 60 * 60 * 1000;
+      if (expiresAt - now < sevenDays) {
+        console.warn(`Meta token for user ${userId} expires in less than 7 days. Run refresh-tokens to renew.`);
+      }
     }
 
     // ── Fetch IG Business Account info ────────────────────────────────────────
