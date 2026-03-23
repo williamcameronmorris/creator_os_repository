@@ -8,6 +8,7 @@ import { ContentRecapCard } from './ContentRecapCard';
 import { EngagementCard } from './EngagementCard';
 import { ComingUpCard } from './ComingUpCard';
 import { SmartTipsCard } from './SmartTipsCard';
+import { DailyBriefSection } from './DailyBriefSection';
 import {
   CheckCircle,
   Plug,
@@ -391,6 +392,9 @@ export function DailyPulse() {
 
         <ConnectBanner />
 
+        {/* AI Daily Brief — proactive content recommendations */}
+        <DailyBriefSection />
+
         {/* 3-card grid */}
         <div className="grid grid-cols-3 gap-4 mb-8">
           <DesktopPulseCard
@@ -514,6 +518,9 @@ export function DailyPulse() {
                 {isCompleted ? "Here's how today is tracking" : `You have ${getThingsToReview()} things to review`}
               </p>
             </div>
+
+            {/* AI Daily Brief on mobile home slide */}
+            <DailyBriefSection />
 
             {isCompleted ? (
               /* ── TODAY'S SNAPSHOT (post-session) ─────────────────────── */
