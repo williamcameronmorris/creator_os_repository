@@ -306,12 +306,6 @@ export function Analytics() {
     );
   }
 
-  // Safari safety valve: force loading=false after 5s if fetch hangs
-  useEffect(() => {
-    const t = setTimeout(() => setLoading(false), 5000);
-    return () => clearTimeout(t);
-  }, []);
-
   return (
     <div className="max-w-7xl mx-auto space-y-8">
       {/* Header */}
