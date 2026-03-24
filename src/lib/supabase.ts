@@ -7,6 +7,14 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables');
 }
 
+const FETCH_TIMEOUT_MS = 15_000;
+
+const fetchWithTimeout = (input, init) => {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  return fetch(input, { ...init, signal: controller.signal }).finally(() => clearTimeout(id));
+};
+
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     storage: {
@@ -21,6 +29,9 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
       },
     },
     persistSession: true,
+  },
+  global: {
+    fetch: fetchWithTimeout,
   },
 });
 
