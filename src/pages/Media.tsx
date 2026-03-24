@@ -25,6 +25,8 @@ export function Media() {
   useEffect(() => {
     if (user) {
       loadMedia();
+    } else {
+      setLoading(false);
     }
   }, [user]);
 
