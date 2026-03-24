@@ -73,10 +73,11 @@ export default function ActionDashboard({ onNavigate, embedded = false }: Action
       const [storedInsights, metricsResult, postsResult] = await Promise.all([
         getStoredInsights(user.id),
         supabase
-          .from('platform_metrics')
-          .select('total_views, total_likes, total_comments')
+          .from('content_posts')
+          .select('views, likes, comments')
           .eq('user_id', user.id)
-          .gte('date', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()),
+          .eq('status', 'published')
+          .gte('published_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]),
         supabase
           .from('content_posts')
           .select('id')
@@ -93,9 +94,9 @@ export default function ActionDashboard({ onNavigate, embedded = false }: Action
       }
 
       if (metricsResult.data) {
-        const totalViews = metricsResult.data.reduce((sum, m) => sum + (m.total_views || 0), 0);
-        const totalLikes = metricsResult.data.reduce((sum, m) => sum + (m.total_likes || 0), 0);
-        const totalComments = metricsResult.data.reduce((sum, m) => sum + (m.total_comments || 0), 0);
+        const totalViews = metricsResult.data.reduce((sum, m) => sum + (m.views || 0), 0);
+        const totalLikes = metricsResult.data.reduce((sum, m) => sum + (m.likes || 0), 0);
+        const totalComments = metricsResult.data.reduce((sum, m) => sum + (m.comments || 0), 0);
         setSocialStats({
           totalViews,
           totalEngagement: totalLikes + totalComments,
@@ -402,7 +403,7 @@ export default function ActionDashboard({ onNavigate, embedded = false }: Action
             {socialStats.totalViews > 0
               ? `${(socialStats.totalViews / 1000).toFixed(1)}k`
               : socialStats.totalEngagement > 0
-                ? `${(socialStats.totalEngagement / 1000).toFixed(1)}k`
+                ? `${socialStats.totalEngagement > 0 ? (socialStats.totalEngagement >= 1000 ? `${(socialStats.totalEngagement / 1000).toFixed(1)}k` : String(socialStats.totalEngagement)) : '—'}`
                 : '—'}
           </p>
         </button>
