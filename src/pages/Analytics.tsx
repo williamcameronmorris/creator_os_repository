@@ -73,6 +73,7 @@ export function Analytics() {
 
   useEffect(() => {
     if (user) loadAnalytics();
+    else setLoading(false);
   }, [user, timeRange]);
 
   const handleTimeRangeChange = (range: '7d' | '30d' | '90d') => {
