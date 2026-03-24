@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
-import { startOfWeek, endOfWeek, subWeeks, format, parseISO, isToday, isThisWeek, addDays, setHours, setMinutes } from 'date-fns';
+import { startOfWeek, endOfWeek, subWeeks, subDays, format, parseISO, isToday, isThisWeek, addDays, setHours, setMinutes } from 'date-fns';
 
 interface ContentPost {
   id: string;
@@ -194,26 +194,42 @@ export function useDailyPulse() {
       const thisWeekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
       const thisWeekEnd = endOfWeek(new Date(), { weekStartsOn: 1 });
       const lastWeekStart = startOfWeek(subWeeks(new Date(), 1), { weekStartsOn: 1 });
-      const lastWeekEnd = endOfWeek(subWeeks(new Date(), 1), { weekStartsOn: 1 });
+      // Rolling 30-day lookback so we always have content to show
+      const thirtyDaysAgo = format(subDays(new Date(), 30), 'yyyy-MM-dd');
 
       const [
-        profileResult, sessionResult, thisWeekMetrics, lastWeekMetrics,
-        postsResult, scheduledResult, insightsResult, dealsResult, credentialsResult,
+        profileResult, sessionResult, postsResult, scheduledResult,
+        insightsResult, dealsResult, credentialsResult,
       ] = await Promise.all([
         supabase.from('profiles').select('display_name, first_name').eq('id', user.id).maybeSingle(),
         supabase.from('daily_pulse_sessions').select('*').eq('user_id', user.id).eq('session_date', today).maybeSingle(),
-        supabase.from('platform_metrics').select('date, views, likes, comments, saves, shares').eq('user_id', user.id).gte('date', format(thisWeekStart, 'yyyy-MM-dd')).lte('date', format(thisWeekEnd, 'yyyy-MM-dd')),
-        supabase.from('platform_metrics').select('views, likes, comments, saves, shares').eq('user_id', user.id).gte('date', format(lastWeekStart, 'yyyy-MM-dd')).lte('date', format(lastWeekEnd, 'yyyy-MM-dd')),
-        supabase.from('content_posts').select('id, title, caption, platform, status, scheduled_for, published_at, thumbnail_url, media_url, views, likes, comments').eq('user_id', user.id).eq('status', 'published').gte('published_at', format(thisWeekStart, 'yyyy-MM-dd')).order('published_at', { ascending: false }).limit(10),
-        supabase.from('content_posts').select('id, title, platform, content_type, scheduled_for').eq('user_id', user.id).eq('status', 'scheduled').gte('scheduled_for', new Date().toISOString()).order('scheduled_for', { ascending: true }).limit(20),
+        // 30-day rolling window — always captures recent content regardless of where we are in the week
+        supabase.from('content_posts')
+          .select('id, title, caption, platform, status, scheduled_for, published_at, thumbnail_url, media_url, views, likes, comments')
+          .eq('user_id', user.id)
+          .eq('status', 'published')
+          .gte('published_at', thirtyDaysAgo)
+          .order('published_at', { ascending: false })
+          .limit(30),
+        supabase.from('content_posts')
+          .select('id, title, platform, content_type, scheduled_for')
+          .eq('user_id', user.id)
+          .eq('status', 'scheduled')
+          .gte('scheduled_for', new Date().toISOString())
+          .order('scheduled_for', { ascending: true })
+          .limit(20),
         supabase.from('social_insights').select('*').eq('user_id', user.id).eq('is_dismissed', false).order('created_at', { ascending: false }).limit(5),
-        supabase.from('deals').select('id, brand, stage, final_amount, quote_standard, next_followup, follow_up_count, payment_status, created_at, updated_at').eq('user_id', user.id).not('stage', 'in', '("Closed","Delivered")').order('updated_at', { ascending: false }).limit(10),
+        supabase.from('deals')
+          .select('id, brand, stage, final_amount, quote_standard, next_followup, follow_up_count, payment_status, created_at, updated_at')
+          .eq('user_id', user.id)
+          .not('stage', 'in', '("Closed","Delivered")')
+          .order('updated_at', { ascending: false })
+          .limit(10),
         supabase.from('platform_credentials').select('platform').eq('user_id', user.id).eq('is_active', true),
       ]);
 
       const userName = profileResult.data?.display_name || profileResult.data?.first_name || user.email?.split('@')[0] || 'there';
 
-      // Read connection status from platform_credentials (source of truth for OAuth tokens)
       const connectedSet = new Set((credentialsResult.data || []).map((c: { platform: string }) => c.platform));
       const platforms = {
         instagram: connectedSet.has('instagram'),
@@ -221,42 +237,24 @@ export function useDailyPulse() {
         youtube: connectedSet.has('youtube'),
         threads: connectedSet.has('threads'),
       };
-
       setConnectedPlatforms(platforms);
       const hasConnectedAccounts = platforms.instagram || platforms.tiktok || platforms.youtube || platforms.threads;
       setHasConnectedAccounts(hasConnectedAccounts);
 
+      // Real data exists if there are any published posts in last 30 days, or upcoming scheduled posts
       const hasRealData =
-        (thisWeekMetrics.data && thisWeekMetrics.data.length > 0) ||
         (postsResult.data && postsResult.data.length > 0) ||
         (scheduledResult.data && scheduledResult.data.length > 0);
 
-      if (!hasRealData) { setData(generateDemoData(userName, sessionResult.data)); return; }
+      if (!hasRealData) {
+        setData(generateDemoData(userName, sessionResult.data));
+        return;
+      }
 
-      const thisWeekViews = (thisWeekMetrics.data || []).reduce((sum, m) => sum + (m.views || 0), 0);
-      const lastWeekViews = (lastWeekMetrics.data || []).reduce((sum, m) => sum + (m.views || 0), 0);
-      const thisWeekLikesRaw = (thisWeekMetrics.data || []).reduce((sum, m) => sum + (m.likes || 0), 0);
-      const thisWeekCommentsRaw = (thisWeekMetrics.data || []).reduce((sum, m) => sum + (m.comments || 0), 0);
-      const thisWeekEngagementFallback = thisWeekLikesRaw + thisWeekCommentsRaw;
-      const lastWeekLikesRaw = (lastWeekMetrics.data || []).reduce((sum, m) => sum + (m.likes || 0), 0);
-      const lastWeekCommentsRaw = (lastWeekMetrics.data || []).reduce((sum, m) => sum + (m.comments || 0), 0);
-      const lastWeekEngagementFallback = lastWeekLikesRaw + lastWeekCommentsRaw;
-
-      const displayViews = thisWeekViews > 0 ? thisWeekViews : thisWeekEngagementFallback;
-      const prevDisplayViews = lastWeekViews > 0 ? lastWeekViews : lastWeekEngagementFallback;
-      const viewsChange = prevDisplayViews > 0 ? Math.round(((displayViews - prevDisplayViews) / prevDisplayViews) * 100) : 0;
-
-      const dailyViews = [0, 0, 0, 0, 0, 0, 0];
-      (thisWeekMetrics.data || []).forEach((metric) => {
-        const date = parseISO(metric.date);
-        const dayIndex = (date.getDay() + 6) % 7;
-        const dayVal = (metric.views || 0) > 0 ? (metric.views || 0) : ((metric.likes || 0) + (metric.comments || 0));
-        dailyViews[dayIndex] += dayVal;
-      });
-
-      const postsWithAnalytics = (postsResult.data || []).map((post) => ({
+      // ── Normalise posts: use caption as title fallback for Instagram ───
+      const allPosts = (postsResult.data || []).map((post) => ({
         id: post.id,
-        title: post.title || 'Untitled Post',
+        title: post.title || post.caption?.slice(0, 60) || 'Untitled Post',
         caption: post.caption || undefined,
         platform: post.platform || 'instagram',
         views: (post as any).views || 0,
@@ -267,46 +265,102 @@ export function useDailyPulse() {
         media_url: post.media_url,
       }));
 
-      const bestPost = postsWithAnalytics.length > 0
-        ? postsWithAnalytics.reduce((best, post) => {
+      // ── Split into this-week vs last-week buckets for change calculations ──
+      const thisWeekPosts = allPosts.filter(p => p.published_at && parseISO(p.published_at) >= thisWeekStart && parseISO(p.published_at) <= thisWeekEnd);
+      const lastWeekPosts = allPosts.filter(p => {
+        if (!p.published_at) return false;
+        const d = parseISO(p.published_at);
+        return d >= lastWeekStart && d < thisWeekStart;
+      });
+
+      // ── Aggregate engagement from content_posts (platform_metrics is optional) ──
+      const sumField = (arr: typeof allPosts, field: 'views' | 'likes' | 'comments') =>
+        arr.reduce((s, p) => s + (p[field] || 0), 0);
+
+      const thisWeekViews = sumField(thisWeekPosts, 'views');
+      const thisWeekLikes = sumField(thisWeekPosts, 'likes');
+      const thisWeekComments = sumField(thisWeekPosts, 'comments');
+      const lastWeekViews = sumField(lastWeekPosts, 'views');
+      const lastWeekLikes = sumField(lastWeekPosts, 'likes');
+      const lastWeekComments = sumField(lastWeekPosts, 'comments');
+
+      // Instagram doesn't expose views — use likes+comments as primary activity metric
+      const thisWeekEngagement = thisWeekLikes + thisWeekComments;
+      const lastWeekEngagement = lastWeekLikes + lastWeekComments;
+      const displayViews = thisWeekViews > 0 ? thisWeekViews : thisWeekEngagement;
+      const prevDisplayViews = lastWeekViews > 0 ? lastWeekViews : lastWeekEngagement;
+
+      const calcChange = (current: number, previous: number) => {
+        if (previous === 0) return current > 0 ? 100 : 0;
+        return Math.round(((current - previous) / previous) * 100);
+      };
+      const viewsChange = calcChange(displayViews, prevDisplayViews);
+
+      // ── Daily chart — last 7 days, engagement per day ─────────────────
+      const sevenDaysAgo = subDays(new Date(), 6);
+      const dailyViews = [0, 0, 0, 0, 0, 0, 0];
+      allPosts.forEach((post) => {
+        if (!post.published_at) return;
+        const date = parseISO(post.published_at);
+        if (date < sevenDaysAgo) return;
+        const dayIndex = (date.getDay() + 6) % 7; // 0=Mon … 6=Sun
+        const val = post.views > 0 ? post.views : (post.likes + post.comments);
+        dailyViews[dayIndex] += val;
+      });
+
+      // ── Best post: highest engagement in last 30 days ─────────────────
+      const bestPost = allPosts.length > 0
+        ? allPosts.reduce((best, post) => {
             const postScore = post.views > 0 ? post.views : post.likes + post.comments;
             const bestScore = best.views > 0 ? best.views : best.likes + best.comments;
             return postScore > bestScore ? post : best;
           })
         : undefined;
 
-      const contentRecap: ContentRecapData = { totalViews: displayViews, viewsChange, postsCount: postsResult.data?.length || 0, bestPost, recentPosts: postsWithAnalytics.slice(0, 3), dailyViews };
-
-      const thisWeekLikes = (thisWeekMetrics.data || []).reduce((sum, m) => sum + (m.likes || 0), 0);
-      const thisWeekComments = (thisWeekMetrics.data || []).reduce((sum, m) => sum + (m.comments || 0), 0);
-      const thisWeekSaves = (thisWeekMetrics.data || []).reduce((sum, m) => sum + ((m as any).saves || 0), 0);
-      const thisWeekShares = (thisWeekMetrics.data || []).reduce((sum, m) => sum + ((m as any).shares || 0), 0);
-      const lastWeekLikes = (lastWeekMetrics.data || []).reduce((sum, m) => sum + (m.likes || 0), 0);
-      const lastWeekComments = (lastWeekMetrics.data || []).reduce((sum, m) => sum + (m.comments || 0), 0);
-      const lastWeekSaves = (lastWeekMetrics.data || []).reduce((sum, m) => sum + ((m as any).saves || 0), 0);
-      const lastWeekShares = (lastWeekMetrics.data || []).reduce((sum, m) => sum + ((m as any).shares || 0), 0);
-
-      const calcChange = (current: number, previous: number) => {
-        if (previous === 0) return current > 0 ? 100 : 0;
-        return Math.round(((current - previous) / previous) * 100);
+      const contentRecap: ContentRecapData = {
+        totalViews: displayViews,
+        viewsChange,
+        postsCount: thisWeekPosts.length > 0 ? thisWeekPosts.length : allPosts.length,
+        bestPost,
+        recentPosts: allPosts.slice(0, 3),
+        dailyViews,
       };
 
-      const totalEngagement = thisWeekLikes + thisWeekComments + thisWeekSaves + thisWeekShares;
-      const lastWeekTotalEngagement = lastWeekLikes + lastWeekComments + lastWeekSaves + lastWeekShares;
+      // ── Engagement card ───────────────────────────────────────────────
+      const totalEngagement = thisWeekEngagement;
+      const lastWeekTotalEngagement = lastWeekEngagement;
       const engagementChange = calcChange(totalEngagement, lastWeekTotalEngagement);
       const engagementRate = thisWeekViews > 0 ? (totalEngagement / thisWeekViews) * 100 : 0;
 
-      const topPosts: TopPost[] = postsWithAnalytics
-        .map((post) => ({ id: post.id, title: post.title, platform: post.platform, engagementRate: post.views > 0 ? ((post.likes + post.comments) / post.views) * 100 : 0, thumbnail_url: post.thumbnail_url }))
+      const topPosts: TopPost[] = allPosts
+        .map((post) => ({
+          id: post.id,
+          title: post.title,
+          platform: post.platform,
+          engagementRate: post.views > 0 ? ((post.likes + post.comments) / post.views) * 100 : (post.likes + post.comments),
+          thumbnail_url: post.thumbnail_url,
+        }))
         .sort((a, b) => b.engagementRate - a.engagementRate)
         .slice(0, 3);
 
       const engagement: EngagementData = {
-        totalEngagement, engagementChange, engagementRate,
-        metrics: { likes: thisWeekLikes, likesChange: calcChange(thisWeekLikes, lastWeekLikes), comments: thisWeekComments, commentsChange: calcChange(thisWeekComments, lastWeekComments), saves: thisWeekSaves, savesChange: calcChange(thisWeekSaves, lastWeekSaves), shares: thisWeekShares, sharesChange: calcChange(thisWeekShares, lastWeekShares) },
+        totalEngagement,
+        engagementChange,
+        engagementRate,
+        metrics: {
+          likes: thisWeekLikes,
+          likesChange: calcChange(thisWeekLikes, lastWeekLikes),
+          comments: thisWeekComments,
+          commentsChange: calcChange(thisWeekComments, lastWeekComments),
+          saves: 0,
+          savesChange: 0,
+          shares: 0,
+          sharesChange: 0,
+        },
         topPosts,
       };
 
+      // ── Coming Up ─────────────────────────────────────────────────────
       const scheduledItems: ScheduleItem[] = (scheduledResult.data || []).map((post) => ({
         id: post.id, title: post.title || 'Untitled', scheduledTime: post.scheduled_for,
         platform: (post.platform?.toLowerCase() || 'instagram') as Platform,
@@ -317,8 +371,15 @@ export function useDailyPulse() {
       const thisWeekItems = scheduledItems.filter((item) => isThisWeek(parseISO(item.scheduledTime), { weekStartsOn: 1 }));
       const nextItem = scheduledItems[0];
 
-      const comingUp: ComingUpData = { todayCount: todayItems.length, thisWeekCount: thisWeekItems.length, nextPostTime: nextItem?.scheduledTime, nextPostPlatform: nextItem?.platform, items: scheduledItems };
+      const comingUp: ComingUpData = {
+        todayCount: todayItems.length,
+        thisWeekCount: thisWeekItems.length,
+        nextPostTime: nextItem?.scheduledTime,
+        nextPostPlatform: nextItem?.platform,
+        items: scheduledItems,
+      };
 
+      // ── Smart Tips ────────────────────────────────────────────────────
       const mapInsightToTip = (insight: any): SmartTip => {
         let type: TipType = 'optimization';
         if (insight.priority === 'high') type = 'warning';
@@ -348,11 +409,17 @@ export function useDailyPulse() {
 
       const defaultTips: SmartTip[] = tips.length === 0 ? [
         { id: 'default-1', type: 'optimization', title: 'Best Posting Time', description: 'Based on your analytics, posting Reels on Tuesday between 6-8 PM gets you 3x more engagement.', actionLabel: 'Schedule a Reel for Tuesday 7 PM', highlightText: 'Tuesday between 6-8 PM' },
-        { id: 'default-2', type: 'warning', title: 'Posting Gap', description: "You haven't posted to TikTok in 5 days. Your audience engagement drops after 3 days of silence.", actionLabel: 'Create TikTok Post', highlightText: 'TikTok in 5 days' },
+        { id: 'default-2', type: 'warning', title: 'Posting Gap', description: "You haven't posted to Instagram in 5 days. Your audience engagement drops after 3 days of silence.", actionLabel: 'Create Instagram Post', highlightText: 'Instagram in 5 days' },
       ] : [];
 
-      const smartTips: SmartTipsData = { tipsCount: tips.length || defaultTips.length, trendingCount: tips.filter((t) => t.type === 'opportunity').length, tips: tips.length > 0 ? tips : defaultTips, allCaughtUp: !!(sessionResult.data?.completed_at) };
+      const smartTips: SmartTipsData = {
+        tipsCount: tips.length || defaultTips.length,
+        trendingCount: tips.filter((t) => t.type === 'opportunity').length,
+        tips: tips.length > 0 ? tips : defaultTips,
+        allCaughtUp: !!(sessionResult.data?.completed_at),
+      };
 
+      // ── Deal Pipeline ─────────────────────────────────────────────────
       const now = new Date();
       const activeDealsRaw = dealsResult.data || [];
       const stageStatusMessages: Record<string, string> = { Intake: 'Awaiting quote', Quoted: 'Quote sent, awaiting response', Negotiating: 'Negotiating terms', Contracted: 'Contract signed', 'In Production': 'Content in production' };
@@ -371,7 +438,12 @@ export function useDailyPulse() {
         return { id: deal.id, brand: deal.brand, status, statusMessage, amount, actionType, daysInStatus: daysStalled > 0 ? daysStalled : undefined };
       });
 
-      const dealPipeline: DealPipelineData = { activeDeals: activeDealsRaw.length, stalledCount: pipelineDeals.filter((d) => d.status === 'stalled' || d.status === 'urgent').length, totalValue: pipelineDeals.reduce((sum, d) => sum + d.amount, 0), deals: pipelineDeals.slice(0, 5) };
+      const dealPipeline: DealPipelineData = {
+        activeDeals: activeDealsRaw.length,
+        stalledCount: pipelineDeals.filter((d) => d.status === 'stalled' || d.status === 'urgent').length,
+        totalValue: pipelineDeals.reduce((sum, d) => sum + d.amount, 0),
+        deals: pipelineDeals.slice(0, 5),
+      };
 
       setData({ contentRecap, engagement, comingUp, smartTips, dealPipeline, session: sessionResult.data, userName });
     } catch (err) {
@@ -405,4 +477,4 @@ export function useDailyPulse() {
   useEffect(() => { fetchData(); }, [fetchData]);
 
   return { data, loading, error, hasConnectedAccounts, connectedPlatforms, refetch: fetchData, markCardReviewed, dismissAll };
-                                       }
+}
