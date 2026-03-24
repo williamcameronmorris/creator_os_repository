@@ -53,17 +53,22 @@ function AppContent() {
 
   const loadProfile = async () => {
     if (!user) return;
-
-    const { data } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', user.id)
-      .maybeSingle();
-
-    if (data) {
-      setProfile(data);
+    const safetyTimer = setTimeout(() => setCheckingProfile(false), 8000);
+    try {
+      const { data } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .maybeSingle();
+      if (data) {
+        setProfile(data);
+      }
+    } catch {
+      // profile load failure is non-critical
+    } finally {
+      clearTimeout(safetyTimer);
+      setCheckingProfile(false);
     }
-    setCheckingProfile(false);
   };
 
   if (loading || checkingProfile) {
