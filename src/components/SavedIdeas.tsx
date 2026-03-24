@@ -67,6 +67,8 @@ export function SavedIdeas() {
   useEffect(() => {
     if (user) {
       loadIdeas();
+    } else {
+      setLoading(false);
     }
   }, [user, showArchived]);
 
