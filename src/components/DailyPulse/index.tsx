@@ -294,7 +294,7 @@ export function DailyPulse() {
   const tipsStat = String(data.smartTips.tipsCount || 0);
 
   // ── Platform connect checklist ─────────────────────────────────────────
-  const allConnected = connectedPlatforms.instagram && connectedPlatforms.youtube && connectedPlatforms.tiktok && connectedPlatforms.threads;
+  const allConnected = connectedPlatforms.instagram && connectedPlatforms.youtube && connectedPlatforms.threads;
   const platforms = [
     { key: 'instagram' as const, label: 'Instagram', icon: Instagram, iconClass: 'text-pink-500', connected: connectedPlatforms.instagram },
     { key: 'youtube' as const, label: 'YouTube', icon: Youtube, iconClass: 'text-red-500', connected: connectedPlatforms.youtube },
