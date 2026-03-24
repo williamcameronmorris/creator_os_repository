@@ -322,7 +322,7 @@ export function useDailyPulse() {
         viewsChange,
         postsCount: thisWeekPosts.length > 0 ? thisWeekPosts.length : allPosts.length,
         bestPost,
-        recentPosts: allPosts.slice(0, 3),
+        recentPosts: allPosts.slice(0, 6),
         dailyViews,
       };
 
