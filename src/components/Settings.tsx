@@ -127,12 +127,6 @@ export function Settings() {
     }
   };
 
-  // Safari safety valve: force loading=false after 5s if fetch hangs
-  useEffect(() => {
-    const t = setTimeout(() => setLoading(false), 5000);
-    return () => clearTimeout(t);
-  }, []);
-
   return (
     <div className="max-w-4xl mx-auto space-y-8">
       <div>
