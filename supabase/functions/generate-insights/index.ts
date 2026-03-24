@@ -79,15 +79,26 @@ Deno.serve(async (req: Request) => {
     // ── Pull recent published posts ──────────────────────────────────────────
     let postsQuery = supabase
       .from("content_posts")
-      .select("id, platform, content_type, title, views, likes, comments, engagement_rate, published_date, saves")
+      .select("id, platform, content_type, title, views, likes, comments, engagement_rate, published_at, saves, caption")
       .eq("user_id", userId)
       .eq("status", "published")
-      .gte("published_date", thirtyDaysAgoStr)
+      .gte("published_at", thirtyDaysAgoStr)
       .order("engagement_rate", { ascending: false })
       .limit(30);
 
     if (filterPlatform) postsQuery = postsQuery.eq("platform", filterPlatform);
     const { data: posts } = await postsQuery;
+
+  // Compute engagement_rate fallback for posts where it's missing/zero
+  for (const p of posts || []) {
+    if (!p.engagement_rate || Number(p.engagement_rate) === 0) {
+      const eng = (p.likes || 0) + (p.comments || 0);
+      p.engagement_rate = p.views > 0 ? (eng / p.views) * 100 : eng;
+    }
+    if (!p.title && p.caption) {
+      p.title = String(p.caption).split("\n")[0].slice(0, 60);
+    }
+  }
 
     // ── Aggregate by platform ─────────────────────────────────────────────────
     const platformGroups: Record<string, { recent: typeof metrics; posts: typeof posts }> = {};
@@ -161,7 +172,7 @@ Deno.serve(async (req: Request) => {
 
       // ── Underperformer insight ─────────────────────────────────────────────
       const recentPosts = (platPosts || [])
-        .filter((p: any) => p.published_date >= sevenDaysAgoStr)
+        .filter((p: any) => p.published_at >= sevenDaysAgoStr)
         .sort((a: any, b: any) => Number(a.engagement_rate) - Number(b.engagement_rate));
 
       if (recentPosts.length >= 1 && sortedByEng.length >= 3) {
