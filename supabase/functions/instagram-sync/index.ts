@@ -136,9 +136,15 @@ Deno.serve(async (req: Request) => {
           ? "video"
           : "image";
 
-      const postData = {
+      // Extract a human-readable title from the first line of the caption (max 80 chars)
+    const captionTitle = item.caption
+      ? item.caption.split("\n")[0].trim().slice(0, 80) || ""
+      : "";
+
+    const postData = {
         user_id: userId,
         platform: "instagram",
+        title: captionTitle,
         caption: item.caption || "",
         media_url: item.media_url || item.thumbnail_url || "",
         thumbnail_url: item.thumbnail_url || "",
