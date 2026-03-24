@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { CheckCircle, AlertCircle, Loader } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 
 /**
  * YoutubeCallback
@@ -10,9 +11,10 @@ import { CheckCircle, AlertCircle, Loader } from 'lucide-react';
  * URL pattern: /auth/youtube/callback?code=ABC123
  *
  * Flow:
- *   1. Extract `code` from URL params
- *   2. Call the youtube-auth Supabase Edge Function to exchange code for tokens
- *   3. Show success/error with channel info and redirect to /settings
+ * 1. Extract `code` from URL params
+ * 2. Call the youtube-auth Supabase Edge Function to exchange code for tokens
+ * 3. Trigger youtube-sync to pull in videos immediately
+ * 4. Show success/error with channel info and redirect to /settings
  */
 export function YoutubeCallback() {
   const [searchParams] = useSearchParams();
@@ -26,6 +28,14 @@ export function YoutubeCallback() {
   const code = searchParams.get('code');
   const oauthError = searchParams.get('error');
   const errorDescription = searchParams.get('error_description');
+
+  // Safely format subscriber counts, handles undefined/null/0
+  const formatSubscribers = (n: number | undefined | null): string => {
+    if (!n || n <= 0) return '0';
+    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+    if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+    return n.toString();
+  };
 
   useEffect(() => {
     if (oauthError) {
@@ -53,13 +63,16 @@ export function YoutubeCallback() {
 
         const redirectUri = `${window.location.origin}/auth/youtube/callback`;
 
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY;
+
         const response = await fetch(
           `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/youtube-auth`,
           {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+              Authorization: `Bearer ${token}`,
             },
             body: JSON.stringify({ code, redirect_uri: redirectUri, userId: user.id }),
           }
@@ -79,8 +92,15 @@ export function YoutubeCallback() {
             : 'YouTube channel connected successfully.'
         );
 
+        // Kick off a background sync so videos appear immediately
+        fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/youtube-sync`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ userId: user.id }),
+        }).catch(() => {/* sync runs in background, ignore errors */});
+
         setTimeout(() => navigate('/settings'), 3000);
-      } catch (err: any) {
+      } catch (err: unknown) {
         setStatus('error');
         setMessage((err as Error).message || 'Failed to connect YouTube account. Please try again.');
         setTimeout(() => navigate('/settings'), 5000);
@@ -89,12 +109,6 @@ export function YoutubeCallback() {
 
     handleExchange();
   }, [code, oauthError, user]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const formatSubscribers = (n: number) => {
-    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-    if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-    return n.toString();
-  };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background px-4">
@@ -133,9 +147,11 @@ export function YoutubeCallback() {
             <div className="flex items-center justify-between p-3 rounded-xl bg-secondary border border-border">
               <div className="text-left">
                 <p className="text-sm font-semibold text-foreground">{channel.name}</p>
-                <p className="text-xs text-muted-foreground">
-                  {formatSubscribers(channel.subscribers)} subscribers
-                </p>
+                {channel.subscribers != null && (
+                  <p className="text-xs text-muted-foreground">
+                    {formatSubscribers(channel.subscribers)} subscribers
+                  </p>
+                )}
               </div>
               <CheckCircle className="w-4 h-4 text-emerald-500 flex-shrink-0" />
             </div>
