@@ -147,11 +147,15 @@ export function DailyBriefSection() {
   const { recommendations, loading, generating, error, hasProfile, generate } = useRecommendations();
 
   const handleCreateClick = (rec: Recommendation) => {
-    // Navigate to Studio with pre-filled context
+    // Navigate to Studio with full Daily Brief context — Studio auto-advances past Ideation
     const params = new URLSearchParams({
       platform: rec.platform || 'instagram',
       type: rec.content_type || 'reel',
-      idea: rec.hook_text || rec.suggested_topic,
+      idea: rec.suggested_topic || '',
+      hook: rec.hook_text || '',
+      framework: rec.hook_framework || '',
+      reasoning: rec.reasoning || '',
+      confidence: String(rec.confidence_score || 85),
     });
     navigate(`/studio?${params.toString()}`);
   };
