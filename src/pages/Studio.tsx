@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { supabase, type AIContentSuggestion } from '../lib/supabase';
 import { getAIQuota, type AIQuotaInfo } from '../lib/aiQuota';
 import { WorkflowStepper, type WorkflowStage } from '../components/Studio/WorkflowStepper';
@@ -18,6 +19,7 @@ export function Studio() {
   const [aiSidebarOpen] = useState(true);
   const [showSuccess, setShowSuccess] = useState(false);
   const [aiQuota, setAiQuota] = useState<AIQuotaInfo | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
 
   useEffect(() => {
     const loadQuota = async () => {
@@ -28,6 +30,28 @@ export function Studio() {
     };
     loadQuota();
   }, []);
+
+
+
+  // Auto-advance to scripting when arriving from Daily Brief "Start creating"
+  useEffect(() => {
+    const ideaParam = searchParams.get('idea');
+    if (!ideaParam) return;
+    const prefilledIdea: AIContentSuggestion = {
+      id: '',
+      user_id: '',
+      platform: (searchParams.get('platform') || 'instagram') as any,
+      content_type: (searchParams.get('type') || 'reel') as any,
+      suggested_topic: ideaParam,
+      suggested_format: searchParams.get('hook') || ideaParam,
+      reasoning: searchParams.get('reasoning') || 'From your Daily Brief',
+      confidence_score: Number(searchParams.get('confidence') || 85),
+      status: 'accepted',
+      created_at: new Date().toISOString(),
+    };
+    setSearchParams({}, { replace: true });
+    handleIdeaSelected(prefilledIdea);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleIdeaSelected = async (idea: AIContentSuggestion) => {
     try {
