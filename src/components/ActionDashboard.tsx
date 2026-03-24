@@ -401,7 +401,7 @@ export default function ActionDashboard({ onNavigate, embedded = false }: Action
           </p>
           <p className="text-xl font-bold text-foreground">
             {socialStats.totalViews > 0
-              ? `${(socialStats.totalViews / 1000).toFixed(1)}k`
+              ? (socialStats.totalViews >= 1000 ? `${(socialStats.totalViews / 1000).toFixed(1)}k` : String(socialStats.totalViews))
               : socialStats.totalEngagement > 0
                 ? `${socialStats.totalEngagement > 0 ? (socialStats.totalEngagement >= 1000 ? `${(socialStats.totalEngagement / 1000).toFixed(1)}k` : String(socialStats.totalEngagement)) : '—'}`
                 : '—'}
