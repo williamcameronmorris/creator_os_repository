@@ -13,7 +13,8 @@ export function useTimezone(): { timezone: string; loading: boolean } {
   useEffect(() => {
     let active = true;
     (async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user;
       if (!user) { setLoading(false); return; }
 
       const { data } = await supabase
@@ -22,9 +23,7 @@ export function useTimezone(): { timezone: string; loading: boolean } {
         .eq('id', user.id)
         .maybeSingle();
 
-      if (active && data?.timezone) {
-        setTimezone(data.timezone);
-      }
+      if (active && data?.timezone) { setTimezone(data.timezone); }
       if (active) setLoading(false);
     })();
     return () => { active = false; };
