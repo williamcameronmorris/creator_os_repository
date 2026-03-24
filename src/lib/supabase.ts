@@ -7,7 +7,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables');
 }
 
-const FETCH_TIMEOUT_MS = 15_000;
+const FETCH_TIMEOUT_MS = 5_000;
 
 const fetchWithTimeout = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
   const controller = new AbortController();
