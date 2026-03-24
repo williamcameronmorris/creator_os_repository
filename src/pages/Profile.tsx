@@ -67,6 +67,7 @@ export function Profile() {
 
   useEffect(() => {
     if (user) loadProfile();
+    else setLoading(false);
   }, [user]);
 
   const loadProfile = async () => {
