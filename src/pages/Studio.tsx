@@ -19,6 +19,7 @@ export function Studio() {
   const [aiSidebarOpen] = useState(true);
   const [showSuccess, setShowSuccess] = useState(false);
   const [aiQuota, setAiQuota] = useState<AIQuotaInfo | null>(null);
+  const [prefilledIdea, setPrefilledIdea] = useState<AIContentSuggestion | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
 
   useEffect(() => {
@@ -31,13 +32,11 @@ export function Studio() {
     loadQuota();
   }, []);
 
-
-
-  // Auto-advance to scripting when arriving from Daily Brief "Start creating"
+  // Pre-load Daily Brief idea into Ideation stage instead of auto-advancing
   useEffect(() => {
     const ideaParam = searchParams.get('idea');
     if (!ideaParam) return;
-    const prefilledIdea: AIContentSuggestion = {
+    const idea: AIContentSuggestion = {
       id: '',
       user_id: '',
       platform: (searchParams.get('platform') || 'instagram') as any,
@@ -50,16 +49,13 @@ export function Studio() {
       created_at: new Date().toISOString(),
     };
     setSearchParams({}, { replace: true });
-    handleIdeaSelected(prefilledIdea);
+    setPrefilledIdea(idea);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleIdeaSelected = async (idea: AIContentSuggestion) => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        alert('You must be logged in to start a project.');
-        return;
-      }
+      if (!user) { alert('You must be logged in to start a project.'); return; }
 
       if (idea.id) {
         await supabase
@@ -81,17 +77,14 @@ export function Studio() {
         .select()
         .maybeSingle();
 
-      if (error) {
-        console.error('Error creating workflow:', error);
-        alert('Failed to create workflow. Please try again.');
-        return;
-      }
+      if (error) { console.error('Error creating workflow:', error); alert('Failed to create workflow. Please try again.'); return; }
 
       if (data) {
         setActiveWorkflowId(data.id);
         setActiveContentType(data.content_type);
         setCompletedStages(['ideation']);
         setActiveStage('scripting');
+        setPrefilledIdea(null);
       } else {
         alert('Failed to create workflow. Please try again.');
       }
@@ -105,28 +98,14 @@ export function Studio() {
     if (!completedStages.includes(stageName)) {
       setCompletedStages(prev => [...prev, stageName]);
     }
-
     const stages: WorkflowStage[] = ['ideation', 'scripting', 'creation', 'scheduling', 'engagement', 'analysis'];
     const idx = stages.indexOf(stageName);
-    if (idx < stages.length - 1) {
-      setActiveStage(stages[idx + 1]);
-    }
+    if (idx < stages.length - 1) { setActiveStage(stages[idx + 1]); }
   };
 
-  const handleSkip = (stageName: WorkflowStage) => {
-    handleStepComplete(stageName);
-  };
-
-  const handleSchedulingComplete = () => {
-    setCompletedStages(prev => [...prev, 'scheduling']);
-    setActiveStage('engagement');
-  };
-
-  const handleEngagementComplete = () => {
-    setCompletedStages(prev => [...prev, 'engagement']);
-    setActiveStage('analysis');
-  };
-
+  const handleSkip = (stageName: WorkflowStage) => { handleStepComplete(stageName); };
+  const handleSchedulingComplete = () => { setCompletedStages(prev => [...prev, 'scheduling']); setActiveStage('engagement'); };
+  const handleEngagementComplete = () => { setCompletedStages(prev => [...prev, 'engagement']); setActiveStage('analysis'); };
   const handleWorkflowComplete = () => {
     setShowSuccess(true);
     setTimeout(() => {
@@ -158,11 +137,8 @@ export function Studio() {
         onStageSelect={setActiveStage}
         completedStages={completedStages}
       />
-
       <div className="flex-1 flex max-w-7xl mx-auto w-full p-4 lg:p-6 gap-4 lg:gap-6 items-start">
-
         <div className="flex-1 bg-card rounded-2xl shadow-sm border border-border h-full flex flex-col overflow-hidden">
-
           <div className="p-4 lg:p-6 border-b border-border flex justify-between items-center">
             <div>
               <h2 className="text-xl font-bold text-foreground capitalize">{activeStage} Stage</h2>
@@ -176,10 +152,12 @@ export function Studio() {
               </p>
             </div>
           </div>
-
           <div className="flex-1 p-4 lg:p-8 overflow-y-auto">
             {activeStage === 'ideation' ? (
-              <IdeationStage onIdeaSelected={handleIdeaSelected} />
+              <IdeationStage
+                onIdeaSelected={handleIdeaSelected}
+                prefilledIdea={prefilledIdea ?? undefined}
+              />
             ) : activeStage === 'scripting' && activeWorkflowId ? (
               <ScriptingStage
                 workflowId={activeWorkflowId}
@@ -213,9 +191,7 @@ export function Studio() {
               />
             ) : (
               <div className="text-center py-20 text-muted-foreground">
-                {activeStage === 'ideation'
-                  ? "Select an idea to start."
-                  : "Select a valid workflow to proceed."}
+                {activeStage === 'ideation' ? "Select an idea to start." : "Select a valid workflow to proceed."}
               </div>
             )}
           </div>
@@ -238,7 +214,6 @@ export function Studio() {
                 {aiQuota ? `${aiQuota.requestsRemaining} credits left` : '...'}
               </div>
             </div>
-
             <div className="flex-1 p-4 overflow-y-auto space-y-4">
               <div className="flex gap-3">
                 <div className="w-8 h-8 rounded-full bg-accent flex items-center justify-center flex-shrink-0">
@@ -251,7 +226,6 @@ export function Studio() {
                 </div>
               </div>
             </div>
-
             <div className="p-4 border-t border-border">
               <input
                 type="text"
