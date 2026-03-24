@@ -17,22 +17,18 @@ export interface PlatformHealth {
  * The actual API-level validation (making a test call) is too expensive to do
  * on every load, so we rely on expiry times and the `token_expires_at` columns.
  */
-export function useTokenHealth(): {
-  platformHealth: PlatformHealth[];
-  loading: boolean;
-  refresh: () => void;
-} {
+export function useTokenHealth(): { platformHealth: PlatformHealth[]; loading: boolean; refresh: () => void; } {
   const [platformHealth, setPlatformHealth] = useState<PlatformHealth[]>([]);
   const [loading, setLoading] = useState(true);
   const [tick, setTick] = useState(0);
-
   const refresh = () => setTick((t) => t + 1);
 
   useEffect(() => {
     let active = true;
     (async () => {
       setLoading(true);
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user;
       if (!user) { setLoading(false); return; }
 
       const { data: profile } = await supabase
