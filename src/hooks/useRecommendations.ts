@@ -36,7 +36,8 @@ export function useRecommendations(): UseRecommendationsResult {
 
   const load = useCallback(async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user;
       if (!user) return;
 
       // Check if the user has a content profile
@@ -45,7 +46,6 @@ export function useRecommendations(): UseRecommendationsResult {
         .select('posts_analyzed')
         .eq('user_id', user.id)
         .maybeSingle();
-
       setHasProfile(!!(profile && profile.posts_analyzed > 0));
 
       // Pull the most recent recommendation_engine suggestions
@@ -58,7 +58,6 @@ export function useRecommendations(): UseRecommendationsResult {
         .limit(3);
 
       if (recsError) throw recsError;
-
       setRecommendations(recs || []);
     } catch (err) {
       console.error('useRecommendations load error:', err);
@@ -68,15 +67,14 @@ export function useRecommendations(): UseRecommendationsResult {
     }
   }, []);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  useEffect(() => { load(); }, [load]);
 
   const generate = useCallback(async (force = false) => {
     setGenerating(true);
     setError(null);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user;
       if (!user) throw new Error('Not authenticated');
 
       const res = await fetch(
@@ -90,10 +88,9 @@ export function useRecommendations(): UseRecommendationsResult {
           body: JSON.stringify({ userId: user.id, force }),
         }
       );
-
       const json = await res.json();
-
       if (!res.ok) throw new Error(json.error || 'Failed to generate recommendations');
+
       if (json.skipped) {
         // Already fresh — just reload from DB
         await load();
