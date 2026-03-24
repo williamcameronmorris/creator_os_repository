@@ -88,6 +88,8 @@ export function Analytics() {
   const loadAnalytics = async () => {
     if (!user) return;
     setLoading(true);
+    const safetyTimer = setTimeout(() => setLoading(false), 5000);
+    try {
 
     const days = isPremium ? (timeRange === '7d' ? 7 : timeRange === '30d' ? 30 : 90) : 7;
     const startDate = subDays(new Date(), days).toISOString().split('T')[0];
@@ -260,8 +262,12 @@ export function Analytics() {
     } else {
       setAbResults([]);
     }
-
-    setLoading(false);
+    } catch (err) {
+      console.error('loadAnalytics error', err);
+    } finally {
+      clearTimeout(safetyTimer);
+      setLoading(false);
+    }
   };
 
   const getPlatformIcon = (p: string) => {
