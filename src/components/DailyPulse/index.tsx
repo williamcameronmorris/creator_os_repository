@@ -25,6 +25,8 @@ import {
   AlertCircle,
   Play,
   X,
+  Send,
+  Sparkles,
 } from 'lucide-react';
 
 type ExpandedCard = 'content' | 'engagement' | 'schedule' | 'tips' | null;
@@ -152,6 +154,44 @@ export function DailyPulse() {
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [expandedCard, setExpandedCard] = useState<ExpandedCard>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [aiQuery, setAiQuery] = useState('');
+  const [aiResponse, setAiResponse] = useState<string | null>(null);
+  const [aiAsking, setAiAsking] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [placeholderIndex, setPlaceholderIndex] = useState(0);
+  const placeholders = [
+    "Ask your question here: Why did my engagements drop?",
+    "Ask your question here: My last video performed great. Help me recreate it.",
+    "Ask your question here: What content should I post next?"
+  ];
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setPlaceholderIndex((prev) => (prev + 1) % placeholders.length);
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [placeholders.length]);
+  const handleAiSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const q = aiQuery.trim();
+    if (!q || aiAsking) return;
+    setAiAsking(true);
+    setAiError(null);
+    setAiResponse(null);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+      const { data: fnData, error: fnError } = await supabase.functions.invoke('ask-copilot', {
+        body: { userId: user.id, question: q },
+      });
+      if (fnError) throw fnError;
+      if (!fnData?.success) throw new Error(fnData?.error || 'No response from AI');
+      setAiResponse(fnData.answer);
+    } catch (err: any) {
+      setAiError(err.message || 'Failed to get a response. Please try again.');
+    } finally {
+      setAiAsking(false);
+    }
+  };
 
   // Mobile swipe state
   const [slideIndex, setSlideIndex] = useState(0);
@@ -392,7 +432,34 @@ export function DailyPulse() {
 
         <ConnectBanner />
 
-        {/* AI Daily Brief — proactive content recommendations */}
+        {/* AI Copilot bar */}
+      <div className="space-y-3 mb-8">
+        <form onSubmit={handleAiSubmit}>
+          <div className={`flex items-center gap-3 p-4 rounded-2xl bg-gradient-to-br from-chart-1/10 to-chart-3/10 border-2 shadow-lg backdrop-blur-sm transition-colors ${aiAsking ? 'border-chart-1/50' : 'border-chart-1/30'}`}>
+            <div className={`flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-chart-1 to-chart-3 shadow-md transition-opacity ${aiAsking ? 'opacity-70' : ''}`}>
+              <Sparkles className={`w-5 h-5 text-white ${aiAsking ? 'animate-pulse' : ''}`} />
+            </div>
+            <input type="text" value={aiQuery} onChange={(e) => { setAiQuery(e.target.value); if (aiResponse) setAiResponse(null); if (aiError) setAiError(null); }} placeholder={placeholders[placeholderIndex]} disabled={aiAsking} className="flex-1 bg-transparent text-foreground placeholder:text-muted-foreground/70 focus:outline-none text-base disabled:opacity-60" />
+            <button type="submit" disabled={aiAsking || !aiQuery.trim()} className="flex items-center justify-center w-10 h-10 rounded-xl bg-primary hover:bg-primary/90 transition-all disabled:opacity-40 disabled:cursor-not-allowed" title="Ask your copilot">
+              <Send className={`w-5 h-5 text-primary-foreground ${aiAsking ? 'animate-pulse' : ''}`} />
+            </button>
+          </div>
+        </form>
+        {(aiResponse || aiError) && (
+          <div className={`rounded-2xl p-5 border ${aiError ? 'bg-destructive/5 border-destructive/20' : 'bg-gradient-to-br from-chart-1/5 to-chart-3/5 border-chart-1/20'}`}>
+            <div className="flex items-start gap-3">
+              <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-gradient-to-br from-chart-1 to-chart-3 flex-shrink-0 mt-0.5">
+                <Sparkles className="w-4 h-4 text-white" />
+              </div>
+              <div className="flex-1 min-w-0">
+                {aiError ? <p className="text-sm text-destructive">{aiError}</p> : <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{aiResponse}</p>}
+              </div>
+              <button onClick={() => { setAiResponse(null); setAiError(null); }} className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0 text-lg leading-none" title="Dismiss">×</button>
+            </div>
+          </div>
+        )}
+      </div>
+      {/* AI Daily Brief — proactive content recommendations */}
         <DailyBriefSection />
 
         {/* 3-card grid */}
@@ -449,7 +516,17 @@ export function DailyPulse() {
           />
         </div>
 
-        {/* Footer actions */}
+        {/* ── COMMAND CENTER section ──────────────────────────────────── */}
+        <div className="mt-12">
+          <div className="flex items-center gap-4 mb-8">
+            <div className="flex-1 h-px bg-border" />
+            <span className="text-xs font-black tracking-widest text-muted-foreground uppercase">Command Center</span>
+            <div className="flex-1 h-px bg-border" />
+          </div>
+          <ActionDashboard onNavigate={navigate} embedded={true} />
+        </div>
+
+      {/* Footer actions */}
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
           {isCompleted ? (
             <button
@@ -479,15 +556,7 @@ export function DailyPulse() {
           )}
         </div>
 
-        {/* ── COMMAND CENTER section ──────────────────────────────────── */}
-        <div className="mt-12">
-          <div className="flex items-center gap-4 mb-8">
-            <div className="flex-1 h-px bg-border" />
-            <span className="text-xs font-black tracking-widest text-muted-foreground uppercase">Command Center</span>
-            <div className="flex-1 h-px bg-border" />
-          </div>
-          <ActionDashboard onNavigate={navigate} embedded={true} />
-        </div>
+  
       </div>
 
       {/* ── MOBILE (< lg) — swipeable cards ─────────────────────────────── */}
