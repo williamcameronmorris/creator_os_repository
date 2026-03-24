@@ -480,5 +480,11 @@ export function useDailyPulse() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
+  // Safari safety valve: force loading=false after 5s if fetch hangs
+  useEffect(() => {
+    const t = setTimeout(() => setLoading(false), 5000);
+    return () => clearTimeout(t);
+  }, []);
+
   return { data, loading, error, hasConnectedAccounts, connectedPlatforms, refetch: fetchData, markCardReviewed, dismissAll };
 }
