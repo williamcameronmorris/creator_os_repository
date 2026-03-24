@@ -8,6 +8,7 @@ export default defineConfig({
     exclude: ['lucide-react'],
   },
   build: {
+    target: 'safari14',
     rollupOptions: {
       output: {
         manualChunks: {
