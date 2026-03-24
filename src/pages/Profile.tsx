@@ -210,12 +210,6 @@ export function Profile() {
     );
   }
 
-  // Safari safety valve: force loading=false after 5s if fetch hangs
-  useEffect(() => {
-    const t = setTimeout(() => setLoading(false), 5000);
-    return () => clearTimeout(t);
-  }, []);
-
   return (
     <div className="max-w-2xl mx-auto space-y-5">
       {/* Header */}
