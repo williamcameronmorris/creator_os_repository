@@ -1,16 +1,12 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 
-type AuthContextType = {
+interface AuthContextType {
   user: User | null;
   loading: boolean;
-  signUp: (email: string, password: string) => Promise<void>;
-  signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
-  resetPassword: (email: string) => Promise<void>;
-  updatePassword: (newPassword: string) => Promise<void>;
-};
+}
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -19,6 +15,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Absolute safety net: never leave the app stuck loading longer than 5s.
+    // Covers Safari ITP hangs, slow networks, and any other silent failure mode.
+    const timeout = setTimeout(() => {
+      setLoading(false);
+    }, 5000);
+
     supabase.auth.getSession()
       .then(({ data: { session } }) => {
         setUser(session?.user ?? null);
@@ -27,63 +29,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(null);
       })
       .finally(() => {
+        clearTimeout(timeout);
         setLoading(false);
       });
 
+    // onAuthStateChange fires immediately on mount in some Supabase versions
+    // and also handles token refreshes. Clear loading here too so whichever
+    // resolves first unblocks the UI.
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      (async () => {
-        setUser(session?.user ?? null);
-
-        if (session?.user) {
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', session.user.id)
-            .maybeSingle();
-
-          if (!profile) {
-            await supabase.from('profiles').insert({
-              id: session.user.id,
-            });
-          }
-        }
-      })();
+      setUser(session?.user ?? null);
+      setLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      clearTimeout(timeout);
+      subscription.unsubscribe();
+    };
   }, []);
 
-  const signUp = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signUp({ email, password });
-    if (error) throw error;
-  };
-
-  const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw error;
-  };
-
   const signOut = async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) throw error;
-  };
-
-  const resetPassword = async (email: string) => {
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/auth?reset=true`,
-    });
-    if (error) throw error;
-  };
-
-  const updatePassword = async (newPassword: string) => {
-    const { error } = await supabase.auth.updateUser({
-      password: newPassword,
-    });
-    if (error) throw error;
+    await supabase.auth.signOut();
+    setUser(null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, signUp, signIn, signOut, resetPassword, updatePassword }}>
+    <AuthContext.Provider value={{ user, loading, signOut }}>
       {children}
     </AuthContext.Provider>
   );
