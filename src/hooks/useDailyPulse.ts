@@ -129,32 +129,25 @@ function generateDemoData(userName: string, session: DailyPulseSession | null): 
   const now = new Date();
   const demoViews = [1850, 2340, 1920, 3150, 2780, 4200, 3650];
   const totalViews = demoViews.reduce((a, b) => a + b, 0);
-
   const demoPosts: ContentPost[] = [
     { id: 'demo-1', title: 'Morning coffee routine', platform: 'instagram', views: 4200, likes: 312, comments: 28, published_at: addDays(now, -2).toISOString() },
     { id: 'demo-2', title: 'Day in my life vlog', platform: 'youtube', views: 3650, likes: 245, comments: 42, published_at: addDays(now, -1).toISOString() },
     { id: 'demo-3', title: 'Product review haul', platform: 'tiktok', views: 2780, likes: 189, comments: 15, published_at: addDays(now, -3).toISOString() },
   ];
-
   const contentRecap: ContentRecapData = { totalViews, viewsChange: 8, postsCount: 3, bestPost: demoPosts[0], recentPosts: demoPosts, dailyViews: demoViews };
-
   const engagement: EngagementData = {
     totalEngagement: 2847, engagementChange: 12, engagementRate: 4.2,
     metrics: { likes: 2134, likesChange: 15, comments: 347, commentsChange: 8, saves: 189, savesChange: 22, shares: 177, sharesChange: 5 },
     topPosts: demoPosts.map((p) => ({ id: p.id, title: p.title, platform: p.platform, engagementRate: ((p.likes + p.comments) / p.views) * 100 })),
   };
-
   const todayAt = (h: number, m: number) => setMinutes(setHours(now, h), m).toISOString();
   const tomorrowAt = (h: number, m: number) => setMinutes(setHours(addDays(now, 1), h), m).toISOString();
-
   const demoSchedule: ScheduleItem[] = [
     { id: 'sched-1', title: 'Morning motivation post', scheduledTime: todayAt(18, 0), platform: 'instagram', type: 'reel' },
     { id: 'sched-2', title: 'Product review video', scheduledTime: tomorrowAt(14, 30), platform: 'youtube', type: 'video' },
     { id: 'sched-3', title: 'Behind the scenes', scheduledTime: tomorrowAt(19, 0), platform: 'tiktok', type: 'post' },
   ];
-
   const comingUp: ComingUpData = { todayCount: 1, thisWeekCount: 3, nextPostTime: demoSchedule[0].scheduledTime, nextPostPlatform: demoSchedule[0].platform, items: demoSchedule };
-
   const smartTips: SmartTipsData = {
     tipsCount: 2, trendingCount: 1,
     tips: [
@@ -163,7 +156,6 @@ function generateDemoData(userName: string, session: DailyPulseSession | null): 
     ],
     allCaughtUp: false,
   };
-
   const dealPipeline: DealPipelineData = {
     activeDeals: 2, stalledCount: 1, totalValue: 3500,
     deals: [
@@ -171,7 +163,6 @@ function generateDemoData(userName: string, session: DailyPulseSession | null): 
       { id: 'demo-deal-2', brand: 'FitCore App', status: 'new', statusMessage: 'New inquiry received', amount: 2000, actionType: 'quote' },
     ],
   };
-
   return { contentRecap, engagement, comingUp, smartTips, dealPipeline, session, userName };
 }
 
@@ -186,8 +177,8 @@ export function useDailyPulse() {
     try {
       setLoading(true);
       setError(null);
-
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user;
       if (!user) { setError('Not authenticated'); return; }
 
       const today = format(new Date(), 'yyyy-MM-dd');
@@ -198,8 +189,13 @@ export function useDailyPulse() {
       const thirtyDaysAgo = format(subDays(new Date(), 30), 'yyyy-MM-dd');
 
       const [
-        profileResult, sessionResult, postsResult, scheduledResult,
-        insightsResult, dealsResult, credentialsResult,
+        profileResult,
+        sessionResult,
+        postsResult,
+        scheduledResult,
+        insightsResult,
+        dealsResult,
+        credentialsResult,
       ] = await Promise.all([
         supabase.from('profiles').select('display_name, first_name').eq('id', user.id).maybeSingle(),
         supabase.from('daily_pulse_sessions').select('*').eq('user_id', user.id).eq('session_date', today).maybeSingle(),
@@ -242,9 +238,7 @@ export function useDailyPulse() {
       setHasConnectedAccounts(hasConnectedAccounts);
 
       // Real data exists if there are any published posts in last 30 days, or upcoming scheduled posts
-      const hasRealData =
-        (postsResult.data && postsResult.data.length > 0) ||
-        (scheduledResult.data && scheduledResult.data.length > 0);
+      const hasRealData = (postsResult.data && postsResult.data.length > 0) || (scheduledResult.data && scheduledResult.data.length > 0);
 
       if (!hasRealData) {
         setData(generateDemoData(userName, sessionResult.data));
@@ -274,9 +268,7 @@ export function useDailyPulse() {
       });
 
       // ── Aggregate engagement from content_posts (platform_metrics is optional) ──
-      const sumField = (arr: typeof allPosts, field: 'views' | 'likes' | 'comments') =>
-        arr.reduce((s, p) => s + (p[field] || 0), 0);
-
+      const sumField = (arr: typeof allPosts, field: 'views' | 'likes' | 'comments') => arr.reduce((s, p) => s + (p[field] || 0), 0);
       const thisWeekViews = sumField(thisWeekPosts, 'views');
       const thisWeekLikes = sumField(thisWeekPosts, 'likes');
       const thisWeekComments = sumField(thisWeekPosts, 'comments');
@@ -296,7 +288,7 @@ export function useDailyPulse() {
       };
       const viewsChange = calcChange(displayViews, prevDisplayViews);
 
-      // ── Daily chart — last 7 days, engagement per day ─────────────────
+      // ── Daily chart — last 7 days, engagement per day ─────────────────────────────────
       const sevenDaysAgo = subDays(new Date(), 6);
       const dailyViews = [0, 0, 0, 0, 0, 0, 0];
       allPosts.forEach((post) => {
@@ -308,14 +300,12 @@ export function useDailyPulse() {
         dailyViews[dayIndex] += val;
       });
 
-      // ── Best post: highest engagement in last 30 days ─────────────────
-      const bestPost = allPosts.length > 0
-        ? allPosts.reduce((best, post) => {
-            const postScore = post.views > 0 ? post.views : post.likes + post.comments;
-            const bestScore = best.views > 0 ? best.views : best.likes + best.comments;
-            return postScore > bestScore ? post : best;
-          })
-        : undefined;
+      // ── Best post: highest engagement in last 30 days ─────────────────────────────────
+      const bestPost = allPosts.length > 0 ? allPosts.reduce((best, post) => {
+        const postScore = post.views > 0 ? post.views : post.likes + post.comments;
+        const bestScore = best.views > 0 ? best.views : best.likes + best.comments;
+        return postScore > bestScore ? post : best;
+      }) : undefined;
 
       const contentRecap: ContentRecapData = {
         totalViews: displayViews,
@@ -326,12 +316,11 @@ export function useDailyPulse() {
         dailyViews,
       };
 
-      // ── Engagement card ───────────────────────────────────────────────
+      // ── Engagement card ────────────────────────────────────────────────────────────────
       const totalEngagement = thisWeekEngagement;
       const lastWeekTotalEngagement = lastWeekEngagement;
       const engagementChange = calcChange(totalEngagement, lastWeekTotalEngagement);
       const engagementRate = thisWeekViews > 0 ? (totalEngagement / thisWeekViews) * 100 : 0;
-
       const topPosts: TopPost[] = allPosts
         .map((post) => ({
           id: post.id,
@@ -342,35 +331,27 @@ export function useDailyPulse() {
         }))
         .sort((a, b) => b.engagementRate - a.engagementRate)
         .slice(0, 3);
-
       const engagement: EngagementData = {
-        totalEngagement,
-        engagementChange,
-        engagementRate,
+        totalEngagement, engagementChange, engagementRate,
         metrics: {
-          likes: thisWeekLikes,
-          likesChange: calcChange(thisWeekLikes, lastWeekLikes),
-          comments: thisWeekComments,
-          commentsChange: calcChange(thisWeekComments, lastWeekComments),
-          saves: 0,
-          savesChange: 0,
-          shares: 0,
-          sharesChange: 0,
+          likes: thisWeekLikes, likesChange: calcChange(thisWeekLikes, lastWeekLikes),
+          comments: thisWeekComments, commentsChange: calcChange(thisWeekComments, lastWeekComments),
+          saves: 0, savesChange: 0, shares: 0, sharesChange: 0,
         },
         topPosts,
       };
 
-      // ── Coming Up ─────────────────────────────────────────────────────
+      // ── Coming Up ──────────────────────────────────────────────────────────────────────
       const scheduledItems: ScheduleItem[] = (scheduledResult.data || []).map((post) => ({
-        id: post.id, title: post.title || 'Untitled', scheduledTime: post.scheduled_for,
+        id: post.id,
+        title: post.title || 'Untitled',
+        scheduledTime: post.scheduled_for,
         platform: (post.platform?.toLowerCase() || 'instagram') as Platform,
         type: (post.content_type?.toLowerCase() || 'post') as ItemType,
       }));
-
       const todayItems = scheduledItems.filter((item) => isToday(parseISO(item.scheduledTime)));
       const thisWeekItems = scheduledItems.filter((item) => isThisWeek(parseISO(item.scheduledTime), { weekStartsOn: 1 }));
       const nextItem = scheduledItems[0];
-
       const comingUp: ComingUpData = {
         todayCount: todayItems.length,
         thisWeekCount: thisWeekItems.length,
@@ -379,17 +360,23 @@ export function useDailyPulse() {
         items: scheduledItems,
       };
 
-      // ── Smart Tips ────────────────────────────────────────────────────
+      // ── Smart Tips ─────────────────────────────────────────────────────────────────────
       const mapInsightToTip = (insight: any): SmartTip => {
         let type: TipType = 'optimization';
         if (insight.priority === 'high') type = 'warning';
         if (insight.insight_type === 'opportunity') type = 'opportunity';
         const d = insight.insight_data || {};
-        return { id: insight.id, type, title: d.title || insight.title || 'Insight', description: d.description || insight.description || '', actionLabel: d.action || insight.action_label, actionUrl: d.actionUrl || insight.action_url, highlightText: d.highlightText || insight.highlight_text };
+        return {
+          id: insight.id,
+          type,
+          title: d.title || insight.title || 'Insight',
+          description: d.description || insight.description || '',
+          actionLabel: d.action || insight.action_label,
+          actionUrl: d.actionUrl || insight.action_url,
+          highlightText: d.highlightText || insight.highlight_text
+        };
       };
-
       const tips = (insightsResult.data || []).map(mapInsightToTip);
-
       if (tips.length === 0 && hasRealData) {
         supabase.functions.invoke('generate-insights', { body: { userId: user.id } })
           .then(() => {
@@ -406,12 +393,10 @@ export function useDailyPulse() {
           })
           .catch(() => {});
       }
-
       const defaultTips: SmartTip[] = tips.length === 0 ? [
         { id: 'default-1', type: 'optimization', title: 'Best Posting Time', description: 'Based on your analytics, posting Reels on Tuesday between 6-8 PM gets you 3x more engagement.', actionLabel: 'Schedule a Reel for Tuesday 7 PM', highlightText: 'Tuesday between 6-8 PM' },
         { id: 'default-2', type: 'warning', title: 'Posting Gap', description: "You haven't posted to Instagram in 5 days. Your audience engagement drops after 3 days of silence.", actionLabel: 'Create Instagram Post', highlightText: 'Instagram in 5 days' },
       ] : [];
-
       const smartTips: SmartTipsData = {
         tipsCount: tips.length || defaultTips.length,
         trendingCount: tips.filter((t) => t.type === 'opportunity').length,
@@ -419,11 +404,14 @@ export function useDailyPulse() {
         allCaughtUp: !!(sessionResult.data?.completed_at),
       };
 
-      // ── Deal Pipeline ─────────────────────────────────────────────────
+      // ── Deal Pipeline ──────────────────────────────────────────────────────────────────
       const now = new Date();
       const activeDealsRaw = dealsResult.data || [];
-      const stageStatusMessages: Record<string, string> = { Intake: 'Awaiting quote', Quoted: 'Quote sent, awaiting response', Negotiating: 'Negotiating terms', Contracted: 'Contract signed', 'In Production': 'Content in production' };
-
+      const stageStatusMessages: Record<string, string> = {
+        Intake: 'Awaiting quote', Quoted: 'Quote sent, awaiting response',
+        Negotiating: 'Negotiating terms', Contracted: 'Contract signed',
+        'In Production': 'Content in production'
+      };
       const pipelineDeals: PipelineDeal[] = activeDealsRaw.map((deal: any) => {
         const amount = deal.final_amount || deal.quote_standard || 0;
         const followupDate = deal.next_followup ? new Date(deal.next_followup) : null;
@@ -431,13 +419,17 @@ export function useDailyPulse() {
         let status: DealStatus = 'on_track';
         let statusMessage = stageStatusMessages[deal.stage] || deal.stage;
         let actionType: 'follow_up' | 'contract' | 'quote' = 'follow_up';
-        if (deal.payment_status === 'Overdue') { status = 'urgent'; statusMessage = 'Payment overdue'; actionType = 'follow_up'; }
-        else if (followupDate && daysStalled > 0) { status = 'stalled'; statusMessage = `No response in ${daysStalled} day${daysStalled === 1 ? '' : 's'}`; actionType = 'follow_up'; }
-        else if (deal.stage === 'Intake') { status = 'new'; actionType = 'quote'; }
-        else if (deal.stage === 'Quoted' || deal.stage === 'Negotiating') { actionType = 'contract'; }
+        if (deal.payment_status === 'Overdue') {
+          status = 'urgent'; statusMessage = 'Payment overdue'; actionType = 'follow_up';
+        } else if (followupDate && daysStalled > 0) {
+          status = 'stalled'; statusMessage = `No response in ${daysStalled} day${daysStalled === 1 ? '' : 's'}`; actionType = 'follow_up';
+        } else if (deal.stage === 'Intake') {
+          status = 'new'; actionType = 'quote';
+        } else if (deal.stage === 'Quoted' || deal.stage === 'Negotiating') {
+          actionType = 'contract';
+        }
         return { id: deal.id, brand: deal.brand, status, statusMessage, amount, actionType, daysInStatus: daysStalled > 0 ? daysStalled : undefined };
       });
-
       const dealPipeline: DealPipelineData = {
         activeDeals: activeDealsRaw.length,
         stalledCount: pipelineDeals.filter((d) => d.status === 'stalled' || d.status === 'urgent').length,
@@ -455,23 +447,35 @@ export function useDailyPulse() {
   }, []);
 
   const markCardReviewed = useCallback(async (cardId: string) => {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user;
     if (!user) return;
     const today = format(new Date(), 'yyyy-MM-dd');
     const currentReviewed = data?.session?.cards_reviewed || [];
     const newReviewed = [...currentReviewed, cardId];
     const isComplete = newReviewed.length >= 4;
     const completedAt = isComplete ? new Date().toISOString() : null;
-    await supabase.from('daily_pulse_sessions').upsert({ user_id: user.id, session_date: today, cards_reviewed: newReviewed, completed_at: completedAt }, { onConflict: 'user_id,session_date' });
-    setData((prev) => prev ? { ...prev, session: { id: prev.session?.id || '', dismissed_all: prev.session?.dismissed_all || false, cards_reviewed: newReviewed, completed_at: completedAt } } : null);
+    await supabase.from('daily_pulse_sessions').upsert({
+      user_id: user.id, session_date: today, cards_reviewed: newReviewed, completed_at: completedAt
+    }, { onConflict: 'user_id,session_date' });
+    setData((prev) => prev ? {
+      ...prev,
+      session: { id: prev.session?.id || '', dismissed_all: prev.session?.dismissed_all || false, cards_reviewed: newReviewed, completed_at: completedAt }
+    } : null);
   }, [data]);
 
   const dismissAll = useCallback(async () => {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user;
     if (!user) return;
     const today = format(new Date(), 'yyyy-MM-dd');
-    await supabase.from('daily_pulse_sessions').upsert({ user_id: user.id, session_date: today, dismissed_all: true, completed_at: new Date().toISOString() }, { onConflict: 'user_id,session_date' });
-    setData((prev) => prev ? { ...prev, session: { id: prev.session?.id || '', dismissed_all: true, cards_reviewed: prev.session?.cards_reviewed || [], completed_at: new Date().toISOString() } } : null);
+    await supabase.from('daily_pulse_sessions').upsert({
+      user_id: user.id, session_date: today, dismissed_all: true, completed_at: new Date().toISOString()
+    }, { onConflict: 'user_id,session_date' });
+    setData((prev) => prev ? {
+      ...prev,
+      session: { id: prev.session?.id || '', dismissed_all: true, cards_reviewed: prev.session?.cards_reviewed || [], completed_at: new Date().toISOString() }
+    } : null);
   }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
