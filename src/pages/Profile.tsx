@@ -72,13 +72,20 @@ export function Profile() {
 
   const loadProfile = async () => {
     if (!user) return;
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', user.id)
-      .maybeSingle();
-    if (!error && data) setProfile({ ...emptyProfile, ...data });
-    setLoading(false);
+    const safetyTimer = setTimeout(() => setLoading(false), 5000);
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .maybeSingle();
+      if (!error && data) setProfile({ ...emptyProfile, ...data });
+    } catch (err) {
+      console.error('loadProfile error', err);
+    } finally {
+      clearTimeout(safetyTimer);
+      setLoading(false);
+    }
   };
 
   const startEditing = () => {
