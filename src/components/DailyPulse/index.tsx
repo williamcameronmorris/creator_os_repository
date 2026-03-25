@@ -1,6 +1,7 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ActionDashboard from '../ActionDashboard';
+import { supabase } from '../../lib/supabase';
 import { format, parseISO } from 'date-fns';
 import { useDailyPulse } from '../../hooks/useDailyPulse';
 import { useTheme } from '../../contexts/ThemeContext';
