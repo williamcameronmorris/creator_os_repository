@@ -581,7 +581,48 @@ export function DailyPulse() {
               </p>
             </div>
 
-            {/* AI Daily Brief on mobile home slide */}
+            {/* AI Copilot bar */}
+        <div className="space-y-3 mb-4">
+          <form onSubmit={handleAiSubmit}>
+            <div className={`flex items-center gap-3 p-3.5 rounded-2xl bg-gradient-to-br from-chart-1/10 to-chart-3/10 border-2 shadow-md backdrop-blur-sm transition-colors ${aiAsking ? 'border-chart-1/50' : 'border-chart-1/30'}`}>
+              <div className={`flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-br from-chart-1 to-chart-3 shadow flex-shrink-0 transition-opacity ${aiAsking ? 'opacity-70' : ''}`}>
+                <Sparkles className={`w-4 h-4 text-white ${aiAsking ? 'animate-pulse' : ''}`} />
+              </div>
+              <input
+                type="text"
+                value={aiQuery}
+                onChange={(e) => { setAiQuery(e.target.value); if (aiResponse) setAiResponse(null); if (aiError) setAiError(null); }}
+                placeholder={placeholders[placeholderIndex]}
+                disabled={aiAsking}
+                className="flex-1 bg-transparent text-foreground placeholder:text-muted-foreground/70 focus:outline-none text-sm disabled:opacity-60"
+              />
+              <button
+                type="submit"
+                disabled={aiAsking || !aiQuery.trim()}
+                className="flex items-center justify-center w-9 h-9 rounded-xl bg-primary hover:bg-primary/90 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0"
+              >
+                <Send className={`w-4 h-4 text-primary-foreground ${aiAsking ? 'animate-pulse' : ''}`} />
+              </button>
+            </div>
+          </form>
+          {(aiResponse || aiError) && (
+            <div className={`rounded-2xl p-4 border ${aiError ? 'bg-destructive/5 border-destructive/20' : 'bg-gradient-to-br from-chart-1/5 to-chart-3/5 border-chart-1/20'}`}>
+              <div className="flex items-start gap-2.5">
+                <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-gradient-to-br from-chart-1 to-chart-3 flex-shrink-0 mt-0.5">
+                  <Sparkles className="w-3.5 h-3.5 text-white" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  {aiError
+                    ? <p className="text-xs text-destructive">{aiError}</p>
+                    : <p className="text-xs text-foreground leading-relaxed whitespace-pre-wrap">{aiResponse}</p>
+                  }
+                </div>
+                <button onClick={() => { setAiResponse(null); setAiError(null); }} className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0 text-lg leading-none">×</button>
+              </div>
+            </div>
+          )}
+        </div>
+        {/* AI Daily Brief on mobile home slide */}
             <DailyBriefSection />
 
             {isCompleted ? (
