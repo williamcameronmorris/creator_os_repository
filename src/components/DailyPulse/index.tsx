@@ -153,6 +153,7 @@ export function DailyPulse() {
   const { theme } = useTheme();
   const { data, loading, hasConnectedAccounts, connectedPlatforms, dismissAll, markCardReviewed, refetch } = useDailyPulse();
   const [bannerDismissed, setBannerDismissed] = useState(false);
+  const [dismissedPlatforms, setDismissedPlatforms] = useState<Set<string>>(new Set());
   const [expandedCard, setExpandedCard] = useState<ExpandedCard>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [aiQuery, setAiQuery] = useState('');
@@ -335,79 +336,70 @@ export function DailyPulse() {
   const tipsStat = String(data.smartTips.tipsCount || 0);
 
   // ── Platform connect checklist ─────────────────────────────────────────
-  const allConnected = connectedPlatforms.instagram && connectedPlatforms.youtube && connectedPlatforms.threads;
-  const platforms = [
+    const platforms = [
     { key: 'instagram' as const, label: 'Instagram', icon: Instagram, iconClass: 'text-pink-500', connected: connectedPlatforms.instagram },
     { key: 'youtube' as const, label: 'YouTube', icon: Youtube, iconClass: 'text-red-500', connected: connectedPlatforms.youtube },
-    { key: 'tiktok' as const, label: 'TikTok', icon: Video, iconClass: 'text-gray-700', connected: connectedPlatforms.tiktok },
-    { key: 'threads' as const, label: 'Threads', icon: MessageCircle, iconClass: 'text-gray-900', connected: connectedPlatforms.threads },
+    { key: 'tiktok' as const, label: 'TikTok', icon: Video, iconClass: 'text-foreground', connected: connectedPlatforms.tiktok },
+    { key: 'threads' as const, label: 'Threads', icon: MessageCircle, iconClass: 'text-foreground', connected: connectedPlatforms.threads },
   ];
 
+  const unconnectedPlatforms = platforms.filter(p => !p.connected && !dismissedPlatforms.has(p.key));
+  const allHandled = unconnectedPlatforms.length === 0;
+
   // null = still loading; don't flash the banner before data arrives
-  const ConnectBanner = () =>
-    !bannerDismissed && !allConnected ? (
-      <div className="bg-card border border-border rounded-3xl p-5 mb-6 shadow-sm">
-        <div className="flex items-start justify-between mb-4">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-2xl bg-primary/10 flex items-center justify-center flex-shrink-0">
-              <Plug className="w-4 h-4 text-primary" />
-            </div>
-            <div>
-              <h3 className="text-sm font-black text-foreground">Connect your platforms</h3>
-              <p className="text-xs text-muted-foreground mt-0.5">Pull in real data from your accounts</p>
-            </div>
+  const ConnectBanner = () => !bannerDismissed && !allHandled ? (
+    <div className="bg-card border border-border rounded-3xl p-5 mb-6 shadow-sm">
+      <div className="flex items-start justify-between mb-4">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-2xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+            <Plug className="w-4 h-4 text-primary" />
           </div>
-          <button
-            onClick={() => setBannerDismissed(true)}
-            className="text-muted-foreground hover:text-foreground transition-colors p-1"
-            aria-label="Skip"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          <div>
+            <h3 className="text-sm font-black text-foreground">Connect your platforms</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">Pull in real data from your accounts</p>
+          </div>
         </div>
-
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-          {platforms.map(({ key, label, icon: Icon, iconClass, connected }) => (
-            <div
-              key={key}
-              className={`flex items-center gap-2.5 flex-1 px-3 py-2.5 rounded-2xl border transition-colors ${
-                connected
-                  ? 'bg-emerald-500/10 border-emerald-500/30'
-                  : 'bg-accent border-border'
-              }`}
-            >
-              {connected ? (
-                <CheckCircle className="w-4 h-4 text-emerald-500 flex-shrink-0" />
-              ) : (
-                <div className="w-4 h-4 rounded-full border-2 border-border flex-shrink-0" />
-              )}
-              <Icon className={`w-3.5 h-3.5 flex-shrink-0 ${connected ? 'text-emerald-500' : iconClass}`} />
-              <span className={`text-xs font-semibold ${connected ? 'text-emerald-500' : 'text-muted-foreground'}`}>
-                {label}
-              </span>
-              {connected && (
-                <span className="text-[10px] text-emerald-500 font-bold ml-auto">✓</span>
-              )}
-            </div>
-          ))}
-
-          <button
-            onClick={() => navigate('/settings')}
-            className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-sm transition-colors flex-shrink-0"
-          >
-            Connect
-            <ArrowRight className="w-4 h-4" />
-          </button>
-        </div>
-
         <button
           onClick={() => setBannerDismissed(true)}
-          className="mt-3 w-full text-xs text-muted-foreground hover:text-foreground transition-colors py-1"
+          className="text-muted-foreground hover:text-foreground transition-colors p-1"
+          aria-label="Skip"
         >
-          Skip for now
+          <X className="w-4 h-4" />
         </button>
       </div>
-    ) : null;
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+        {unconnectedPlatforms.map(({ key, label, icon: Icon, iconClass }) => (
+          <div
+            key={key}
+            className="flex items-center gap-2.5 flex-1 px-3 py-2.5 rounded-2xl border bg-accent border-border"
+          >
+            <div className="w-4 h-4 rounded-full border-2 border-border flex-shrink-0" />
+            <Icon className={`w-3.5 h-3.5 flex-shrink-0 ${iconClass}`} />
+            <span className="text-xs font-semibold text-muted-foreground">{label}</span>
+            <button
+              onClick={() => setDismissedPlatforms(prev => new Set([...prev, key]))}
+              className="ml-auto flex items-center justify-center w-5 h-5 rounded-full text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+              aria-label={`Skip ${label}`}
+            >
+              <X className="w-3 h-3" />
+            </button>
+          </div>
+        ))}
+        <button
+          onClick={() => navigate('/settings')}
+          className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-sm transition-colors flex-shrink-0"
+        >
+          Connect <ArrowRight className="w-4 h-4" />
+        </button>
+      </div>
+      <button
+        onClick={() => setBannerDismissed(true)}
+        className="mt-3 w-full text-xs text-muted-foreground hover:text-foreground transition-colors py-1"
+      >
+        Skip for now
+      </button>
+    </div>
+  ) : null;
 
   // ═════════════════════════════════════════════════════════════════════════
   // RENDER
@@ -676,26 +668,28 @@ export function DailyPulse() {
                 )}
 
                 {/* Connect checklist if no accounts */}
-                {!hasConnectedAccounts && !bannerDismissed && (
+                {!bannerDismissed && !allHandled && (
                   <div className="rounded-2xl border border-border bg-accent p-3">
                     <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide mb-2">Connect platforms</p>
-                    {platforms.map(({ key, label, icon: Icon, iconClass, connected }) => (
+                    {unconnectedPlatforms.map(({ key, label, icon: Icon, iconClass }) => (
                       <div key={key} className="flex items-center gap-2 py-1">
-                        {connected
-                          ? <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />
-                          : <div className="w-3.5 h-3.5 rounded-full border-2 border-border" />
-                        }
-                        <Icon className={`w-3 h-3 ${connected ? 'text-emerald-500' : iconClass}`} />
-                        <span className={`text-xs ${connected ? 'text-emerald-500 font-semibold' : 'text-muted-foreground'}`}>{label}</span>
+                        <div className="w-3.5 h-3.5 rounded-full border-2 border-border flex-shrink-0" />
+                        <Icon className={`w-3 h-3 ${iconClass}`} />
+                        <span className="text-xs text-muted-foreground">{label}</span>
+                        <button
+                          onClick={() => setDismissedPlatforms(prev => new Set([...prev, key]))}
+                          className="ml-auto text-muted-foreground/50 hover:text-muted-foreground"
+                          aria-label={`Skip ${label}`}
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
                       </div>
                     ))}
-                    <button
-                      onClick={() => navigate('/settings')}
-                      className="mt-2 w-full flex items-center justify-center gap-1.5 py-2 rounded-xl bg-violet-600 text-white text-xs font-bold hover:bg-violet-700 transition-colors"
-                    >
-                      <Plug className="w-3 h-3" /> Connect
+                    <button onClick={() => navigate('/settings')} className="mt-2 w-full flex items-center justify-center gap-1.5 py-2 rounded-xl bg-violet-600 text-white text-xs font-bold hover:bg-violet-700 transition-colors" >
+                      <Plug className="w-3 h-3" />
+                      Connect
                     </button>
-                    <button onClick={() => setBannerDismissed(true)} className="mt-1.5 w-full text-[10px] text-muted-foreground hover:text-foreground">Skip</button>
+                    <button onClick={() => setBannerDismissed(true)} className="mt-1.5 w-full text-[10px] text-muted-foreground hover:text-foreground">Skip all</button>
                   </div>
                 )}
 
@@ -729,7 +723,7 @@ export function DailyPulse() {
                   ))}
                 </div>
 
-                {!hasConnectedAccounts && !bannerDismissed && (
+                {!bannerDismissed && !allHandled && (
                   <button
                     onClick={() => navigate('/settings')}
                     className="mt-auto flex items-center justify-center gap-2 w-full py-2.5 rounded-2xl bg-violet-600 text-white text-sm font-bold hover:bg-violet-700 transition-colors"
