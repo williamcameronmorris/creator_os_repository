@@ -40,7 +40,7 @@ const platformIcons: Record<Platform, typeof Instagram> = {
 const platformColors: Record<Platform, string> = {
   instagram: 'text-pink-500',
   youtube: 'text-red-500',
-  tiktok: 'text-gray-900',
+  tiktok: 'text-foreground',
 };
 
 const typeLabels: Record<ItemType, string> = {
@@ -78,7 +78,6 @@ export function ComingUpCard({
     const today: ScheduleItem[] = [];
     const tomorrow: ScheduleItem[] = [];
     const thisWeek: ScheduleItem[] = [];
-
     items.forEach((item) => {
       const date = parseISO(item.scheduledTime);
       if (isToday(date)) {
@@ -89,7 +88,6 @@ export function ComingUpCard({
         thisWeek.push(item);
       }
     });
-
     return { today, tomorrow, thisWeek };
   };
 
@@ -108,10 +106,9 @@ export function ComingUpCard({
 
   const renderScheduleGroup = (title: string, items: ScheduleItem[]) => {
     if (items.length === 0) return null;
-
     return (
       <div className="mb-4">
-        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
+        <p className="text-xs font-semibold text-muted-foreground/60 uppercase tracking-wider mb-2">
           {title}
         </p>
         <div className="space-y-2">
@@ -120,27 +117,27 @@ export function ComingUpCard({
             return (
               <div
                 key={item.id}
-                className="flex items-center gap-3 p-3 bg-gray-100 rounded-xl"
+                className="flex items-center gap-3 p-3 bg-accent rounded-xl"
               >
                 <div className="flex items-center gap-2 min-w-0 flex-1">
-                  <span className="text-sm font-semibold text-gray-900 whitespace-nowrap">
+                  <span className="text-sm font-semibold text-foreground whitespace-nowrap">
                     {formatTime(item.scheduledTime)}
                   </span>
                   <PlatformIcon className={`w-4 h-4 ${platformColors[item.platform]} flex-shrink-0`} />
-                  <span className="text-sm text-gray-700 truncate">
+                  <span className="text-sm text-foreground/80 truncate">
                     {formatType(item.platform, item.type)}
                   </span>
                 </div>
                 <div className="flex items-center gap-1">
                   <button
                     onClick={() => onEditPost(item.id)}
-                    className="px-2.5 py-1 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-200 transition-colors"
+                    className="px-2.5 py-1 rounded-lg text-xs font-medium text-muted-foreground hover:bg-border/50 transition-colors"
                   >
                     Edit
                   </button>
                   <button
                     onClick={() => onReschedule(item.id)}
-                    className="px-2.5 py-1 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-200 transition-colors"
+                    className="px-2.5 py-1 rounded-lg text-xs font-medium text-muted-foreground hover:bg-border/50 transition-colors"
                   >
                     Reschedule
                   </button>
@@ -168,10 +165,10 @@ export function ComingUpCard({
       <div className="space-y-4">
         {data.items.length === 0 ? (
           <div className="text-center py-8">
-            <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-3">
-              <Calendar className="w-6 h-6 text-gray-500" />
+            <div className="w-12 h-12 rounded-full bg-accent flex items-center justify-center mx-auto mb-3">
+              <Calendar className="w-6 h-6 text-muted-foreground" />
             </div>
-            <p className="text-gray-500 text-sm">No content scheduled</p>
+            <p className="text-muted-foreground text-sm">No content scheduled</p>
           </div>
         ) : (
           <>
@@ -180,7 +177,6 @@ export function ComingUpCard({
             {renderScheduleGroup('THIS WEEK', grouped.thisWeek)}
           </>
         )}
-
         <button
           onClick={onViewCalendar}
           className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-violet-600 text-white font-medium hover:bg-violet-700 transition-colors"
