@@ -35,9 +35,9 @@ const tipIcons: Record<TipType, typeof Sparkles> = {
 };
 
 const tipStyles: Record<TipType, { iconBg: string; iconColor: string }> = {
-  optimization: { iconBg: 'bg-emerald-100', iconColor: 'text-emerald-600' },
-  warning: { iconBg: 'bg-amber-100', iconColor: 'text-amber-600' },
-  opportunity: { iconBg: 'bg-blue-100', iconColor: 'text-blue-600' },
+  optimization: { iconBg: 'bg-emerald-500/15', iconColor: 'text-emerald-600' },
+  warning: { iconBg: 'bg-amber-500/15', iconColor: 'text-amber-600' },
+  opportunity: { iconBg: 'bg-blue-500/15', iconColor: 'text-blue-600' },
 };
 
 export function SmartTipsCard({
@@ -55,11 +55,10 @@ export function SmartTipsCard({
 
   const renderHighlightedText = (text: string, highlight?: string) => {
     if (!highlight) return text;
-
     const parts = text.split(new RegExp(`(${highlight})`, 'gi'));
     return parts.map((part, index) =>
       part.toLowerCase() === highlight.toLowerCase() ? (
-        <span key={index} className="font-bold text-gray-900">{part}</span>
+        <span key={index} className="font-bold text-foreground">{part}</span>
       ) : (
         part
       )
@@ -81,27 +80,26 @@ export function SmartTipsCard({
       <div className="space-y-4">
         {data.allCaughtUp ? (
           <div className="text-center py-8">
-            <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
+            <div className="w-16 h-16 rounded-full bg-accent flex items-center justify-center mx-auto mb-4">
               <PartyPopper className="w-8 h-8 text-emerald-600" />
             </div>
-            <p className="text-lg font-semibold text-gray-900 mb-1">All caught up!</p>
-            <p className="text-sm text-gray-500">You've reviewed all your insights for today</p>
+            <p className="text-lg font-semibold text-foreground mb-1">All caught up!</p>
+            <p className="text-sm text-muted-foreground">{"You've reviewed all your insights for today"}</p>
           </div>
         ) : data.tips.length === 0 ? (
           <div className="text-center py-8">
-            <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-3">
+            <div className="w-12 h-12 rounded-full bg-accent flex items-center justify-center mx-auto mb-3">
               <Sparkles className="w-6 h-6 text-emerald-600" />
             </div>
-            <p className="text-gray-500 text-sm">No new insights yet</p>
-            <p className="text-gray-400 text-xs mt-1">Post more content to get AI-powered tips</p>
+            <p className="text-muted-foreground text-sm">No new insights yet</p>
+            <p className="text-muted-foreground/70 text-xs mt-1">Post more content to get AI-powered tips</p>
           </div>
         ) : (
           data.tips.map((tip) => {
             const TipIcon = tipIcons[tip.type];
             const style = tipStyles[tip.type];
-
             return (
-              <div key={tip.id} className="p-4 bg-gray-100 rounded-xl">
+              <div key={tip.id} className="p-4 bg-accent rounded-xl">
                 <div className="flex items-start gap-3">
                   <div
                     className={`w-10 h-10 rounded-lg ${style.iconBg} flex items-center justify-center flex-shrink-0`}
@@ -109,7 +107,7 @@ export function SmartTipsCard({
                     <TipIcon className={`w-5 h-5 ${style.iconColor}`} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm text-gray-700 mb-3">
+                    <p className="text-sm text-foreground/80 mb-3">
                       {renderHighlightedText(tip.description, tip.highlightText)}
                     </p>
                     {tip.actionLabel && (
@@ -127,10 +125,9 @@ export function SmartTipsCard({
             );
           })
         )}
-
         {data.tips.length > 0 && !data.allCaughtUp && (
-          <div className="pt-2 border-t border-gray-200">
-            <div className="flex items-center gap-2 text-sm text-gray-500">
+          <div className="pt-2 border-t border-border">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <TrendingUp className="w-4 h-4" />
               <span>Tips update daily based on your content performance</span>
             </div>
