@@ -69,7 +69,7 @@ Deno.serve(async (req: Request) => {
     const [profileResult, metricsResult, prevMetricsResult, postsResult, dealsResult] = await Promise.all([
       supabase
         .from("profiles")
-        .select("first_name, display_name, instagram_avg_views, tiktok_avg_views, youtube_avg_views, instagram_access_token, tiktok_access_token, youtube_access_token")
+        .select("first_name, display_name, instagram_avg_views, tiktok_avg_views, youtube_avg_views, instagram_access_token, instagram_business_account_id, tiktok_access_token, youtube_access_token")
         .eq("id", userId)
         .maybeSingle(),
 
@@ -111,7 +111,7 @@ Deno.serve(async (req: Request) => {
 
     // Build connected platforms list
     const connectedPlatforms: string[] = [];
-    if (profile?.instagram_access_token) connectedPlatforms.push("Instagram");
+    if (profile?.instagram_access_token || profile?.instagram_business_account_id) connectedPlatforms.push("Instagram");
     if (profile?.tiktok_access_token) connectedPlatforms.push("TikTok");
     if (profile?.youtube_access_token) connectedPlatforms.push("YouTube");
 
