@@ -64,6 +64,28 @@ function getEmoji() {
   return '🌙';
 }
 
+// ── Simple inline markdown renderer (bold, bullets, line breaks) ─────────────
+function renderMarkdown(text: string): React.ReactNode {
+  return text.split('\n').map((line, i, arr) => {
+    const isBullet = /^[-*•]\s/.test(line);
+    const content = isBullet ? line.replace(/^[-*•]\s/, '') : line;
+    const parts = content.split(/(\*\*[^*]+\*\*)/g);
+    const rendered = parts.map((part, j) => {
+      if (part.startsWith('**') && part.endsWith('**')) {
+        return React.createElement('strong', { key: j }, part.slice(2, -2));
+      }
+      return part;
+    });
+    if (isBullet) {
+      return React.createElement('li', { key: i, className: 'ml-4 list-disc' }, ...rendered);
+    }
+    return React.createElement(React.Fragment, { key: i },
+      ...rendered,
+      i < arr.length - 1 ? React.createElement('br') : null
+    );
+  });
+}
+
 // ── Card summary data for desktop grid headers ───────────────────────────────
 function SummaryChip({ label, color }: { label: string; color: string }) {
   return (
@@ -445,7 +467,7 @@ export function DailyPulse() {
                 <Sparkles className="w-4 h-4 text-white" />
               </div>
               <div className="flex-1 min-w-0">
-                {aiError ? <p className="text-sm text-destructive">{aiError}</p> : <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{aiResponse}</p>}
+                {aiError ? <p className="text-sm text-destructive">{aiError}</p> : <p className="text-sm text-foreground leading-relaxed">{renderMarkdown(aiResponse!)}</p>}
               </div>
               <button onClick={() => { setAiResponse(null); setAiError(null); }} className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0 text-lg leading-none" title="Dismiss">×</button>
             </div>
@@ -614,7 +636,7 @@ export function DailyPulse() {
                 <div className="flex-1 min-w-0">
                   {aiError
                     ? <p className="text-xs text-destructive">{aiError}</p>
-                    : <p className="text-xs text-foreground leading-relaxed whitespace-pre-wrap">{aiResponse}</p>
+                    : <p className="text-xs text-foreground leading-relaxed">{renderMarkdown(aiResponse!)}</p>
                   }
                 </div>
                 <button onClick={() => { setAiResponse(null); setAiError(null); }} className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0 text-lg leading-none">×</button>
