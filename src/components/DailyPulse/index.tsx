@@ -66,23 +66,18 @@ function getEmoji() {
 
 // ── Simple inline markdown renderer (bold, bullets, line breaks) ─────────────
 function renderMarkdown(text: string): React.ReactNode {
-  return text.split('\n').map((line, i, arr) => {
+  const lines = text.split('\n');
+  return lines.map((line, i) => {
     const isBullet = /^[-*•]\s/.test(line);
     const content = isBullet ? line.replace(/^[-*•]\s/, '') : line;
     const parts = content.split(/(\*\*[^*]+\*\*)/g);
-    const rendered = parts.map((part, j) => {
-      if (part.startsWith('**') && part.endsWith('**')) {
-        return React.createElement('strong', { key: j }, part.slice(2, -2));
-      }
-      return part;
-    });
-    if (isBullet) {
-      return React.createElement('li', { key: i, className: 'ml-4 list-disc' }, ...rendered);
-    }
-    return React.createElement(React.Fragment, { key: i },
-      ...rendered,
-      i < arr.length - 1 ? React.createElement('br') : null
+    const rendered = parts.map((part, j) =>
+      part.startsWith('**') && part.endsWith('**')
+        ? <strong key={j}>{part.slice(2, -2)}</strong>
+        : part
     );
+    if (isBullet) return <li key={i} className="ml-4 list-disc">{rendered}</li>;
+    return <span key={i}>{rendered}{i < lines.length - 1 && <br />}</span>;
   });
 }
 
