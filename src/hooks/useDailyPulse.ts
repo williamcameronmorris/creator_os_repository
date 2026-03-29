@@ -197,7 +197,7 @@ export function useDailyPulse() {
         dealsResult,
         credentialsResult,
       ] = await Promise.all([
-        supabase.from('profiles').select('display_name, first_name, youtube_access_token, instagram_access_token, instagram_business_account_id, tiktok_access_token, threads_access_token').eq('id', user.id).maybeSingle(),
+        supabase.from('profiles').select('display_name, full_name, youtube_access_token, instagram_access_token, instagram_business_account_id, tiktok_access_token, threads_access_token').eq('id', user.id).maybeSingle(),
         supabase.from('daily_pulse_sessions').select('*').eq('user_id', user.id).eq('session_date', today).maybeSingle(),
         // 30-day rolling window — always captures recent content regardless of where we are in the week
         supabase.from('content_posts')
@@ -224,7 +224,7 @@ export function useDailyPulse() {
         supabase.from('platform_credentials').select('platform').eq('user_id', user.id).eq('is_active', true),
       ]);
 
-      const userName = profileResult.data?.display_name || profileResult.data?.first_name || user.email?.split('@')[0] || 'there';
+      const userName = profileResult.data?.display_name || profileResult.data?.full_name?.split(' ')[0] || user.email?.split('@')[0] || 'there';
 
       const connectedSet = new Set((credentialsResult.data || []).map((c: { platform: string }) => c.platform));
       const profile = profileResult.data;
