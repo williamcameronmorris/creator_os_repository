@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useSubscription } from '../contexts/SubscriptionContext';
 import { supabase } from '../lib/supabase';
-import { Calendar, Clock, Instagram, Youtube, Plus, Sparkles, Edit, Trash2, DollarSign, Info, TrendingUp, Lock, Crown, CheckCircle2, XCircle, Loader2, ExternalLink, RefreshCw, AlertTriangle, AtSign, LayoutGrid, List } from 'lucide-react';
+import { Calendar, Clock, Instagram, Youtube, Plus, Sparkles, Edit, Trash2, DollarSign, TrendingUp, Lock, Crown, CheckCircle2, XCircle, Loader2, ExternalLink, RefreshCw, AlertTriangle, AtSign, LayoutGrid, List, ChevronDown } from 'lucide-react';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatInTz } from '../lib/timezone';
 import { CalendarView } from '../components/CalendarView';
@@ -23,6 +23,8 @@ interface Post {
   published_at: string | null;
 }
 
+type CalGranularity = 'monthly' | 'weekly' | 'daily';
+
 export function Schedule() {
   const { user } = useAuth();
   const { tier } = useSubscription();
@@ -31,84 +33,76 @@ export function Schedule() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'scheduled' | 'draft' | 'published'>('all');
   const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
+  const [calGranularity, setCalGranularity] = useState<CalGranularity>('monthly');
+  const [calDropdownOpen, setCalDropdownOpen] = useState(false);
+  const calDropdownRef = useRef<HTMLDivElement>(null);
 
   const isPremium = tier === 'paid';
   const { timezone } = useTimezone();
 
   useEffect(() => {
-    if (user) {
-      loadPosts();
-    }
+    if (user) loadPosts();
   }, [user]);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (calDropdownRef.current && !calDropdownRef.current.contains(e.target as Node)) {
+        setCalDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
   const loadPosts = async () => {
     if (!user) return;
-
-    const statuses = filter === 'all'
-      ? ['scheduled', 'draft', 'published']
-      : [filter];
-
     const { data, error } = await supabase
       .from('content_posts')
       .select('id, platform, caption, media_urls, scheduled_date, scheduled_for, status, deal_id, is_sponsored, publish_status, publish_error, platform_post_id, published_at')
       .eq('user_id', user.id)
-      .in('status', statuses)
+      .in('status', ['scheduled', 'draft', 'published'])
       .order('scheduled_date', { ascending: true, nullsFirst: false });
 
-    if (!error && data) {
-      setPosts(data);
-    }
+    if (!error && data) setPosts(data);
     setLoading(false);
   };
 
   const handleDelete = async (postId: string) => {
     if (!confirm('Are you sure you want to delete this post?')) return;
-
-    const { error } = await supabase
-      .from('content_posts')
-      .delete()
-      .eq('id', postId);
-
-    if (!error) {
-      loadPosts();
-    }
+    const { error } = await supabase.from('content_posts').delete().eq('id', postId);
+    if (!error) loadPosts();
   };
 
-  const handleEdit = (post: Post) => {
-    navigate(`/schedule/edit/${post.id}`);
-  };
+  const handleEdit = (post: Post) => navigate(`/schedule/edit/${post.id}`);
 
   const getPlatformIcon = (platform: string) => {
     switch (platform) {
-      case 'instagram':
-        return Instagram;
-      case 'youtube':
-        return Youtube;
-      case 'tiktok':
-        return Sparkles;
-      case 'threads':
-        return AtSign;
-      default:
-        return Calendar;
+      case 'instagram': return Instagram;
+      case 'youtube':   return Youtube;
+      case 'tiktok':    return Sparkles;
+      case 'threads':   return AtSign;
+      default:          return Calendar;
     }
   };
 
-  const filteredPosts = posts;
+  // Client-side filter
+  const filteredPosts = filter === 'all'
+    ? posts
+    : posts.filter(p => p.status === filter);
 
   const getPlatformPostUrl = (platform: string, platformPostId: string | null): string | null => {
     if (!platformPostId) return null;
     switch (platform) {
-      case 'youtube': return `https://www.youtube.com/watch?v=${platformPostId}`;
+      case 'youtube':  return `https://www.youtube.com/watch?v=${platformPostId}`;
       case 'instagram': return `https://www.instagram.com/p/${platformPostId}/`;
-      case 'tiktok': return null; // TikTok uses publish_id, not a shareable URL
-      case 'threads': return `https://www.threads.net/post/${platformPostId}`;
+      case 'threads':  return `https://www.threads.net/post/${platformPostId}`;
       default: return null;
     }
   };
 
-  const scheduledPosts = posts.filter(post => post.status === 'scheduled');
+  const scheduledPosts = posts.filter(p => p.status === 'scheduled');
   const totalScheduled = scheduledPosts.length;
-  const freeLimit = isPremium ? 999 : 5;
   const schedulingLimit = isPremium ? 999 : 5;
 
   const handleNewPost = () => {
@@ -120,35 +114,67 @@ export function Schedule() {
   };
 
   const now = new Date();
-  const next7Days = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+  const next7Days  = new Date(now.getTime() + 7  * 24 * 60 * 60 * 1000);
   const next24Hours = new Date(now.getTime() + 24 * 60 * 60 * 1000);
 
-  const thisWeekPosts = scheduledPosts.filter(post => {
-    if (!post.scheduled_date) return false;
-    const postDate = new Date(post.scheduled_date);
-    return postDate >= now && postDate <= next7Days;
+  const thisWeekPosts = scheduledPosts.filter(p => {
+    if (!p.scheduled_date) return false;
+    const d = new Date(p.scheduled_date);
+    return d >= now && d <= next7Days;
   }).length;
 
-  const publishingSoonPosts = scheduledPosts.filter(post => {
-    if (!post.scheduled_date) return false;
-    const postDate = new Date(post.scheduled_date);
-    return postDate >= now && postDate <= next24Hours;
+  const publishingSoonPosts = scheduledPosts.filter(p => {
+    if (!p.scheduled_date) return false;
+    const d = new Date(p.scheduled_date);
+    return d >= now && d <= next24Hours;
   }).length;
+
+  const granularityLabels: Record<CalGranularity, string> = {
+    monthly: 'Monthly',
+    weekly:  'Weekly',
+    daily:   'Daily',
+  };
 
   return (
     <div className="max-w-7xl mx-auto">
-      <div className="mb-8">
-        <div className="flex items-center justify-between mb-4">
+      {/* ── Page header ── */}
+      <div className="mb-6">
+        <div className="flex items-start justify-between gap-3 mb-4">
           <div>
-            <h1 className="text-3xl font-bold text-foreground mb-2">
-              Content Schedule
-            </h1>
-            <p className="text-muted-foreground">
-              Manage your scheduled and draft posts
-            </p>
+            <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-1">Content Schedule</h1>
+            <p className="text-sm text-muted-foreground">Manage your scheduled and draft posts</p>
           </div>
+          <button
+            onClick={handleNewPost}
+            className="flex items-center gap-2 px-4 sm:px-6 py-2.5 sm:py-3 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl font-medium transition-colors shadow-md text-sm sm:text-base flex-shrink-0"
+          >
+            <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
+            <span>New Post</span>
+          </button>
+        </div>
+
+        {/* ── Filter + view controls ── */}
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          {/* Status filters */}
+          <div className="flex items-center gap-2 flex-wrap">
+            {(['all', 'scheduled', 'draft', 'published'] as const).map(f => (
+              <button
+                key={f}
+                onClick={() => setFilter(f)}
+                className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl font-medium transition-colors shadow-sm text-sm ${
+                  filter === f
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-card border border-border text-muted-foreground hover:bg-accent hover:text-foreground'
+                }`}
+              >
+                {f === 'all' ? 'All' : f === 'scheduled' ? 'Scheduled' : f === 'draft' ? 'Drafts' : 'Published'}
+              </button>
+            ))}
+          </div>
+
+          {/* View toggle + calendar granularity */}
           <div className="flex items-center gap-2">
-            {/* View toggle */}
+            {/* List / Calendar toggle */}
             <div className="flex items-center bg-card border border-border rounded-xl overflow-hidden">
               <button
                 onClick={() => setViewMode('list')}
@@ -165,82 +191,65 @@ export function Schedule() {
                 <LayoutGrid className="w-4 h-4" />
               </button>
             </div>
-            <button
-              onClick={handleNewPost}
-              className="flex items-center gap-2 px-6 py-3 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl font-medium transition-colors shadow-md"
-            >
-              <Plus className="w-5 h-5" />
-              New Post
-            </button>
+
+            {/* Granularity dropdown — only in calendar mode */}
+            {viewMode === 'calendar' && (
+              <div className="relative" ref={calDropdownRef}>
+                <button
+                  onClick={() => setCalDropdownOpen(o => !o)}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-card border border-border rounded-xl text-sm font-medium text-foreground hover:bg-accent transition-colors"
+                >
+                  {granularityLabels[calGranularity]}
+                  <ChevronDown className={`w-3.5 h-3.5 text-muted-foreground transition-transform ${calDropdownOpen ? 'rotate-180' : ''}`} />
+                </button>
+                {calDropdownOpen && (
+                  <div className="absolute right-0 mt-1 w-32 bg-card border border-border rounded-xl shadow-lg overflow-hidden z-10">
+                    {(['daily', 'weekly', 'monthly'] as CalGranularity[]).map(g => (
+                      <button
+                        key={g}
+                        onClick={() => { setCalGranularity(g); setCalDropdownOpen(false); }}
+                        className={`w-full px-3 py-2 text-sm text-left transition-colors ${calGranularity === g ? 'bg-primary/10 text-primary font-semibold' : 'text-foreground hover:bg-accent'}`}
+                      >
+                        {granularityLabels[g]}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
 
+      {/* ── Content area ── */}
       <div className="mb-8">
-        <div className="flex items-center gap-3 mb-6">
-          <button
-            onClick={() => setFilter('all')}
-            className={`px-4 py-2 rounded-xl font-medium transition-colors shadow-sm ${
-              filter === 'all'
-                ? 'bg-primary text-primary-foreground'
-                : 'bg-card border border-border text-muted-foreground hover:bg-accent hover:text-foreground'
-            }`}
-          >
-            All
-          </button>
-          <button
-            onClick={() => setFilter('scheduled')}
-            className={`px-4 py-2 rounded-xl font-medium transition-colors shadow-sm ${
-              filter === 'scheduled'
-                ? 'bg-primary text-primary-foreground'
-                : 'bg-card border border-border text-muted-foreground hover:bg-accent hover:text-foreground'
-            }`}
-          >
-            Scheduled
-          </button>
-          <button
-            onClick={() => setFilter('draft')}
-            className={`px-4 py-2 rounded-xl font-medium transition-colors shadow-sm ${
-              filter === 'draft'
-                ? 'bg-primary text-primary-foreground'
-                : 'bg-card border border-border text-muted-foreground hover:bg-accent hover:text-foreground'
-            }`}
-          >
-            Drafts
-          </button>
-          <button
-            onClick={() => setFilter('published')}
-            className={`px-4 py-2 rounded-xl font-medium transition-colors shadow-sm ${
-              filter === 'published'
-                ? 'bg-primary text-primary-foreground'
-                : 'bg-card border border-border text-muted-foreground hover:bg-accent hover:text-foreground'
-            }`}
-          >
-            Published
-          </button>
-        </div>
-
         {/* Calendar view */}
         {viewMode === 'calendar' && !loading && (
           <CalendarView
-            posts={posts.filter((p) => p.status === 'scheduled' && p.scheduled_date)}
+            posts={posts.filter(p => p.status === 'scheduled' && p.scheduled_date)}
             timezone={timezone}
-            onPostClick={(p) => handleEdit(p as Post)}
+            onPostClick={p => handleEdit(p as Post)}
+            granularity={calGranularity}
           />
         )}
 
-        {viewMode === 'list' && loading ? (
+        {/* List view */}
+        {viewMode === 'list' && loading && (
           <div className="p-8 rounded-xl text-center bg-card border border-border">
             <p className="text-muted-foreground">Loading...</p>
           </div>
-        ) : viewMode === 'list' && filteredPosts.length === 0 ? (
+        )}
+
+        {viewMode === 'list' && !loading && filteredPosts.length === 0 && (
           <div className="p-12 rounded-xl text-center bg-card border border-border shadow-md">
             <Calendar className="w-16 h-16 mx-auto mb-4 text-muted-foreground opacity-50" />
             <h3 className="text-xl font-bold mb-2 text-foreground">
               {filter === 'all' ? 'No posts yet' : filter === 'scheduled' ? 'No scheduled posts' : filter === 'draft' ? 'No drafts' : 'No published posts'}
             </h3>
             <p className="mb-6 text-muted-foreground">
-              Create your first post to get started with content scheduling
+              {filter === 'draft'
+                ? 'Drafts you save will appear here'
+                : 'Create your first post to get started with content scheduling'}
             </p>
             <button
               onClick={handleNewPost}
@@ -250,166 +259,156 @@ export function Schedule() {
               Create Post
             </button>
           </div>
-        ) : viewMode === 'list' ? (
-          <div className="grid gap-4">
+        )}
+
+        {viewMode === 'list' && !loading && filteredPosts.length > 0 && (
+          <div className="grid gap-3">
             {filteredPosts.map((post) => {
               const Icon = getPlatformIcon(post.platform);
               return (
                 <div
                   key={post.id}
-                  className={`p-6 rounded-xl relative bg-card border border-border shadow-md hover:shadow-lg transition-shadow ${
+                  className={`p-4 rounded-xl relative bg-card border border-border shadow-md hover:shadow-lg transition-shadow overflow-hidden ${
                     post.is_sponsored ? 'border-l-4 border-l-amber-500' : ''
                   }`}
                 >
-                  <div className="flex items-start gap-4">
-                    <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-chart-1/20 flex-shrink-0">
-                      <Icon className="w-6 h-6 text-chart-1" />
+                  <div className="flex items-start gap-3">
+                    {/* Platform icon */}
+                    <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-chart-1/20 flex-shrink-0 mt-0.5">
+                      <Icon className="w-5 h-5 text-chart-1" />
                     </div>
 
+                    {/* Main content */}
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-2 flex-wrap">
-                        <h3 className="font-semibold text-foreground">
-                          {post.platform.charAt(0).toUpperCase() + post.platform.slice(1)} Post
-                        </h3>
-                        {post.is_sponsored && (
-                          <span className="flex items-center gap-1 px-2 py-1 text-xs rounded-full bg-amber-500/10 text-amber-600 font-semibold">
-                            <DollarSign className="w-3 h-3" />
-                            Sponsored
-                          </span>
-                        )}
-                        {/* Base status badge */}
-                        {post.status !== 'published' && (
-                          <span className={`px-2 py-1 text-xs rounded-full ${
-                            post.status === 'scheduled'
-                              ? 'bg-emerald-500/10 text-emerald-600'
-                              : 'bg-amber-500/10 text-amber-600'
-                          }`}>
-                            {post.status}
-                          </span>
-                        )}
-                        {/* Publish status overlay */}
-                        {post.publish_status === 'publishing' && (
-                          <span className="flex items-center gap-1 px-2 py-1 text-xs rounded-full bg-blue-500/10 text-blue-600 font-semibold">
-                            <Loader2 className="w-3 h-3 animate-spin" />
-                            Publishing…
-                          </span>
-                        )}
-                        {post.publish_status === 'published' && (
-                          <span className="flex items-center gap-1 px-2 py-1 text-xs rounded-full bg-emerald-500/10 text-emerald-600 font-semibold">
-                            <CheckCircle2 className="w-3 h-3" />
-                            Published
-                          </span>
-                        )}
-                        {post.publish_status === 'failed' && (
-                          <span className="flex items-center gap-1 px-2 py-1 text-xs rounded-full bg-red-500/10 text-red-600 font-semibold">
-                            <XCircle className="w-3 h-3" />
-                            Failed
-                          </span>
-                        )}
+                      {/* Title row: badges + actions */}
+                      <div className="flex items-start justify-between gap-2 mb-1.5">
+                        <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                          <h3 className="font-semibold text-foreground text-sm">
+                            {post.platform.charAt(0).toUpperCase() + post.platform.slice(1)} Post
+                          </h3>
+                          {post.is_sponsored && (
+                            <span className="flex items-center gap-1 px-1.5 py-0.5 text-xs rounded-full bg-amber-500/10 text-amber-600 font-semibold">
+                              <DollarSign className="w-3 h-3" />
+                              Sponsored
+                            </span>
+                          )}
+                          {post.status !== 'published' && (
+                            <span className={`px-1.5 py-0.5 text-xs rounded-full ${
+                              post.status === 'scheduled' ? 'bg-emerald-500/10 text-emerald-600' : 'bg-amber-500/10 text-amber-600'
+                            }`}>
+                              {post.status}
+                            </span>
+                          )}
+                          {post.publish_status === 'publishing' && (
+                            <span className="flex items-center gap-1 px-1.5 py-0.5 text-xs rounded-full bg-blue-500/10 text-blue-600 font-semibold">
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                              Publishing…
+                            </span>
+                          )}
+                          {post.publish_status === 'published' && (
+                            <span className="flex items-center gap-1 px-1.5 py-0.5 text-xs rounded-full bg-emerald-500/10 text-emerald-600 font-semibold">
+                              <CheckCircle2 className="w-3 h-3" />
+                              Published
+                            </span>
+                          )}
+                          {post.publish_status === 'failed' && (
+                            <span className="flex items-center gap-1 px-1.5 py-0.5 text-xs rounded-full bg-red-500/10 text-red-600 font-semibold">
+                              <XCircle className="w-3 h-3" />
+                              Failed
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Action buttons — always top-right, compact */}
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          {post.publish_status === 'failed' && (
+                            <button
+                              onClick={async () => {
+                                await supabase.from('content_posts').update({ publish_status: null, publish_error: null }).eq('id', post.id);
+                                loadPosts();
+                              }}
+                              className="p-1.5 rounded-lg transition-colors hover:bg-accent"
+                              title="Retry publish"
+                            >
+                              <RefreshCw className="w-4 h-4 text-orange-500" />
+                            </button>
+                          )}
+                          {post.status !== 'published' && (
+                            <button onClick={() => handleEdit(post)} className="p-1.5 rounded-lg transition-colors hover:bg-accent">
+                              <Edit className="w-4 h-4 text-muted-foreground hover:text-foreground" />
+                            </button>
+                          )}
+                          <button onClick={() => handleDelete(post.id)} className="p-1.5 rounded-lg transition-colors hover:bg-accent">
+                            <Trash2 className="w-4 h-4 text-muted-foreground hover:text-foreground" />
+                          </button>
+                        </div>
                       </div>
 
-                      <p className="text-sm mb-3 line-clamp-2 text-muted-foreground">
-                        {post.caption || 'No caption'}
-                      </p>
+                      {/* Caption + optional thumbnail row */}
+                      <div className="flex items-start gap-3">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm mb-2 line-clamp-2 text-muted-foreground">
+                            {post.caption || 'No caption'}
+                          </p>
 
-                      {post.scheduled_date && (
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <Clock className="w-4 h-4" />
-                          {post.publish_status === 'published' && post.published_at
-                            ? `Published ${formatInTz(post.published_at, timezone)}`
-                            : formatInTz(post.scheduled_date!, timezone)}
+                          {post.scheduled_date && (
+                            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                              <Clock className="w-3.5 h-3.5 flex-shrink-0" />
+                              {post.publish_status === 'published' && post.published_at
+                                ? `Published ${formatInTz(post.published_at, timezone)}`
+                                : formatInTz(post.scheduled_date, timezone)}
+                            </div>
+                          )}
+
+                          {post.publish_status === 'failed' && post.publish_error && (
+                            <div className="flex items-start gap-2 mt-2 p-2 rounded-lg bg-red-500/10 border border-red-500/20">
+                              <AlertTriangle className="w-3.5 h-3.5 text-red-500 flex-shrink-0 mt-0.5" />
+                              <p className="text-xs text-red-600">{post.publish_error}</p>
+                            </div>
+                          )}
+
+                          {post.publish_status === 'published' && (() => {
+                            const url = getPlatformPostUrl(post.platform, post.platform_post_id);
+                            return url ? (
+                              <a href={url} target="_blank" rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 mt-1 text-xs text-primary hover:underline">
+                                <ExternalLink className="w-3 h-3" />
+                                View on {post.platform.charAt(0).toUpperCase() + post.platform.slice(1)}
+                              </a>
+                            ) : null;
+                          })()}
                         </div>
-                      )}
 
-                      {/* Publish error detail */}
-                      {post.publish_status === 'failed' && post.publish_error && (
-                        <div className="flex items-start gap-2 mt-2 p-2 rounded-lg bg-red-500/10 border border-red-500/20">
-                          <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
-                          <p className="text-xs text-red-600">{post.publish_error}</p>
-                        </div>
-                      )}
-
-                      {/* View on platform link */}
-                      {post.publish_status === 'published' && (() => {
-                        const url = getPlatformPostUrl(post.platform, post.platform_post_id);
-                        return url ? (
-                          <a
-                            href={url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 mt-1 text-xs text-primary hover:underline"
-                          >
-                            <ExternalLink className="w-3 h-3" />
-                            View on {post.platform.charAt(0).toUpperCase() + post.platform.slice(1)}
-                          </a>
-                        ) : null;
-                      })()}
-                    </div>
-
-                    {/* Prominent media thumbnail */}
-                    {post.media_urls && post.media_urls.length > 0 && (
-                      <div className="relative flex-shrink-0">
-                        <div className="w-20 h-20 rounded-xl overflow-hidden border border-border bg-accent">
-                          <img
-                            src={post.media_urls[0]}
-                            alt=""
-                            className="w-full h-full object-cover"
-                          />
-                        </div>
-                        {post.media_urls.length > 1 && (
-                          <div className="absolute -bottom-1.5 -right-1.5 px-1.5 py-0.5 bg-card border border-border rounded-md text-xs text-muted-foreground font-semibold shadow-sm">
-                            +{post.media_urls.length - 1}
+                        {/* Thumbnail — smaller on mobile, larger on desktop */}
+                        {post.media_urls && post.media_urls.length > 0 && (
+                          <div className="relative flex-shrink-0">
+                            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl overflow-hidden border border-border bg-accent">
+                              <img src={post.media_urls[0]} alt="" className="w-full h-full object-cover" />
+                            </div>
+                            {post.media_urls.length > 1 && (
+                              <div className="absolute -bottom-1 -right-1 px-1 py-0.5 bg-card border border-border rounded text-[10px] text-muted-foreground font-semibold shadow-sm">
+                                +{post.media_urls.length - 1}
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
-                    )}
-
-                    <div className="flex items-center gap-2">
-                      {/* Retry failed posts by resetting publish_status */}
-                      {post.publish_status === 'failed' && (
-                        <button
-                          onClick={async () => {
-                            await supabase
-                              .from('content_posts')
-                              .update({ publish_status: null, publish_error: null })
-                              .eq('id', post.id);
-                            loadPosts();
-                          }}
-                          className="p-2 rounded-lg transition-colors hover:bg-accent"
-                          title="Retry publish"
-                        >
-                          <RefreshCw className="w-5 h-5 text-orange-500" />
-                        </button>
-                      )}
-                      {post.status !== 'published' && (
-                        <button
-                          onClick={() => handleEdit(post)}
-                          className="p-2 rounded-lg transition-colors hover:bg-accent"
-                        >
-                          <Edit className="w-5 h-5 text-muted-foreground hover:text-foreground" />
-                        </button>
-                      )}
-                      <button
-                        onClick={() => handleDelete(post.id)}
-                        className="p-2 rounded-lg transition-colors hover:bg-accent"
-                      >
-                        <Trash2 className="w-5 h-5 text-muted-foreground hover:text-foreground" />
-                      </button>
                     </div>
                   </div>
                 </div>
               );
             })}
           </div>
-        ) : null}
+        )}
       </div>
 
+      {/* ── Stats ── */}
       <div className="mb-8">
-        <h2 className="text-2xl font-bold text-foreground mb-6">Content Scheduling Stats</h2>
+        <h2 className="text-xl sm:text-2xl font-bold text-foreground mb-4">Content Scheduling Stats</h2>
 
-        <div className="grid md:grid-cols-3 gap-4 mb-6">
-          <div className="relative p-6 rounded-xl bg-card border border-border shadow-md overflow-hidden">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl"></div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-6">
+          <div className="relative p-5 rounded-xl bg-card border border-border shadow-md overflow-hidden">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl" />
             <div className="relative z-10">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-medium text-muted-foreground">Total Scheduled</span>
@@ -431,10 +430,7 @@ export function Schedule() {
                 <>
                   <div className="flex items-center gap-2">
                     <div className="flex-1 h-2 bg-secondary rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-blue-500 transition-all duration-500"
-                        style={{ width: `${Math.min((totalScheduled / schedulingLimit) * 100, 100)}%` }}
-                      ></div>
+                      <div className="h-full bg-blue-500 transition-all duration-500" style={{ width: `${Math.min((totalScheduled / schedulingLimit) * 100, 100)}%` }} />
                     </div>
                     <span className="text-xs text-muted-foreground whitespace-nowrap">
                       {schedulingLimit - totalScheduled > 0 ? `${schedulingLimit - totalScheduled} left` : 'Limit reached'}
@@ -451,8 +447,8 @@ export function Schedule() {
             </div>
           </div>
 
-          <div className="relative p-6 rounded-xl bg-card border border-border shadow-md overflow-hidden">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-3xl"></div>
+          <div className="relative p-5 rounded-xl bg-card border border-border shadow-md overflow-hidden">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-3xl" />
             <div className="relative z-10">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-medium text-muted-foreground">This Week</span>
@@ -466,8 +462,8 @@ export function Schedule() {
             </div>
           </div>
 
-          <div className="relative p-6 rounded-xl bg-card border border-border shadow-md overflow-hidden">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-orange-500/10 rounded-full blur-3xl"></div>
+          <div className="relative p-5 rounded-xl bg-card border border-border shadow-md overflow-hidden">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-orange-500/10 rounded-full blur-3xl" />
             <div className="relative z-10">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-medium text-muted-foreground">Publishing Soon</span>
@@ -492,7 +488,6 @@ export function Schedule() {
           </div>
         </div>
       </div>
-
     </div>
   );
 }
