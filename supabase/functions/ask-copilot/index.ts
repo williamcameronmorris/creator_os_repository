@@ -69,7 +69,7 @@ Deno.serve(async (req: Request) => {
     const [profileResult, metricsResult, prevMetricsResult, postsResult, dealsResult] = await Promise.all([
       supabase
         .from("profiles")
-        .select("first_name, display_name, instagram_avg_views, tiktok_avg_views, youtube_avg_views, instagram_access_token, instagram_business_account_id, tiktok_access_token, youtube_access_token")
+        .select("full_name, display_name, instagram_avg_views, tiktok_avg_views, youtube_avg_views, instagram_access_token, instagram_business_account_id, tiktok_access_token, youtube_access_token")
         .eq("id", userId)
         .maybeSingle(),
 
@@ -107,7 +107,7 @@ Deno.serve(async (req: Request) => {
     ]);
 
     const profile = profileResult.data;
-    const creatorName = profile?.display_name || profile?.first_name || "Creator";
+    const creatorName = profile?.display_name || profile?.full_name?.split(" ")[0] || "Creator";
 
     // Build connected platforms list
     const connectedPlatforms: string[] = [];
