@@ -130,6 +130,22 @@ export default function ActionDashboard({ onNavigate, embedded = false }: Action
     }
   };
 
+  // Generate insights from existing local data — no premium required
+  const regenerateInsightsOnly = async () => {
+    setSyncing(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const newInsights = await generateInsights(user.id);
+      await saveInsights(user.id, newInsights);
+      setInsights(newInsights);
+    } catch (error) {
+      console.error('Error regenerating insights:', error);
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   const getPlatformIcon = (platform: string) => {
     switch (platform) {
       case 'instagram': return Instagram;
@@ -270,8 +286,8 @@ export default function ActionDashboard({ onNavigate, embedded = false }: Action
                 <>
                   <p className="text-muted-foreground mb-2">No priorities yet for this platform</p>
                   <p className="text-sm text-muted-foreground mb-4">Post more content or sync to generate AI-powered insights</p>
-                  <button onClick={syncAllPlatforms} disabled={syncing} className="px-4 py-2 rounded-lg font-semibold bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50">
-                    {syncing ? 'Syncing...' : 'Sync & Generate Insights'}
+                  <button onClick={regenerateInsightsOnly} disabled={syncing} className="px-4 py-2 rounded-lg font-semibold bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50">
+                    {syncing ? 'Generating...' : 'Generate Insights'}
                   </button>
                 </>
               ) : (
