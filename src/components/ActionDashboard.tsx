@@ -29,6 +29,7 @@ export default function ActionDashboard({ onNavigate, embedded = false }: Action
   const [syncing, setSyncing] = useState(false);
   const [selectedPlatform, setSelectedPlatform] = useState<string | null>(null);
   const [showPaywall, setShowPaywall] = useState(false);
+  const [connectedPlatforms, setConnectedPlatforms] = useState<Set<string>>(new Set());
   const isPremium = tier === 'paid';
 
   useEffect(() => {
@@ -39,6 +40,28 @@ export default function ActionDashboard({ onNavigate, embedded = false }: Action
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('instagram_access_token, instagram_business_account_id, tiktok_access_token, youtube_access_token, threads_access_token')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      const { data: credentials } = await supabase
+        .from('platform_credentials')
+        .select('platform')
+        .eq('user_id', user.id)
+        .eq('is_active', true);
+
+      const connected = new Set<string>([
+        ...(credentials || []).map((c: { platform: string }) => c.platform),
+        ...(profile?.instagram_access_token || profile?.instagram_business_account_id ? ['instagram'] : []),
+        ...(profile?.tiktok_access_token ? ['tiktok'] : []),
+        ...(profile?.youtube_access_token ? ['youtube'] : []),
+        ...(profile?.threads_access_token ? ['threads'] : []),
+      ]);
+      setConnectedPlatforms(connected);
+
       const storedInsights = await getStoredInsights(user.id);
       if (storedInsights.length === 0) {
         const newInsights = await generateInsights(user.id);
@@ -243,11 +266,23 @@ export default function ActionDashboard({ onNavigate, embedded = false }: Action
           {getPlatformInsights(selectedPlatform).length === 0 ? (
             <div className="text-center py-12">
               <TrendingUp className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-              <p className="text-muted-foreground mb-2">No priorities yet for this platform</p>
-              <p className="text-sm text-muted-foreground mb-4">Connect your account and post content to receive AI-powered insights</p>
-              <button onClick={() => onNavigate('/settings')} className="px-4 py-2 rounded-lg font-semibold bg-primary text-primary-foreground hover:bg-primary/90 transition-colors">
-                Connect Platform
-              </button>
+              {connectedPlatforms.has(selectedPlatform) ? (
+                <>
+                  <p className="text-muted-foreground mb-2">No priorities yet for this platform</p>
+                  <p className="text-sm text-muted-foreground mb-4">Post more content or sync to generate AI-powered insights</p>
+                  <button onClick={syncAllPlatforms} disabled={syncing} className="px-4 py-2 rounded-lg font-semibold bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50">
+                    {syncing ? 'Syncing...' : 'Sync & Generate Insights'}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <p className="text-muted-foreground mb-2">Platform not connected</p>
+                  <p className="text-sm text-muted-foreground mb-4">Connect your account and post content to receive AI-powered insights</p>
+                  <button onClick={() => onNavigate('/settings')} className="px-4 py-2 rounded-lg font-semibold bg-primary text-primary-foreground hover:bg-primary/90 transition-colors">
+                    Connect Platform
+                  </button>
+                </>
+              )}
             </div>
           ) : (
             <div className="space-y-3">
