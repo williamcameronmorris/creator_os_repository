@@ -1,4 +1,7 @@
-import { Instagram, Youtube, Sparkles, AtSign, Video, Image as ImageIcon, Heart, MessageCircle, Bookmark, Share2, ThumbsUp, Eye } from 'lucide-react';
+import {
+  Instagram, Youtube, Sparkles, Video, Image as ImageIcon,
+  Heart, MessageCircle, Bookmark, Share2, ThumbsUp, Eye,
+} from 'lucide-react';
 
 interface PostPreviewProps {
   platform: 'instagram' | 'tiktok' | 'youtube';
@@ -6,34 +9,43 @@ interface PostPreviewProps {
   mediaUrls: string[];
   mediaFiles: File[];
   scheduledDate?: string;
+  /** Real account handle — falls back to 'your_account' if omitted */
+  username?: string;
 }
 
 /**
  * Mock platform-specific post preview.
  * Shows a realistic representation of how the post will look on each platform.
  */
-export function PostPreview({ platform, caption, mediaUrls, mediaFiles }: PostPreviewProps) {
+export function PostPreview({ platform, caption, mediaUrls, mediaFiles, username = 'your_account' }: PostPreviewProps) {
   const allMedia: string[] = [
     ...mediaUrls,
-    ...mediaFiles.map((f) => URL.createObjectURL(f)),
+    ...mediaFiles.map(f => URL.createObjectURL(f)),
   ];
   const firstMedia = allMedia[0] || null;
-  const isVideo = mediaFiles[0]?.type?.startsWith('video/');
+  const isVideo    = mediaFiles[0]?.type?.startsWith('video/');
 
   if (platform === 'instagram') {
-    return <InstagramPreview caption={caption} media={firstMedia} isVideo={isVideo} mediaCount={allMedia.length} />;
+    return <InstagramPreview caption={caption} media={firstMedia} isVideo={isVideo} mediaCount={allMedia.length} username={username} />;
   }
   if (platform === 'tiktok') {
-    return <TikTokPreview caption={caption} media={firstMedia} />;
+    return <TikTokPreview caption={caption} media={firstMedia} username={username} />;
   }
-  return <YouTubePreview caption={caption} media={firstMedia} />;
+  return <YouTubePreview caption={caption} media={firstMedia} username={username} />;
 }
 
-// ── Instagram ──────────────────────────────────────────────────────────────────
+// ── Instagram ─────────────────────────────────────────────────────────────────
 function InstagramPreview({
-  caption, media, isVideo, mediaCount,
-}: { caption: string; media: string | null; isVideo: boolean; mediaCount: number }) {
+  caption, media, isVideo, mediaCount, username,
+}: {
+  caption: string;
+  media: string | null;
+  isVideo: boolean;
+  mediaCount: number;
+  username: string;
+}) {
   const truncatedCaption = caption.length > 125 ? caption.slice(0, 125) + '... more' : caption;
+  const handle = username.startsWith('@') ? username.slice(1) : username;
 
   return (
     <div className="w-full max-w-[375px] mx-auto font-sans bg-white rounded-2xl overflow-hidden shadow-lg border border-gray-100">
@@ -43,7 +55,7 @@ function InstagramPreview({
           <Instagram className="w-4 h-4 text-white" />
         </div>
         <div className="flex-1">
-          <p className="text-[13px] font-semibold text-gray-900 leading-none">your_account</p>
+          <p className="text-[13px] font-semibold text-gray-900 leading-none">{handle}</p>
           <p className="text-[11px] text-gray-400 mt-0.5">Preview</p>
         </div>
         <button className="text-gray-400 text-xl leading-none">···</button>
@@ -76,16 +88,16 @@ function InstagramPreview({
       <div className="px-4 pt-3 pb-1">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-4">
-            <Heart className="w-6 h-6 text-gray-800" />
-            <MessageCircle className="w-6 h-6 text-gray-800" />
-            <Share2 className="w-6 h-6 text-gray-800" />
+            <Heart          className="w-6 h-6 text-gray-800" />
+            <MessageCircle  className="w-6 h-6 text-gray-800" />
+            <Share2         className="w-6 h-6 text-gray-800" />
           </div>
           <Bookmark className="w-6 h-6 text-gray-800" />
         </div>
         <p className="text-[13px] font-semibold text-gray-900 mb-1">0 likes</p>
         {caption && (
           <p className="text-[13px] text-gray-900 leading-snug">
-            <span className="font-semibold">your_account </span>
+            <span className="font-semibold">{handle} </span>
             {truncatedCaption}
           </p>
         )}
@@ -94,10 +106,21 @@ function InstagramPreview({
   );
 }
 
-// ── TikTok ─────────────────────────────────────────────────────────────────────
-function TikTokPreview({ caption, media }: { caption: string; media: string | null }) {
+// ── TikTok ────────────────────────────────────────────────────────────────────
+function TikTokPreview({
+  caption, media, username,
+}: {
+  caption: string;
+  media: string | null;
+  username: string;
+}) {
+  const handle = username.startsWith('@') ? username : `@${username}`;
+
   return (
-    <div className="w-full max-w-[280px] mx-auto bg-black rounded-2xl overflow-hidden shadow-lg relative" style={{ aspectRatio: '9/16' }}>
+    <div
+      className="w-full max-w-[280px] mx-auto bg-black rounded-2xl overflow-hidden shadow-lg relative"
+      style={{ aspectRatio: '9/16' }}
+    >
       {/* Background */}
       <div className="absolute inset-0">
         {media ? (
@@ -120,10 +143,10 @@ function TikTokPreview({ caption, media }: { caption: string; media: string | nu
           </div>
         </div>
         {[
-          { Icon: Heart, label: '0' },
-          { Icon: MessageCircle, label: '0' },
-          { Icon: Bookmark, label: '0' },
-          { Icon: Share2, label: 'Share' },
+          { Icon: Heart,         label: '0'     },
+          { Icon: MessageCircle, label: '0'     },
+          { Icon: Bookmark,      label: '0'     },
+          { Icon: Share2,        label: 'Share' },
         ].map(({ Icon, label }) => (
           <div key={label} className="flex flex-col items-center gap-0.5">
             <Icon className="w-7 h-7 text-white" />
@@ -134,7 +157,7 @@ function TikTokPreview({ caption, media }: { caption: string; media: string | nu
 
       {/* Bottom caption */}
       <div className="absolute bottom-4 left-3 right-16">
-        <p className="text-white text-[12px] font-semibold mb-1">@your_account</p>
+        <p className="text-white text-[12px] font-semibold mb-1">{handle}</p>
         {caption && (
           <p className="text-white text-[11px] leading-snug line-clamp-3">{caption}</p>
         )}
@@ -143,10 +166,17 @@ function TikTokPreview({ caption, media }: { caption: string; media: string | nu
   );
 }
 
-// ── YouTube ────────────────────────────────────────────────────────────────────
-function YouTubePreview({ caption, media }: { caption: string; media: string | null }) {
-  const title = caption?.split('\n')[0]?.slice(0, 80) || 'Untitled Video';
+// ── YouTube ───────────────────────────────────────────────────────────────────
+function YouTubePreview({
+  caption, media, username,
+}: {
+  caption: string;
+  media: string | null;
+  username: string;
+}) {
+  const title       = caption?.split('\n')[0]?.slice(0, 80)               || 'Untitled Video';
   const description = caption?.split('\n').slice(1).join(' ')?.slice(0, 120) || '';
+  const channelName = username.startsWith('@') ? username.slice(1) : username;
 
   return (
     <div className="w-full max-w-[375px] mx-auto bg-white rounded-2xl overflow-hidden shadow-lg border border-gray-100">
@@ -160,7 +190,6 @@ function YouTubePreview({ caption, media }: { caption: string; media: string | n
             <p className="text-white/40 text-sm">No thumbnail</p>
           </div>
         )}
-        {/* Duration placeholder */}
         <div className="absolute bottom-2 right-2 bg-black/80 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">
           0:00
         </div>
@@ -173,7 +202,7 @@ function YouTubePreview({ caption, media }: { caption: string; media: string | n
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-[13px] font-semibold text-gray-900 line-clamp-2 leading-snug mb-1">{title}</p>
-          <p className="text-[11px] text-gray-500">Your Channel · 0 views · Just now</p>
+          <p className="text-[11px] text-gray-500">{channelName} · 0 views · Just now</p>
           {description && (
             <p className="text-[11px] text-gray-400 mt-1 line-clamp-2">{description}</p>
           )}
@@ -183,20 +212,16 @@ function YouTubePreview({ caption, media }: { caption: string; media: string | n
       {/* Engagement row */}
       <div className="flex items-center justify-around py-2 border-t border-gray-100 text-gray-500">
         <div className="flex items-center gap-1.5">
-          <ThumbsUp className="w-4 h-4" />
-          <span className="text-[11px]">0</span>
+          <ThumbsUp className="w-4 h-4" /><span className="text-[11px]">0</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <MessageCircle className="w-4 h-4" />
-          <span className="text-[11px]">0</span>
+          <MessageCircle className="w-4 h-4" /><span className="text-[11px]">0</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <Eye className="w-4 h-4" />
-          <span className="text-[11px]">0 views</span>
+          <Eye className="w-4 h-4" /><span className="text-[11px]">0 views</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <Share2 className="w-4 h-4" />
-          <span className="text-[11px]">Share</span>
+          <Share2 className="w-4 h-4" /><span className="text-[11px]">Share</span>
         </div>
       </div>
     </div>
