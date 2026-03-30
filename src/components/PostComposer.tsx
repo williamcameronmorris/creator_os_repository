@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import {
   X, Instagram, Youtube, Video, Calendar, Upload,
-  Sparkles, ArrowLeft, AlertCircle, Crop, Eye, EyeOff
+  Sparkles, ArrowLeft, AlertCircle, Crop, Eye, EyeOff, Zap
 } from 'lucide-react';
 import { ImageCropper } from './ImageCropper';
 import { PostPreview } from './PostPreview';
@@ -38,6 +38,9 @@ const PLATFORM_LIMITS = {
   youtube:   { caption: 5000, media: 1  },
 };
 
+/** Minimum minutes in the future a scheduled post must be */
+const MIN_SCHEDULE_MINUTES = 20;
+
 function getUploadError(error: any, fileName: string): string {
   const msg = error?.message || '';
   if (msg.includes('Payload too large') || msg.includes('413'))
@@ -67,13 +70,11 @@ function generateVideoThumbnail(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const url    = URL.createObjectURL(file);
     const video  = document.createElement('video');
-    video.preload = 'metadata';
-    video.muted   = true;
+    video.preload    = 'metadata';
+    video.muted      = true;
     video.playsInline = true;
     video.src = url;
-    video.addEventListener('loadeddata', () => {
-      video.currentTime = 0;
-    });
+    video.addEventListener('loadeddata', () => { video.currentTime = 0; });
     video.addEventListener('seeked', () => {
       const canvas = document.createElement('canvas');
       canvas.width  = video.videoWidth  || 320;
@@ -84,11 +85,19 @@ function generateVideoThumbnail(file: File): Promise<string> {
       URL.revokeObjectURL(url);
       resolve(canvas.toDataURL('image/jpeg', 0.7));
     });
-    video.addEventListener('error', () => {
-      URL.revokeObjectURL(url);
-      reject(new Error('video load error'));
-    });
+    video.addEventListener('error', () => { URL.revokeObjectURL(url); reject(new Error('video load error')); });
   });
+}
+
+/**
+ * Returns true if the datetime-local string is at least MIN_SCHEDULE_MINUTES
+ * from now (in the user's local time).
+ */
+function isScheduleDateValid(localDatetimeValue: string): boolean {
+  if (!localDatetimeValue) return false;
+  const selected = new Date(localDatetimeValue).getTime();
+  const minAllowed = Date.now() + MIN_SCHEDULE_MINUTES * 60 * 1000;
+  return selected >= minAllowed;
 }
 
 export function PostComposer({ onClose, onSuccess, asPage = false, editPost }: PostComposerProps) {
@@ -96,8 +105,6 @@ export function PostComposer({ onClose, onSuccess, asPage = false, editPost }: P
   const { timezone } = useTimezone();
 
   // ── Multi-platform selection ──────────────────────────────────────────────
-  // When editing an existing post the platform field is a single string; we
-  // seed the Set from that. For new posts default to instagram.
   const [platforms, setPlatforms] = useState<Set<Platform>>(() => {
     if (editPost?.platform) {
       const saved = editPost.platform.split(',').map(s => s.trim()) as Platform[];
@@ -106,19 +113,15 @@ export function PostComposer({ onClose, onSuccess, asPage = false, editPost }: P
     return new Set<Platform>(['instagram']);
   });
 
-  // The "primary" platform drives caption limits and the preview tab.
-  // It always stays in sync with the first selected platform.
   const primaryPlatform: Platform = (['instagram', 'tiktok', 'youtube'] as Platform[])
     .find(p => platforms.has(p)) ?? 'instagram';
 
-  // Which platform's preview tab is active
   const [previewPlatform, setPreviewPlatform] = useState<Platform>(primaryPlatform);
 
   const togglePlatform = (p: Platform) => {
     setPlatforms(prev => {
       const next = new Set(prev);
       if (next.has(p)) {
-        // Must keep at least one selected
         if (next.size > 1) next.delete(p);
       } else {
         next.add(p);
@@ -127,33 +130,29 @@ export function PostComposer({ onClose, onSuccess, asPage = false, editPost }: P
     });
   };
 
-  // Keep previewPlatform valid when platforms change
   useEffect(() => {
-    if (!platforms.has(previewPlatform)) {
-      setPreviewPlatform(primaryPlatform);
-    }
+    if (!platforms.has(previewPlatform)) setPreviewPlatform(primaryPlatform);
   }, [platforms, previewPlatform, primaryPlatform]);
 
-  const [caption, setCaption] = useState(editPost?.caption || '');
+  const [caption,       setCaption]       = useState(editPost?.caption || '');
   const [scheduledDate, setScheduledDate] = useState(
-    editPost?.scheduled_date
-      ? utcToLocalInput(editPost.scheduled_date, timezone)
-      : ''
+    editPost?.scheduled_date ? utcToLocalInput(editPost.scheduled_date, timezone) : ''
   );
-  const [mediaFiles, setMediaFiles]         = useState<File[]>([]);
-  const [mediaUrls,  setMediaUrls]          = useState<string[]>(editPost?.media_urls || []);
-  const [videoThumbs, setVideoThumbs]       = useState<Record<number, string>>({}); // index → dataUrl
-  const [uploading, setUploading]           = useState(false);
-  const [saving,    setSaving]              = useState(false);
-  const [errorMessage, setErrorMessage]     = useState<string | null>(null);
-  const [cropperFile,  setCropperFile]      = useState<File | null>(null);
-  const [showPreview,  setShowPreview]      = useState(false);
-  const [autosaveStatus, setAutosaveStatus] = useState<'idle' | 'saved'>('idle');
-  const [abEnabled,      setAbEnabled]      = useState(false);
-  const [scheduledDateB, setScheduledDateB] = useState('');
+  const [mediaFiles,      setMediaFiles]      = useState<File[]>([]);
+  const [mediaUrls,       setMediaUrls]       = useState<string[]>(editPost?.media_urls || []);
+  const [videoThumbs,     setVideoThumbs]     = useState<Record<number, string>>({});
+  const [uploading,       setUploading]       = useState(false);
+  const [saving,          setSaving]          = useState(false);
+  const [publishingNow,   setPublishingNow]   = useState(false);
+  const [errorMessage,    setErrorMessage]    = useState<string | null>(null);
+  const [cropperFile,     setCropperFile]     = useState<File | null>(null);
+  const [showPreview,     setShowPreview]     = useState(false);
+  const [autosaveStatus,  setAutosaveStatus]  = useState<'idle' | 'saved'>('idle');
+  const [abEnabled,       setAbEnabled]       = useState(false);
+  const [scheduledDateB,  setScheduledDateB]  = useState('');
   const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // ── Autosave draft to localStorage ───────────────────────────────────────
+  // ── Autosave draft ────────────────────────────────────────────────────────
   const DRAFT_KEY = editPost ? `draft_edit_${editPost.id}` : `draft_new_${user?.id}`;
 
   useEffect(() => {
@@ -162,11 +161,11 @@ export function PostComposer({ onClose, onSuccess, asPage = false, editPost }: P
       const saved = localStorage.getItem(DRAFT_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (parsed.caption      && !caption)       setCaption(parsed.caption);
-        if (parsed.platforms)                       setPlatforms(new Set(parsed.platforms as Platform[]));
-        if (parsed.scheduledDate)                   setScheduledDate(parsed.scheduledDate);
+        if (parsed.caption      && !caption) setCaption(parsed.caption);
+        if (parsed.platforms)                setPlatforms(new Set(parsed.platforms as Platform[]));
+        if (parsed.scheduledDate)            setScheduledDate(parsed.scheduledDate);
       }
-    } catch (_) { /* ignore */ }
+    } catch (_) {}
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -174,42 +173,44 @@ export function PostComposer({ onClose, onSuccess, asPage = false, editPost }: P
     if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
     autosaveTimer.current = setTimeout(() => {
       try {
-        localStorage.setItem(DRAFT_KEY, JSON.stringify({
-          caption,
-          platforms: Array.from(platforms),
-          scheduledDate,
-        }));
+        localStorage.setItem(DRAFT_KEY, JSON.stringify({ caption, platforms: Array.from(platforms), scheduledDate }));
         setAutosaveStatus('saved');
         setTimeout(() => setAutosaveStatus('idle'), 2000);
-      } catch (_) { /* ignore */ }
+      } catch (_) {}
     }, 1000);
     return () => { if (autosaveTimer.current) clearTimeout(autosaveTimer.current); };
   }, [caption, platforms, scheduledDate]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const clearDraft = () => {
-    try { localStorage.removeItem(DRAFT_KEY); } catch (_) { /* ignore */ }
-  };
+  const clearDraft = () => { try { localStorage.removeItem(DRAFT_KEY); } catch (_) {} };
 
-  // Caption limit uses the most restrictive selected platform
-  const lowestCaptionLimit = Math.min(
-    ...Array.from(platforms).map(p => PLATFORM_LIMITS[p].caption)
-  );
-  const lowestMediaLimit = Math.min(
-    ...Array.from(platforms).map(p => PLATFORM_LIMITS[p].media)
-  );
+  // ── Limits ────────────────────────────────────────────────────────────────
+  const lowestCaptionLimit = Math.min(...Array.from(platforms).map(p => PLATFORM_LIMITS[p].caption));
+  const lowestMediaLimit   = Math.min(...Array.from(platforms).map(p => PLATFORM_LIMITS[p].media));
   const charactersRemaining = lowestCaptionLimit - caption.length;
 
-  // ── Video thumbnail generation ────────────────────────────────────────────
+  // ── Schedule date validation ──────────────────────────────────────────────
+  const scheduleDateTooSoon = scheduledDate !== '' && !isScheduleDateValid(scheduledDate);
+
+  // Compute the minimum allowed datetime-local string for the input's min= attribute
+  const minScheduleDatetime = (() => {
+    const d = new Date(Date.now() + MIN_SCHEDULE_MINUTES * 60 * 1000);
+    // Format as YYYY-MM-DDTHH:MM (datetime-local format)
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  })();
+
+  // ── Video thumbnails ──────────────────────────────────────────────────────
   useEffect(() => {
     mediaFiles.forEach((file, index) => {
       if (file.type.startsWith('video/') && !videoThumbs[index]) {
         generateVideoThumbnail(file)
           .then(thumb => setVideoThumbs(prev => ({ ...prev, [index]: thumb })))
-          .catch(() => { /* leave empty on failure */ });
+          .catch(() => {});
       }
     });
   }, [mediaFiles]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Media handlers ────────────────────────────────────────────────────────
   const handleMediaChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     if (mediaFiles.length + mediaUrls.length + files.length > lowestMediaLimit) {
@@ -246,6 +247,7 @@ export function PostComposer({ onClose, onSuccess, asPage = false, editPost }: P
     }
   };
 
+  // ── Upload media ──────────────────────────────────────────────────────────
   const uploadMedia = async (): Promise<string[]> => {
     if (!user || mediaFiles.length === 0) return [];
     const uploadedUrls: string[] = [];
@@ -255,7 +257,7 @@ export function PostComposer({ onClose, onSuccess, asPage = false, editPost }: P
       const { data, error } = await supabase.storage
         .from('media')
         .upload(fileName, file, { cacheControl: '3600', upsert: false });
-      if (error) { console.error('Upload error:', error); throw new Error(getUploadError(error, file.name)); }
+      if (error) throw new Error(getUploadError(error, file.name));
       const { data: { publicUrl } } = supabase.storage.from('media').getPublicUrl(data.path);
       uploadedUrls.push(publicUrl);
       await supabase.from('media_library').insert({
@@ -269,11 +271,18 @@ export function PostComposer({ onClose, onSuccess, asPage = false, editPost }: P
     return uploadedUrls;
   };
 
+  // ── Save (draft or scheduled) ─────────────────────────────────────────────
   const handleSave = async (status: 'draft' | 'scheduled') => {
     if (!user) return;
     setErrorMessage(null);
     if (!caption.trim()) { setErrorMessage('Please add a caption before saving.'); return; }
-    if (status === 'scheduled' && !scheduledDate) { setErrorMessage('Please select a date and time to schedule this post.'); return; }
+    if (status === 'scheduled') {
+      if (!scheduledDate) { setErrorMessage('Please select a date and time to schedule this post.'); return; }
+      if (!isScheduleDateValid(scheduledDate)) {
+        setErrorMessage(`Posts must be scheduled at least ${MIN_SCHEDULE_MINUTES} minutes from now. Use "Publish Now" to post immediately.`);
+        return;
+      }
+    }
     if (status === 'scheduled' && abEnabled && !scheduledDateB) {
       setErrorMessage('Please select an alternate time for Version B, or disable A/B testing.');
       return;
@@ -281,11 +290,10 @@ export function PostComposer({ onClose, onSuccess, asPage = false, editPost }: P
     setSaving(true);
     setUploading(mediaFiles.length > 0);
     try {
-      const newMediaUrls  = await uploadMedia();
-      const allMediaUrls  = [...mediaUrls, ...newMediaUrls];
+      const newMediaUrls = await uploadMedia();
+      const allMediaUrls = [...mediaUrls, ...newMediaUrls];
       const platformArray = Array.from(platforms);
 
-      // Create one post row per selected platform
       for (const p of platformArray) {
         const basePost = {
           user_id:    user.id,
@@ -331,8 +339,56 @@ export function PostComposer({ onClose, onSuccess, asPage = false, editPost }: P
     }
   };
 
-  // ── Username for preview ─────────────────────────────────────────────────
-  // Pull from user metadata; fall back to email prefix
+  // ── Publish Now ───────────────────────────────────────────────────────────
+  // Inserts the post with scheduled_for = now and immediately triggers the
+  // publish-scheduled-posts edge function to dispatch it.
+  const handlePublishNow = async () => {
+    if (!user) return;
+    setErrorMessage(null);
+    if (!caption.trim()) { setErrorMessage('Please add a caption before publishing.'); return; }
+    setPublishingNow(true);
+    setUploading(mediaFiles.length > 0);
+    try {
+      const newMediaUrls = await uploadMedia();
+      const allMediaUrls = [...mediaUrls, ...newMediaUrls];
+      const platformArray = Array.from(platforms);
+      const nowUtc = new Date().toISOString();
+
+      // Insert one row per platform, all scheduled for right now
+      const rows = platformArray.map(p => ({
+        user_id:        user.id,
+        platform:       p,
+        caption:        caption.trim(),
+        media_url:      allMediaUrls[0] || null,
+        media_urls:     allMediaUrls,
+        status:         'scheduled' as const,
+        scheduled_date: nowUtc,
+        scheduled_for:  nowUtc,
+      }));
+
+      const { error: insertError } = await supabase.from('content_posts').insert(rows);
+      if (insertError) throw insertError;
+
+      // Immediately invoke the scheduler so it doesn't wait for the next cron tick
+      const { error: invokeError } = await supabase.functions.invoke('publish-scheduled-posts');
+      if (invokeError) {
+        // Non-fatal — the cron will pick it up within the next minute
+        console.warn('Could not invoke publish-scheduled-posts immediately:', invokeError.message);
+      }
+
+      clearDraft();
+      onSuccess();
+      onClose();
+    } catch (error: any) {
+      console.error('Error publishing now:', error);
+      setErrorMessage(error.message || getSaveError(error));
+    } finally {
+      setPublishingNow(false);
+      setUploading(false);
+    }
+  };
+
+  // ── Username for preview ──────────────────────────────────────────────────
   const displayUsername: string = (() => {
     const meta = (user as any)?.user_metadata;
     return meta?.username || meta?.full_name || user?.email?.split('@')[0] || 'your_account';
@@ -358,7 +414,6 @@ export function PostComposer({ onClose, onSuccess, asPage = false, editPost }: P
                     : 'border-border hover:border-primary/50 hover:bg-accent'
                 }`}
               >
-                {/* Checkmark badge */}
                 {isSelected && (
                   <span className="absolute top-2 right-2 w-4 h-4 bg-primary rounded-full flex items-center justify-center">
                     <svg className="w-2.5 h-2.5 text-white" viewBox="0 0 10 10" fill="none">
@@ -422,10 +477,8 @@ export function PostComposer({ onClose, onSuccess, asPage = false, editPost }: P
               />
             </label>
           )}
-
           {(mediaUrls.length > 0 || mediaFiles.length > 0) && (
             <div className="grid grid-cols-2 gap-3">
-              {/* Existing URL media */}
               {mediaUrls.map((url, index) => (
                 <div key={`url-${index}`} className="relative aspect-square rounded-xl overflow-hidden group border border-border">
                   <img src={url} alt="" className="w-full h-full object-cover" />
@@ -437,16 +490,12 @@ export function PostComposer({ onClose, onSuccess, asPage = false, editPost }: P
                   </button>
                 </div>
               ))}
-
-              {/* New local files */}
               {mediaFiles.map((file, index) => (
                 <div key={`file-${index}`} className="relative aspect-square rounded-xl overflow-hidden group border border-border">
                   {file.type.startsWith('video/') ? (
-                    /* Video: show generated thumbnail or gradient placeholder */
                     videoThumbs[index] ? (
                       <div className="relative w-full h-full">
                         <img src={videoThumbs[index]} alt="Video thumbnail" className="w-full h-full object-cover" />
-                        {/* Play badge overlay */}
                         <div className="absolute inset-0 flex items-center justify-center bg-black/20">
                           <div className="w-10 h-10 bg-black/60 rounded-full flex items-center justify-center">
                             <svg className="w-4 h-4 text-white ml-0.5" viewBox="0 0 16 16" fill="currentColor">
@@ -454,14 +503,12 @@ export function PostComposer({ onClose, onSuccess, asPage = false, editPost }: P
                             </svg>
                           </div>
                         </div>
-                        {/* Duration / video label */}
                         <div className="absolute bottom-2 left-2 bg-black/60 text-white text-[10px] font-semibold px-1.5 py-0.5 rounded flex items-center gap-1">
                           <Video className="w-2.5 h-2.5" />
                           Video
                         </div>
                       </div>
                     ) : (
-                      /* Still generating — animated gradient */
                       <div className="w-full h-full bg-gradient-to-br from-gray-700 to-gray-900 flex items-center justify-center animate-pulse">
                         <Video className="w-12 h-12 text-white/40" />
                       </div>
@@ -469,7 +516,6 @@ export function PostComposer({ onClose, onSuccess, asPage = false, editPost }: P
                   ) : (
                     <img src={URL.createObjectURL(file)} alt="" className="w-full h-full object-cover" />
                   )}
-
                   <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
                     {file.type.startsWith('image/') && (
                       <button
@@ -502,16 +548,26 @@ export function PostComposer({ onClose, onSuccess, asPage = false, editPost }: P
             Schedule (Optional)
           </div>
         </label>
-        <input
-          type="datetime-local"
-          value={scheduledDate}
-          onChange={(e) => setScheduledDate(e.target.value)}
-          min={nowAsLocalInput(timezone)}
-          className="w-full px-4 py-3 rounded-xl border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
-        />
+        <div className="space-y-1.5">
+          <input
+            type="datetime-local"
+            value={scheduledDate}
+            onChange={(e) => setScheduledDate(e.target.value)}
+            min={minScheduleDatetime}
+            className={`w-full px-4 py-3 rounded-xl border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all ${
+              scheduleDateTooSoon ? 'border-orange-400 bg-orange-50/10' : 'border-border'
+            }`}
+          />
+          {scheduleDateTooSoon && (
+            <div className="flex items-center gap-2 text-orange-500 text-xs font-medium px-1">
+              <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+              Must be at least {MIN_SCHEDULE_MINUTES} minutes from now. Use "Publish Now" to post immediately.
+            </div>
+          )}
+        </div>
 
-        {/* A/B test toggle (only for new scheduled posts) */}
-        {!editPost && scheduledDate && (
+        {/* A/B test toggle */}
+        {!editPost && scheduledDate && !scheduleDateTooSoon && (
           <div className="rounded-xl border border-border bg-muted/30 p-4 space-y-3">
             <label className="flex items-center gap-3 cursor-pointer">
               <div className="relative">
@@ -538,7 +594,7 @@ export function PostComposer({ onClose, onSuccess, asPage = false, editPost }: P
                   type="datetime-local"
                   value={scheduledDateB}
                   onChange={(e) => setScheduledDateB(e.target.value)}
-                  min={nowAsLocalInput(timezone)}
+                  min={minScheduleDatetime}
                   className="w-full px-4 py-3 rounded-xl border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
                 />
               </div>
@@ -562,10 +618,8 @@ export function PostComposer({ onClose, onSuccess, asPage = false, editPost }: P
           {showPreview ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
           {showPreview ? 'Hide Preview' : 'Preview Post'}
         </button>
-
         {showPreview && (
           <div className="mt-4">
-            {/* Tab bar when multiple platforms selected */}
             {platforms.size > 1 && (
               <div className="flex gap-2 mb-3">
                 {(Object.keys(PLATFORM_ICONS) as Platform[])
@@ -589,7 +643,6 @@ export function PostComposer({ onClose, onSuccess, asPage = false, editPost }: P
                   })}
               </div>
             )}
-
             <PostPreview
               platform={previewPlatform}
               caption={caption}
@@ -611,18 +664,33 @@ export function PostComposer({ onClose, onSuccess, asPage = false, editPost }: P
     </>
   );
 
+  const isWorking = saving || uploading || publishingNow;
+
   const actionButtons = (
-    <div className="flex items-center justify-end gap-3">
+    <div className="flex items-center justify-end gap-3 flex-wrap">
+      {/* Save Draft */}
       <button
         onClick={() => handleSave('draft')}
-        disabled={saving || uploading || !caption.trim()}
+        disabled={isWorking || !caption.trim()}
         className="px-6 py-3 rounded-xl font-medium bg-accent hover:bg-accent/80 text-foreground transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
       >
         {saving && !uploading ? 'Saving...' : 'Save Draft'}
       </button>
+
+      {/* Publish Now */}
+      <button
+        onClick={handlePublishNow}
+        disabled={isWorking || !caption.trim()}
+        className="flex items-center gap-2 px-6 py-3 rounded-xl font-medium bg-emerald-600 hover:bg-emerald-700 text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+      >
+        <Zap className="w-4 h-4" />
+        {publishingNow ? (uploading ? 'Uploading...' : 'Publishing...') : 'Publish Now'}
+      </button>
+
+      {/* Schedule Post */}
       <button
         onClick={() => handleSave('scheduled')}
-        disabled={saving || uploading || !caption.trim() || !scheduledDate}
+        disabled={isWorking || !caption.trim() || !scheduledDate || scheduleDateTooSoon}
         className="px-6 py-3 rounded-xl font-medium bg-primary hover:bg-primary/90 text-primary-foreground transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
       >
         {uploading ? 'Uploading...' : saving ? 'Scheduling...' : 'Schedule Post'}
@@ -677,7 +745,7 @@ export function PostComposer({ onClose, onSuccess, asPage = false, editPost }: P
           <div className="overflow-y-auto max-h-[calc(90vh-180px)] p-6 space-y-6">
             {formContent}
           </div>
-          <div className="flex items-center justify-end gap-3 p-6 border-t border-border">
+          <div className="p-6 border-t border-border">
             {actionButtons}
           </div>
         </div>
