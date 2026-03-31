@@ -68,24 +68,56 @@ function getSaveError(error: any): string {
 /** Generate a thumbnail data-URL from the first frame of a video File */
 function generateVideoThumbnail(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
-    const url    = URL.createObjectURL(file);
-    const video  = document.createElement('video');
-    video.preload    = 'metadata';
-    video.muted      = true;
+    const url   = URL.createObjectURL(file);
+    const video = document.createElement('video');
+    video.preload     = 'metadata';
+    video.muted       = true;
     video.playsInline = true;
-    video.src = url;
-    video.addEventListener('loadeddata', () => { video.currentTime = 0; });
-    video.addEventListener('seeked', () => {
+    // Cross-origin attribute prevents tainted canvas issues
+    video.crossOrigin = 'anonymous';
+
+    // Safety net: if nothing fires within 8 seconds, bail out
+    const timeout = setTimeout(() => {
+      URL.revokeObjectURL(url);
+      reject(new Error('thumbnail timeout'));
+    }, 8_000);
+
+    const capture = () => {
+      clearTimeout(timeout);
       const canvas = document.createElement('canvas');
-      canvas.width  = video.videoWidth  || 320;
-      canvas.height = video.videoHeight || 240;
+      // Cap the thumbnail size to avoid memory issues on 4K video
+      const maxDim = 640;
+      const w = video.videoWidth  || 320;
+      const h = video.videoHeight || 240;
+      const scale = Math.min(1, maxDim / Math.max(w, h));
+      canvas.width  = Math.round(w * scale);
+      canvas.height = Math.round(h * scale);
       const ctx = canvas.getContext('2d');
-      if (!ctx) { URL.revokeObjectURL(url); reject(new Error('no ctx')); return; }
+      if (!ctx) { URL.revokeObjectURL(url); reject(new Error('no canvas ctx')); return; }
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       URL.revokeObjectURL(url);
       resolve(canvas.toDataURL('image/jpeg', 0.7));
-    });
-    video.addEventListener('error', () => { URL.revokeObjectURL(url); reject(new Error('video load error')); });
+    };
+
+    video.addEventListener('seeked', capture, { once: true });
+
+    video.addEventListener('loadedmetadata', () => {
+      // Seek to 0.1s so browsers that don't fire seeked at t=0 still fire it
+      video.currentTime = 0.1;
+    }, { once: true });
+
+    // Fallback: if loadeddata fires and we're already at the right time, capture directly
+    video.addEventListener('loadeddata', () => {
+      if (video.readyState >= 2 && video.currentTime > 0) capture();
+    }, { once: true });
+
+    video.addEventListener('error', () => {
+      clearTimeout(timeout);
+      URL.revokeObjectURL(url);
+      reject(new Error('video load error'));
+    }, { once: true });
+
+    video.src = url;
   });
 }
 
@@ -215,6 +247,13 @@ export function PostComposer({ onClose, onSuccess, asPage = false, editPost }: P
     const files = Array.from(e.target.files || []);
     if (mediaFiles.length + mediaUrls.length + files.length > lowestMediaLimit) {
       setErrorMessage(`Selected platforms only allow ${lowestMediaLimit} media file(s)`);
+      return;
+    }
+    // Warn on files over 500MB — Supabase storage free tier limit is 50MB per file
+    const MAX_VIDEO_MB = 500;
+    const oversized = files.find(f => f.type.startsWith('video/') && f.size > MAX_VIDEO_MB * 1024 * 1024);
+    if (oversized) {
+      setErrorMessage(`"${oversized.name}" is too large (max ${MAX_VIDEO_MB}MB).`);
       return;
     }
     setErrorMessage(null);
