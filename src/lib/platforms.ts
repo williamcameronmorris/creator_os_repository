@@ -11,7 +11,7 @@ export interface PlatformStatus {
   label?: string;
 }
 
-export async function getPlatformStatus(userId: string): Promise<PlatformStatus[]> {
+export async function getPlatformStatus(userId: string): romise<PlatformStatus[]> {
   const { data: profile } = await supabase
     .from('profiles')
     .select([
@@ -189,7 +189,7 @@ export async function syncPlatform(
   }
 
   // Only call sync edge functions for platforms that have them
-  const syncablePlatforms = ['instagram', 'tiktok', 'youtube'];
+  const syncablePlatforms = ['instagram', 'tiktok', 'youtube', 'threads'];
   if (!syncablePlatforms.includes(platform)) {
     // For facebook/threads, a full sync would be triggered from their dedicated pages
     return;
