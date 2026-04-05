@@ -331,7 +331,7 @@ export function Settings() {
                           Connected
                         </span>
                         {/* No sync for facebook/threads (done via dedicated pages) */}
-                        {!['facebook', 'threads'].includes(platform.platform) && (
+                        {platform.platform !== 'facebook' && (
                           <button
                             onClick={() => handleSyncPlatform(platform.platform)}
                             disabled={syncing === platform.platform}
