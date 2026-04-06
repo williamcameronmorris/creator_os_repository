@@ -139,7 +139,7 @@ export function Schedule() {
 
   return (
     <div className="max-w-7xl mx-auto">
-      {/* ââ Page header ââ */}
+      {/* Ã¢ÂÂÃ¢ÂÂ Page header Ã¢ÂÂÃ¢ÂÂ */}
       <div className="mb-6">
         <div className="flex items-start justify-between gap-3 mb-4">
           <div>
@@ -155,7 +155,7 @@ export function Schedule() {
           </button>
         </div>
 
-        {/* ââ Filter + view controls ââ */}
+        {/* Ã¢ÂÂÃ¢ÂÂ Filter + view controls Ã¢ÂÂÃ¢ÂÂ */}
         <div className="flex items-center justify-between gap-3 flex-wrap">
           {/* Status filters */}
           <div className="flex items-center gap-2 flex-wrap">
@@ -194,7 +194,7 @@ export function Schedule() {
               </button>
             </div>
 
-            {/* Granularity dropdown â only in calendar mode */}
+            {/* Granularity dropdown Ã¢ÂÂ only in calendar mode */}
             {viewMode === 'calendar' && (
               <div className="relative" ref={calDropdownRef}>
                 <button
@@ -223,7 +223,7 @@ export function Schedule() {
         </div>
       </div>
 
-      {/* ââ Content area ââ */}
+      {/* Ã¢ÂÂÃ¢ÂÂ Content area Ã¢ÂÂÃ¢ÂÂ */}
       <div className="mb-8">
         {/* Calendar view */}
         {viewMode === 'calendar' && !loading && (
@@ -304,7 +304,7 @@ export function Schedule() {
                           {post.publish_status === 'publishing' && (
                             <span className="flex items-center gap-1 px-1.5 py-0.5 text-xs rounded-full bg-blue-500/10 text-blue-600 font-semibold">
                               <Loader2 className="w-3 h-3 animate-spin" />
-                              Publishingâ¦
+                              PublishingÃ¢ÂÂ¦
                             </span>
                           )}
                           {post.publish_status === 'published' && (
@@ -321,7 +321,7 @@ export function Schedule() {
                           )}
                         </div>
 
-                        {/* Action buttons â always top-right, compact */}
+                        {/* Action buttons Ã¢ÂÂ always top-right, compact */}
                         <div className="flex items-center gap-1 flex-shrink-0">
                           {post.publish_status === 'failed' && (
                             <button
@@ -381,7 +381,7 @@ export function Schedule() {
                           })()}
                         </div>
 
-                        {/* Thumbnail â smaller on mobile, larger on desktop */}
+                        {/* Thumbnail Ã¢ÂÂ smaller on mobile, larger on desktop */}
                         {post.media_urls && post.media_urls.length > 0 && (
                           <div className="relative flex-shrink-0">
                             <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl overflow-hidden border border-border bg-accent">
@@ -404,7 +404,7 @@ export function Schedule() {
         )}
       </div>
 
-      {/* ââ Stats ââ */}
+      {/* Ã¢ÂÂÃ¢ÂÂ Stats Ã¢ÂÂÃ¢ÂÂ */}
       <div className="mb-8">
         <h2 className="text-xl sm:text-2xl font-bold text-foreground mb-4">Content Scheduling Stats</h2>
 
@@ -470,7 +470,7 @@ export function Schedule() {
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-medium text-muted-foreground">Publishing Soon</span>
                 <Clock className="w-5 h-5 text-orange-500" />
-              </div
+              </div>
               <div className="flex items-baseline gap-2 mb-1">
                 <span className="text-3xl font-bold text-foreground">{publishingSoonPosts}</span>
                 <span className="text-sm text-muted-foreground">posts</span>
