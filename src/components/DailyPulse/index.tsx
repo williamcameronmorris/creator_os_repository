@@ -801,7 +801,7 @@ export function DailyPulse() {
 
         {/* Slide 1 — Content Recap */}
         {currentSlide === 'content' && (
-          <div className="flex-1 flex flex-col">
+          <div key="slide-content" className="flex-1 flex flex-col animate-slide-in-up">
             <p className="text-xs font-black tracking-widest text-purple-400 uppercase mb-1">WEEKLY REVIEW</p>
             <h2 className="text-4xl font-black text-foreground mb-6">Content<br />Recap</h2>
             <div className="bg-card border border-border rounded-3xl shadow-sm flex-1 overflow-auto">
@@ -821,7 +821,7 @@ export function DailyPulse() {
 
         {/* Slide 2 — Coming Up */}
         {currentSlide === 'schedule' && (
-          <div className="flex-1 flex flex-col">
+          <div key="slide-schedule" className="flex-1 flex flex-col animate-slide-in-up">
             <p className="text-xs font-black tracking-widest text-rose-400 uppercase mb-1">SCHEDULE</p>
             <h2 className="text-4xl font-black text-foreground mb-6">Coming<br />Up</h2>
             <div className="bg-card border border-border rounded-3xl shadow-sm flex-1 overflow-auto">
@@ -843,7 +843,7 @@ export function DailyPulse() {
 
         {/* Slide 4 — Smart Tips */}
         {currentSlide === 'tips' && (
-          <div className="flex-1 flex flex-col">
+          <div key="slide-tips" className="flex-1 flex flex-col animate-slide-in-up">
             <p className="text-xs font-black tracking-widest text-emerald-500 uppercase mb-1">AI INSIGHTS</p>
             <h2 className="text-4xl font-black text-foreground mb-6">Smart<br />Tips</h2>
             <div className="bg-card border border-border rounded-3xl shadow-sm flex-1 overflow-auto">
