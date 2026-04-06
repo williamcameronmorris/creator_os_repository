@@ -21,6 +21,8 @@ interface Post {
   publish_error: string | null;
   platform_post_id: string | null;
   published_at: string | null;
+  thumbnail_url?: string | null;
+  media_type?: string | null;
 }
 
 type CalGranularity = 'monthly' | 'weekly' | 'daily';
@@ -58,11 +60,11 @@ export function Schedule() {
   const loadPosts = async () => {
     if (!user) return;
     const { data, error } = await supabase
-      .from('content_posts')
-      .select('id, platform, caption, media_urls, scheduled_date, scheduled_for, status, deal_id, is_sponsored, publish_status, publish_error, platform_post_id, published_at')
+      .from('content_posts_unified')
+      .select('id, platform, caption, media_urls, scheduled_date, scheduled_for, status, deal_id, is_sponsored, publish_status, publish_error, platform_post_id, published_at, thumbnail_url, media_type')
       .eq('user_id', user.id)
       .in('status', ['scheduled', 'draft', 'published'])
-      .order('scheduled_date', { ascending: true, nullsFirst: false });
+      .order('published_at', { ascending: false, nullsFirst: false });
 
     if (!error && data) setPosts(data);
     setLoading(false);
@@ -70,7 +72,7 @@ export function Schedule() {
 
   const handleDelete = async (postId: string) => {
     if (!confirm('Are you sure you want to delete this post?')) return;
-    const { error } = await supabase.from('content_posts').delete().eq('id', postId);
+    const { error } = await supabase.from('content_posts_unified').delete().eq('id', postId);
     if (!error) loadPosts();
   };
 
@@ -137,7 +139,7 @@ export function Schedule() {
 
   return (
     <div className="max-w-7xl mx-auto">
-      {/* ── Page header ── */}
+      {/* ââ Page header ââ */}
       <div className="mb-6">
         <div className="flex items-start justify-between gap-3 mb-4">
           <div>
@@ -153,7 +155,7 @@ export function Schedule() {
           </button>
         </div>
 
-        {/* ── Filter + view controls ── */}
+        {/* ââ Filter + view controls ââ */}
         <div className="flex items-center justify-between gap-3 flex-wrap">
           {/* Status filters */}
           <div className="flex items-center gap-2 flex-wrap">
@@ -192,7 +194,7 @@ export function Schedule() {
               </button>
             </div>
 
-            {/* Granularity dropdown — only in calendar mode */}
+            {/* Granularity dropdown â only in calendar mode */}
             {viewMode === 'calendar' && (
               <div className="relative" ref={calDropdownRef}>
                 <button
@@ -221,7 +223,7 @@ export function Schedule() {
         </div>
       </div>
 
-      {/* ── Content area ── */}
+      {/* ââ Content area ââ */}
       <div className="mb-8">
         {/* Calendar view */}
         {viewMode === 'calendar' && !loading && (
@@ -302,7 +304,7 @@ export function Schedule() {
                           {post.publish_status === 'publishing' && (
                             <span className="flex items-center gap-1 px-1.5 py-0.5 text-xs rounded-full bg-blue-500/10 text-blue-600 font-semibold">
                               <Loader2 className="w-3 h-3 animate-spin" />
-                              Publishing…
+                              Publishingâ¦
                             </span>
                           )}
                           {post.publish_status === 'published' && (
@@ -319,12 +321,12 @@ export function Schedule() {
                           )}
                         </div>
 
-                        {/* Action buttons — always top-right, compact */}
+                        {/* Action buttons â always top-right, compact */}
                         <div className="flex items-center gap-1 flex-shrink-0">
                           {post.publish_status === 'failed' && (
                             <button
                               onClick={async () => {
-                                await supabase.from('content_posts').update({ publish_status: null, publish_error: null }).eq('id', post.id);
+                                await supabase.from('content_posts_unified').update({ publish_status: null, publish_error: null }).eq('id', post.id);
                                 loadPosts();
                               }}
                               className="p-1.5 rounded-lg transition-colors hover:bg-accent"
@@ -379,11 +381,11 @@ export function Schedule() {
                           })()}
                         </div>
 
-                        {/* Thumbnail — smaller on mobile, larger on desktop */}
+                        {/* Thumbnail â smaller on mobile, larger on desktop */}
                         {post.media_urls && post.media_urls.length > 0 && (
                           <div className="relative flex-shrink-0">
                             <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl overflow-hidden border border-border bg-accent">
-                              <img src={post.media_urls[0]} alt="" className="w-full h-full object-cover" />
+                              <img src={post.media_type === 'video' && post.thumbnail_url ? post.thumbnail_url : post.media_urls[0]} alt="" className="w-full h-full object-cover" />
                             </div>
                             {post.media_urls.length > 1 && (
                               <div className="absolute -bottom-1 -right-1 px-1 py-0.5 bg-card border border-border rounded text-[10px] text-muted-foreground font-semibold shadow-sm">
@@ -402,7 +404,7 @@ export function Schedule() {
         )}
       </div>
 
-      {/* ── Stats ── */}
+      {/* ââ Stats ââ */}
       <div className="mb-8">
         <h2 className="text-xl sm:text-2xl font-bold text-foreground mb-4">Content Scheduling Stats</h2>
 
@@ -468,7 +470,7 @@ export function Schedule() {
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-medium text-muted-foreground">Publishing Soon</span>
                 <Clock className="w-5 h-5 text-orange-500" />
-              </div>
+              </div
               <div className="flex items-baseline gap-2 mb-1">
                 <span className="text-3xl font-bold text-foreground">{publishingSoonPosts}</span>
                 <span className="text-sm text-muted-foreground">posts</span>
