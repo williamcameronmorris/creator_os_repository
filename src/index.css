@@ -153,6 +153,12 @@
   .animate-swipe-hint    { animation: swipe-hint 1.5s ease-in-out infinite; }
   .transition-all-smooth { transition: all 0.2s cubic-bezier(0.16,1,0.3,1); }
 
+  @keyframes slide-in-up {
+    0%   { opacity: 0; transform: translateY(16px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+  .animate-slide-in-up { animation: slide-in-up 0.35s cubic-bezier(0.16,1,0.3,1) both; }
+
   /* Scrollbar */
   ::-webkit-scrollbar { width: 5px; height: 5px; }
   ::-webkit-scrollbar-track { background: transparent; }
