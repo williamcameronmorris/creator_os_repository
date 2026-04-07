@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Calendar, Send, AlertTriangle, Image as ImageIcon, Sparkles, Clock } from 'lucide-react';
+import { Send, AlertTriangle, Image as ImageIcon, Sparkles, Clock } from 'lucide-react';
+import { DateTimePicker } from '../DateTimePicker';
 
 interface TimeSlot {
   label: string;
@@ -267,15 +268,10 @@ export function SchedulingStage({ workflowId, contentType, onComplete }: Schedul
 
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-1">Or pick a custom time</label>
-                <div className="relative">
-                  <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <input
-                    type="datetime-local"
-                    value={scheduledDate}
-                    onChange={(e) => setScheduledDate(e.target.value)}
-                    className="w-full pl-12 p-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
-                  />
-                </div>
+                <DateTimePicker
+                  value={scheduledDate}
+                  onChange={(v) => setScheduledDate(v)}
+                />
               </div>
             </div>
 

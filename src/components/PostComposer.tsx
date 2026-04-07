@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { ImageCropper } from './ImageCropper';
 import { PostPreview } from './PostPreview';
+import { DateTimePicker } from './DateTimePicker';
 import { useTimezone } from '../hooks/useTimezone';
 import { utcToLocalInput, localInputToUtc, nowAsLocalInput } from '../lib/timezone';
 
@@ -588,14 +589,11 @@ export function PostComposer({ onClose, onSuccess, asPage = false, editPost }: P
           </div>
         </label>
         <div className="space-y-1.5">
-          <input
-            type="datetime-local"
+          <DateTimePicker
             value={scheduledDate}
-            onChange={(e) => setScheduledDate(e.target.value)}
+            onChange={(v) => setScheduledDate(v)}
             min={minScheduleDatetime}
-            className={`w-full px-4 py-3 rounded-xl border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all ${
-              scheduleDateTooSoon ? 'border-orange-400 bg-orange-50/10' : 'border-border'
-            }`}
+            className={scheduleDateTooSoon ? 'border-orange-400 bg-orange-50/10' : 'border-border'}
           />
           {scheduleDateTooSoon && (
             <div className="flex items-center gap-2 text-orange-500 text-xs font-medium px-1">
@@ -629,12 +627,10 @@ export function PostComposer({ onClose, onSuccess, asPage = false, editPost }: P
                 <label className="block text-xs font-medium text-muted-foreground mb-1.5">
                   Version B — Alternate time slot
                 </label>
-                <input
-                  type="datetime-local"
+                <DateTimePicker
                   value={scheduledDateB}
-                  onChange={(e) => setScheduledDateB(e.target.value)}
+                  onChange={(v) => setScheduledDateB(v)}
                   min={minScheduleDatetime}
-                  className="w-full px-4 py-3 rounded-xl border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
                 />
               </div>
             )}
