@@ -1,19 +1,22 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { RefreshCw, Sparkles, ArrowRight, Loader2, AlertCircle, Zap } from 'lucide-react';
+import { RefreshCw, Sparkles, ArrowRight, Loader2, AlertCircle, Zap, ChevronDown } from 'lucide-react';
 import { useRecommendations, type Recommendation } from '../../hooks/useRecommendations';
 
-// ── Framework → accent color mapping ────────────────────────────────────────
+// -- Framework -> accent color mapping ----------------------------------------
 const FRAMEWORK_COLORS: Record<string, { bg: string; text: string; border: string }> = {
-  'Proof-First':     { bg: 'bg-emerald-500/10', text: 'text-emerald-600 dark:text-emerald-400', border: 'border-emerald-500/20' },
-  'Curiosity Gap':   { bg: 'bg-violet-500/10',  text: 'text-violet-600 dark:text-violet-400',  border: 'border-violet-500/20' },
-  'Pain Point':      { bg: 'bg-red-500/10',     text: 'text-red-600 dark:text-red-400',        border: 'border-red-500/20' },
-  'Challenge':       { bg: 'bg-orange-500/10',  text: 'text-orange-600 dark:text-orange-400',  border: 'border-orange-500/20' },
-  'Question + Proof':{ bg: 'bg-blue-500/10',    text: 'text-blue-600 dark:text-blue-400',      border: 'border-blue-500/20' },
-  'Bold Claim':      { bg: 'bg-amber-500/10',   text: 'text-amber-600 dark:text-amber-400',    border: 'border-amber-500/20' },
-  'Storytelling':    { bg: 'bg-pink-500/10',    text: 'text-pink-600 dark:text-pink-400',      border: 'border-pink-500/20' },
-  'Contrarian':      { bg: 'bg-rose-500/10',    text: 'text-rose-600 dark:text-rose-400',      border: 'border-rose-500/20' },
-  'How-To':          { bg: 'bg-sky-500/10',     text: 'text-sky-600 dark:text-sky-400',        border: 'border-sky-500/20' },
-  'List/Ranking':    { bg: 'bg-indigo-500/10',  text: 'text-indigo-600 dark:text-indigo-400',  border: 'border-indigo-500/20' },
+  'Proof-First': { bg: 'bg-emerald-500/10', text: 'text-emerald-600 dark:text-emerald-400', border: 'border-emerald-500/20' },
+  'Curiosity Gap': { bg: 'bg-violet-500/10', text: 'text-violet-600 dark:text-violet-400', border: 'border-violet-500/20' },
+  'Pain Point': { bg: 'bg-red-500/10', text: 'text-red-600 dark:text-red-400', border: 'border-red-500/20' },
+  'Challenge': { bg: 'bg-orange-500/10', text: 'text-orange-600 dark:text-orange-400', border: 'border-orange-500/20' },
+  'Question + Proof':{ bg: 'bg-blue-500/10', text: 'text-blue-600 dark:text-blue-400', border: 'border-blue-500/20' },
+  'Bold Claim': { bg: 'bg-amber-500/10', text: 'text-amber-600 dark:text-amber-400', border: 'border-amber-500/20' },
+  'Storytelling': { bg: 'bg-pink-500/10', text: 'text-pink-600 dark:text-pink-400', border: 'border-pink-500/20' },
+  'Contrarian': { bg: 'bg-rose-500/10', text: 'text-rose-600 dark:text-rose-400', border: 'border-rose-500/20' },
+  'Contrarian Statement': { bg: 'bg-rose-500/10', text: 'text-rose-600 dark:text-rose-400', border: 'border-rose-500/20' },
+  'Personal Opinion/Hot Take': { bg: 'bg-fuchsia-500/10', text: 'text-fuchsia-600 dark:text-fuchsia-400', border: 'border-fuchsia-500/20' },
+  'How-To': { bg: 'bg-sky-500/10', text: 'text-sky-600 dark:text-sky-400', border: 'border-sky-500/20' },
+  'List/Ranking': { bg: 'bg-indigo-500/10', text: 'text-indigo-600 dark:text-indigo-400', border: 'border-indigo-500/20' },
 };
 
 const DEFAULT_COLOR = { bg: 'bg-primary/10', text: 'text-primary', border: 'border-primary/20' };
@@ -35,69 +38,101 @@ function ConfidenceBar({ score }: { score: number }) {
   );
 }
 
-// ── Single recommendation card ───────────────────────────────────────────────
-function RecCard({ rec, index, onCreateClick }: {
+// -- Single recommendation card (collapsed/expandable) ------------------------
+function RecCard({ rec, index, isExpanded, onToggle, onCreateClick }: {
   rec: Recommendation;
   index: number;
+  isExpanded: boolean;
+  onToggle: () => void;
   onCreateClick: (rec: Recommendation) => void;
 }) {
   const colors = frameworkColor(rec.hook_framework);
   const labels = ['A', 'B', 'C'];
 
   return (
-    <div className="bg-card border border-border rounded-3xl p-5 flex flex-col gap-3 group hover:border-primary/30 transition-colors">
-      {/* Top row: framework badge + index label */}
-      <div className="flex items-center justify-between">
-        <span className={`text-[10px] font-black tracking-widest uppercase px-2.5 py-1 rounded-full border ${colors.bg} ${colors.text} ${colors.border}`}>
+    <div
+      className={`bg-card border rounded-2xl transition-all duration-200 cursor-pointer ${
+        isExpanded
+          ? 'border-primary/30 shadow-md'
+          : 'border-border hover:border-primary/20'
+      }`}
+      onClick={() => !isExpanded && onToggle()}
+    >
+      {/* -- Collapsed row: always visible -- */}
+      <div
+        className={`flex items-center gap-3 p-4 ${isExpanded ? 'pb-0' : ''}`}
+        onClick={(e) => { if (isExpanded) { e.stopPropagation(); onToggle(); } }}
+      >
+        {/* Index label */}
+        <span className="text-xs font-black text-muted-foreground/40 w-4 flex-shrink-0">
+          {labels[index]}
+        </span>
+
+        {/* Framework badge */}
+        <span className={`text-[9px] font-black tracking-widest uppercase px-2 py-0.5 rounded-full border flex-shrink-0 ${colors.bg} ${colors.text} ${colors.border}`}>
           {rec.hook_framework || 'General'}
         </span>
-        <span className="text-xs font-black text-muted-foreground opacity-40">{labels[index]}</span>
+
+        {/* Topic title */}
+        <p className="text-sm font-bold text-foreground truncate flex-1 min-w-0">
+          {rec.suggested_topic}
+        </p>
+
+        {/* Format pill */}
+        <span className="text-[10px] font-semibold text-muted-foreground bg-accent px-2 py-0.5 rounded-full flex-shrink-0">
+          {rec.suggested_format}
+        </span>
+
+        {/* Chevron */}
+        <ChevronDown className={`w-4 h-4 text-muted-foreground flex-shrink-0 transition-transform duration-200 ${
+          isExpanded ? 'rotate-180' : ''
+        }`} />
       </div>
 
-      {/* Hook text — the actual opening line */}
-      {rec.hook_text && (
-        <p className="text-sm font-black text-foreground leading-snug">
-          "{rec.hook_text}"
-        </p>
-      )}
-
-      {/* Topic */}
-      <p className="text-base font-bold text-foreground leading-tight">
-        {rec.suggested_topic}
-      </p>
-
-      {/* Format */}
-      <p className="text-xs text-muted-foreground leading-relaxed">
-        {rec.suggested_format}
-      </p>
-
-      {/* Reasoning */}
-      <p className="text-xs text-muted-foreground leading-relaxed border-t border-border pt-3">
-        {rec.reasoning}
-      </p>
-
-      {/* Confidence + CTA */}
-      <ConfidenceBar score={rec.confidence_score} />
-
-      <button
-        onClick={() => onCreateClick(rec)}
-        className="mt-1 w-full flex items-center justify-center gap-1.5 py-2.5 rounded-2xl bg-primary/10 hover:bg-primary/20 text-primary text-sm font-bold transition-colors group-hover:bg-primary group-hover:text-primary-foreground"
+      {/* -- Expanded content -- */}
+      <div
+        className={`overflow-hidden transition-all duration-200 ${
+          isExpanded ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0'
+        }`}
       >
-        Start creating
-        <ArrowRight className="w-3.5 h-3.5" />
-      </button>
+        <div className="px-4 pb-4 pt-3 space-y-3">
+          {/* Hook text */}
+          {rec.hook_text && (
+            <p className="text-sm font-black text-foreground leading-snug">
+              "{rec.hook_text}"
+            </p>
+          )}
+
+          {/* Reasoning */}
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            {rec.reasoning}
+          </p>
+
+          {/* Confidence */}
+          <ConfidenceBar score={rec.confidence_score} />
+
+          {/* CTA */}
+          <button
+            onClick={(e) => { e.stopPropagation(); onCreateClick(rec); }}
+            className="mt-1 w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-primary/10 hover:bg-primary text-primary hover:text-primary-foreground text-sm font-bold transition-colors"
+          >
+            Start creating
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
 
-// ── Empty / generating state ─────────────────────────────────────────────────
+// -- Empty / generating state -------------------------------------------------
 function EmptyState({ generating, hasProfile, onGenerate }: {
   generating: boolean;
   hasProfile: boolean;
   onGenerate: () => void;
 }) {
   return (
-    <div className="bg-card border border-border rounded-3xl p-8 flex flex-col items-center text-center gap-4">
+    <div className="bg-card border border-border rounded-2xl p-8 flex flex-col items-center text-center gap-4">
       <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center">
         {generating ? (
           <Loader2 className="w-5 h-5 text-primary animate-spin" />
@@ -115,7 +150,7 @@ function EmptyState({ generating, hasProfile, onGenerate }: {
         </>
       ) : hasProfile ? (
         <>
-          <p className="text-sm font-black text-foreground">Ready to generate your brief</p>
+          <p className="text-sm font-black text-foreground">Ready to generate ideas</p>
           <p className="text-xs text-muted-foreground max-w-xs">
             Your content profile is ready. Generate 3 personalized recommendations based on your real performance data.
           </p>
@@ -124,12 +159,12 @@ function EmptyState({ generating, hasProfile, onGenerate }: {
             className="flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-primary text-primary-foreground text-sm font-bold hover:bg-primary/90 transition-colors"
           >
             <Zap className="w-4 h-4" />
-            Generate My Brief
+            Generate Ideas
           </button>
         </>
       ) : (
         <>
-          <p className="text-sm font-black text-foreground">Connect Instagram to unlock your brief</p>
+          <p className="text-sm font-black text-foreground">Connect Instagram to unlock content ideas</p>
           <p className="text-xs text-muted-foreground max-w-xs">
             Once you sync your Instagram, the AI analyzes your top posts and generates personalized recommendations every day.
           </p>
@@ -139,15 +174,16 @@ function EmptyState({ generating, hasProfile, onGenerate }: {
   );
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // MAIN EXPORT
-// ═══════════════════════════════════════════════════════════════════════════
+// =============================================================================
 export function DailyBriefSection() {
   const navigate = useNavigate();
   const { recommendations, loading, generating, error, hasProfile, generate } = useRecommendations();
+  const [sectionOpen, setSectionOpen] = useState(false);
+  const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
 
   const handleCreateClick = (rec: Recommendation) => {
-    // Navigate to Studio with full Daily Brief context — Studio auto-advances past Ideation
     const params = new URLSearchParams({
       platform: rec.platform || 'instagram',
       type: rec.content_type || 'reel',
@@ -160,51 +196,80 @@ export function DailyBriefSection() {
     navigate(`/studio?${params.toString()}`);
   };
 
+  const handleToggle = (index: number) => {
+    setExpandedIndex((prev) => (prev === index ? null : index));
+  };
+
+  const handleSectionToggle = () => {
+    setSectionOpen((prev) => !prev);
+    if (sectionOpen) setExpandedIndex(null);
+  };
+
   const hasRecs = recommendations.length > 0;
+  const ideaCount = recommendations.length;
 
   return (
     <div className="mb-8">
-      {/* Section header */}
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <Sparkles className="w-4 h-4 text-primary" />
-          <span className="text-xs font-black tracking-widest text-muted-foreground uppercase">
-            Today's Brief
-          </span>
-        </div>
-
-        {hasRecs && (
-          <button
-            onClick={() => generate(true)}
-            disabled={generating}
-            className="flex items-center gap-1.5 text-xs font-bold text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
-          >
-            <RefreshCw className={`w-3 h-3 ${generating ? 'animate-spin' : ''}`} />
-            {generating ? 'Refreshing...' : 'Refresh'}
-          </button>
-        )}
-      </div>
-
-      {/* Error state */}
+      {/* Error state (shown outside the folder) */}
       {error && (
-        <div className="flex items-center gap-2 text-sm text-red-600 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-2xl px-4 py-3 mb-4">
+        <div className="flex items-center gap-2 text-sm text-red-600 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-2xl px-4 py-3 mb-3">
           <AlertCircle className="w-4 h-4 flex-shrink-0" />
           <span>{error}</span>
         </div>
       )}
 
-      {/* Content */}
+      {/* Loading state */}
       {loading ? (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {[0, 1, 2].map((i) => (
-            <div key={i} className="bg-card border border-border rounded-3xl p-5 h-64 animate-pulse" />
-          ))}
-        </div>
+        <div className="bg-card border border-border rounded-2xl p-4 h-14 animate-pulse" />
       ) : hasRecs ? (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {recommendations.map((rec, i) => (
-            <RecCard key={rec.id} rec={rec} index={i} onCreateClick={handleCreateClick} />
-          ))}
+        /* -- Collapsible folder wrapper -- */
+        <div className="bg-card border border-border rounded-2xl overflow-hidden transition-all duration-200">
+          {/* Section header row (always visible, acts as toggle) */}
+          <button
+            onClick={handleSectionToggle}
+            className="w-full flex items-center gap-2.5 p-4 text-left hover:bg-accent/50 transition-colors"
+          >
+            <Sparkles className="w-4 h-4 text-primary flex-shrink-0" />
+            <span className="text-xs font-black tracking-widest text-muted-foreground uppercase flex-1">
+              Content Ideas
+            </span>
+            {ideaCount > 0 && (
+              <span className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+                {ideaCount} {ideaCount === 1 ? 'idea' : 'ideas'}
+              </span>
+            )}
+            <button
+              onClick={(e) => { e.stopPropagation(); generate(true); }}
+              disabled={generating}
+              className="flex items-center justify-center p-1 text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
+              aria-label="Refresh ideas"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${generating ? 'animate-spin' : ''}`} />
+            </button>
+            <ChevronDown className={`w-4.5 h-4.5 text-muted-foreground flex-shrink-0 transition-transform duration-200 ${
+              sectionOpen ? 'rotate-180' : ''
+            }`} />
+          </button>
+
+          {/* Collapsible card container */}
+          <div
+            className={`overflow-hidden transition-all duration-300 ${
+              sectionOpen ? 'max-h-[1200px] opacity-100' : 'max-h-0 opacity-0'
+            }`}
+          >
+            <div className="px-3 pb-3 space-y-1.5">
+              {recommendations.map((rec, i) => (
+                <RecCard
+                  key={rec.id}
+                  rec={rec}
+                  index={i}
+                  isExpanded={expandedIndex === i}
+                  onToggle={() => handleToggle(i)}
+                  onCreateClick={handleCreateClick}
+                />
+              ))}
+            </div>
+          </div>
         </div>
       ) : (
         <EmptyState generating={generating} hasProfile={hasProfile} onGenerate={() => generate(false)} />
