@@ -10,6 +10,7 @@ import { EngagementCard } from './EngagementCard';
 import { ComingUpCard } from './ComingUpCard';
 import { SmartTipsCard } from './SmartTipsCard';
 import { DailyBriefSection } from './DailyBriefSection';
+import { TopPerformingSection } from './TopPerformingSection';
 import {
   CheckCircle,
   Plug,
@@ -471,6 +472,7 @@ export function DailyPulse() {
       </div>
       {/* AI Daily Brief — proactive content recommendations */}
         <DailyBriefSection />
+        <TopPerformingSection />
 
         {/* 3-card grid */}
         <div className="grid grid-cols-3 gap-4 mb-8">
@@ -641,6 +643,7 @@ export function DailyPulse() {
         </div>
         {/* AI Daily Brief on mobile home slide */}
             <DailyBriefSection />
+            <TopPerformingSection />
 
             {isCompleted ? (
               /* ── TODAY'S SNAPSHOT (post-session) ─────────────────────── */
