@@ -89,7 +89,8 @@ async function publishYouTube(
   serviceKey: string,
   userId: string,
   mediaUrls: string[],
-  caption: string
+  caption: string,
+  contentType?: string
 ): Promise<string> {
   const videoUrl = mediaUrls.find((u) =>
     /\.(mp4|mov|avi|webm|mkv)(\?|$)/i.test(u)
@@ -103,7 +104,7 @@ async function publishYouTube(
       "Content-Type": "application/json",
       Authorization: `Bearer ${serviceKey}`,
     },
-    body: JSON.stringify({ userId, mediaUrl: videoUrl, caption }),
+    body: JSON.stringify({ userId, mediaUrl: videoUrl, caption, contentType: contentType || "video" }),
   });
 
   const data = await res.json();
@@ -195,7 +196,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: duePosts, error: fetchError } = await supabase
       .from("content_posts")
-      .select("id, user_id, platform, caption, media_urls, publish_status, published_at")
+      .select("id, user_id, platform, caption, media_urls, publish_status, published_at, content_type")
       .eq("status", "scheduled")
       .lte("scheduled_for", now)
       .or(`publish_status.is.null,and(publish_status.eq.failed,published_at.lte.${retryWindow})`)
@@ -222,7 +223,7 @@ Deno.serve(async (req: Request) => {
     const results: PublishResult[] = [];
 
     for (const post of duePosts) {
-      const { id: postId, user_id: userId, platform, caption, media_urls: mediaUrls } = post;
+      const { id: postId, user_id: userId, platform, caption, media_urls: mediaUrls, content_type: postContentType } = post;
       const urls: string[] = Array.isArray(mediaUrls) ? mediaUrls : [];
 
       console.log(`Publishing post ${postId} to ${platform}...`);
@@ -235,7 +236,7 @@ Deno.serve(async (req: Request) => {
             platformPostId = await publishInstagram(supabaseUrl, supabaseKey, userId, urls, caption || "");
             break;
           case "youtube":
-            platformPostId = await publishYouTube(supabaseUrl, supabaseKey, userId, urls, caption || "");
+            platformPostId = await publishYouTube(supabaseUrl, supabaseKey, userId, urls, caption || "", postContentType || "video");
             break;
           case "tiktok":
             platformPostId = await publishTikTok(supabaseUrl, supabaseKey, userId, urls, caption || "");

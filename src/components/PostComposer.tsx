@@ -183,6 +183,7 @@ export function PostComposer({ onClose, onSuccess, asPage = false, editPost }: P
   const [autosaveStatus,  setAutosaveStatus]  = useState<'idle' | 'saved'>('idle');
   const [abEnabled,       setAbEnabled]       = useState(false);
   const [scheduledDateB,  setScheduledDateB]  = useState('');
+  const [ytContentType,   setYtContentType]   = useState<'video' | 'short'>('video');
   const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Autosave draft ────────────────────────────────────────────────────────
@@ -342,6 +343,7 @@ export function PostComposer({ onClose, onSuccess, asPage = false, editPost }: P
           media_url:  allMediaUrls[0] || null,
           media_urls: allMediaUrls,
           status,
+          ...(p === 'youtube' ? { content_type: ytContentType } : {}),
         };
 
         if (status === 'scheduled' && abEnabled && scheduledDateB && !editPost) {
@@ -404,6 +406,7 @@ export function PostComposer({ onClose, onSuccess, asPage = false, editPost }: P
         status:         'scheduled' as const,
         scheduled_date: nowUtc,
         scheduled_for:  nowUtc,
+        ...(p === 'youtube' ? { content_type: ytContentType } : {}),
       }));
 
       const { error: insertError } = await supabase.from('content_posts').insert(rows);
@@ -475,6 +478,36 @@ export function PostComposer({ onClose, onSuccess, asPage = false, editPost }: P
           </p>
         )}
       </div>
+
+      {/* YouTube content type: Video vs Short */}
+      {platforms.has('youtube') && (
+        <div>
+          <label className="block text-sm font-medium mb-2 text-foreground">YouTube Format</label>
+          <div className="flex gap-2">
+            {(['video', 'short'] as const).map((t) => {
+              const isActive = ytContentType === t;
+              return (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setYtContentType(t)}
+                  className={`flex-1 py-2.5 px-4 rounded-xl border text-sm font-medium transition-all ${
+                    isActive
+                      ? 'border-primary bg-primary/10 text-primary'
+                      : 'border-border hover:border-primary/50 hover:bg-accent text-foreground'
+                  }`}
+                >
+                  <Video className={`w-4 h-4 mx-auto mb-1 ${isActive ? 'text-primary' : 'text-muted-foreground'}`} />
+                  {t === 'video' ? 'Video' : 'Short'}
+                </button>
+              );
+            })}
+          </div>
+          {ytContentType === 'short' && (
+            <p className="text-xs text-muted-foreground mt-1.5">Vertical video, under 60 seconds. #Shorts will be added to the title automatically.</p>
+          )}
+        </div>
+      )}
 
       {/* Caption */}
       <div>
