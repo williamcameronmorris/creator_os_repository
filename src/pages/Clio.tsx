@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-// import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import {
@@ -9,32 +9,83 @@ import {
   Lightbulb,
   ArrowRight,
   RefreshCw,
+  Pencil,
 } from 'lucide-react';
 
-// Lightweight markdown-to-JSX for Clio responses
+// Inline markdown: convert **bold** to <strong>
+function inlineMarkdown(text: string, lineKey: number) {
+  const parts: (string | JSX.Element)[] = [];
+  let remaining = text;
+  let key = 0;
+  while (remaining.includes('**')) {
+    const start = remaining.indexOf('**');
+    const end = remaining.indexOf('**', start + 2);
+    if (end === -1) break;
+    if (start > 0) parts.push(remaining.slice(0, start));
+    parts.push(<strong key={`b${lineKey}-${key++}`}>{remaining.slice(start + 2, end)}</strong>);
+    remaining = remaining.slice(end + 2);
+  }
+  if (remaining) parts.push(remaining);
+  return parts.length > 0 ? parts : [text];
+}
+
+// Detect numbered content ideas in Clio responses (e.g. "1. **Guitar Gear Collabs** — ...")
+// Returns { ideas: [{number, title, description}], preamble, postscript }
+function parseActionableIdeas(text: string) {
+  const lines = text.split('\n');
+  const ideas: { number: number; title: string; description: string; raw: string }[] = [];
+  const preambleLines: string[] = [];
+  const postscriptLines: string[] = [];
+  let foundFirstIdea = false;
+  let foundPostscript = false;
+  let currentIdea: { number: number; title: string; description: string; raw: string } | null = null;
+
+  for (const line of lines) {
+    // Match patterns like "1. **Title** — description" or "1. Title — description"
+    const ideaMatch = line.match(/^(\d+)\.\s+\*{0,2}(.+?)\*{0,2}\s*[—\-–:]\s*(.+)/);
+    if (ideaMatch) {
+      if (currentIdea) ideas.push(currentIdea);
+      foundFirstIdea = true;
+      foundPostscript = false;
+      currentIdea = {
+        number: parseInt(ideaMatch[1]),
+        title: ideaMatch[2].replace(/\*\*/g, '').trim(),
+        description: ideaMatch[3].trim(),
+        raw: line,
+      };
+    } else if (currentIdea && line.trim() && !line.match(/^\d+\./)) {
+      // Continuation of previous idea
+      currentIdea.description += ' ' + line.trim();
+    } else if (!foundFirstIdea) {
+      preambleLines.push(line);
+    } else if (line.trim() === '' && currentIdea) {
+      // Blank line after an idea, could be gap or end
+      continue;
+    } else if (foundFirstIdea && !line.match(/^\d+\./)) {
+      if (currentIdea) { ideas.push(currentIdea); currentIdea = null; }
+      foundPostscript = true;
+      postscriptLines.push(line);
+    }
+  }
+  if (currentIdea) ideas.push(currentIdea);
+
+  // Only treat as actionable if we found 2+ numbered ideas
+  if (ideas.length < 2) return null;
+
+  return {
+    ideas,
+    preamble: preambleLines.join('\n').trim(),
+    postscript: postscriptLines.join('\n').trim(),
+  };
+}
+
+// Render plain markdown (non-actionable responses)
 function renderMarkdown(text: string) {
   return text.split('\n').map((line, i) => {
-    // Convert **bold** and *italic*
-    const parts: (string | JSX.Element)[] = [];
-    let remaining = line;
-    let key = 0;
-    // Bold
-    while (remaining.includes('**')) {
-      const start = remaining.indexOf('**');
-      const end = remaining.indexOf('**', start + 2);
-      if (end === -1) break;
-      if (start > 0) parts.push(remaining.slice(0, start));
-      parts.push(<strong key={`b${i}-${key++}`}>{remaining.slice(start + 2, end)}</strong>);
-      remaining = remaining.slice(end + 2);
-    }
-    if (remaining) parts.push(remaining);
-
-    // Bullet list items: lines starting with "- "
     const isListItem = line.trimStart().startsWith('- ');
-
     return (
       <span key={i} style={isListItem ? { display: 'block', paddingLeft: '1rem' } : undefined}>
-        {parts.length > 0 ? parts : line}
+        {inlineMarkdown(line, i)}
         {'\n'}
       </span>
     );
@@ -60,6 +111,7 @@ function getGreeting() {
 
 export function Clio() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [query, setQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [response, setResponse] = useState('');
@@ -220,14 +272,67 @@ export function Clio() {
       </div>
 
       {/* Response area */}
-      {response && (
-        <div className="ie-border-b pb-6 mb-8 animate-reveal-up">
-          <span className="t-micro accent-dot mb-3 block">Clio</span>
-          <div className="t-body text-foreground leading-relaxed whitespace-pre-wrap">
-            {renderMarkdown(response)}
+      {response && (() => {
+        const parsed = parseActionableIdeas(response);
+        if (parsed) {
+          // Actionable ideas: render as tappable cards
+          return (
+            <div className="pb-6 mb-8 animate-reveal-up">
+              <span className="t-micro accent-dot mb-3 block">Clio</span>
+              {parsed.preamble && (
+                <div className="t-body text-foreground leading-relaxed whitespace-pre-wrap mb-4">
+                  {renderMarkdown(parsed.preamble)}
+                </div>
+              )}
+              <div className="space-y-0">
+                {parsed.ideas.map((idea) => (
+                  <button
+                    key={idea.number}
+                    onClick={() => {
+                      const params = new URLSearchParams({
+                        idea: idea.title,
+                        reasoning: idea.description.substring(0, 200),
+                      });
+                      navigate(`/studio/workflow?${params.toString()}`);
+                    }}
+                    className="w-full text-left data-row group ie-border-b"
+                  >
+                    <span className="t-micro font-bold text-foreground" style={{ minWidth: '30px' }}>
+                      {String(idea.number).padStart(2, '0')}
+                    </span>
+                    <div className="flex-1 ml-4">
+                      <span className="text-sm font-semibold text-foreground block">
+                        {idea.title}
+                      </span>
+                      <span className="t-body text-muted-foreground text-xs mt-0.5 block line-clamp-2">
+                        {idea.description}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 ml-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <span className="t-micro text-muted-foreground whitespace-nowrap">SCRIPT IT</span>
+                      <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
+                    </div>
+                  </button>
+                ))}
+              </div>
+              {parsed.postscript && (
+                <div className="t-body text-foreground leading-relaxed whitespace-pre-wrap mt-4 ie-border-b pb-6">
+                  {renderMarkdown(parsed.postscript)}
+                </div>
+              )}
+            </div>
+          );
+        }
+        // Non-actionable response: plain markdown
+        return (
+          <div className="ie-border-b pb-6 mb-8 animate-reveal-up">
+            <span className="t-micro accent-dot mb-3 block">Clio</span>
+            <div className="t-body text-foreground leading-relaxed whitespace-pre-wrap">
+              {renderMarkdown(response)}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Adaptive content */}
       {!response && !briefLoading && (
