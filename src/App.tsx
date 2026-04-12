@@ -6,14 +6,16 @@ import { SubscriptionProvider } from './contexts/SubscriptionContext';
 import { Auth } from './components/Auth';
 import { Onboarding } from './components/Onboarding';
 import { Layout } from './components/Layout';
-import { DailyPulse } from './components/DailyPulse';
+import { Clio } from './pages/Clio';
+import { StudioHub } from './pages/StudioHub';
+import { Studio } from './pages/Studio';
+import { OfficeHub } from './pages/OfficeHub';
 import { Schedule } from './pages/Schedule';
 import { Media } from './pages/Media';
 import { Analytics } from './pages/Analytics';
 import { SavedIdeasPage } from './pages/SavedIdeasPage';
 import { Profile } from './pages/Profile';
 import { SettingsPage } from './pages/SettingsPage';
-import { Studio } from './pages/Studio';
 import { PostComposerPage } from './pages/PostComposerPage';
 import { MetaCallback } from './components/MetaCallback';
 import { ThreadsCallback } from './components/ThreadsCallback';
@@ -25,8 +27,8 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#f7f5ff]">
-        <div className="w-10 h-10 border-4 border-purple-200 border-t-purple-600 rounded-full animate-spin" />
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="w-1.5 h-1.5 bg-foreground animate-pulse" />
       </div>
     );
   }
@@ -73,8 +75,8 @@ function AppContent() {
 
   if (loading || checkingProfile) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#f7f5ff]">
-        <div className="w-10 h-10 border-4 border-purple-200 border-t-purple-600 rounded-full animate-spin" />
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="w-1.5 h-1.5 bg-foreground animate-pulse" />
       </div>
     );
   }
@@ -99,122 +101,40 @@ function AppContent() {
 
   return (
     <Routes>
-      <Route
-        path="/"
-        element={
-          <ProtectedRoute>
-            <Layout><DailyPulse /></Layout>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/dashboard"
-        element={
-          <ProtectedRoute>
-            <Layout><DailyPulse /></Layout>
-          </ProtectedRoute>
-        }
-      />
-      <Route path="/command-center" element={<Navigate to="/dashboard" replace />} />
-      <Route
-        path="/studio"
-        element={
-          <ProtectedRoute>
-            <Layout><Studio /></Layout>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/schedule"
-        element={
-          <ProtectedRoute>
-            <Layout><Schedule /></Layout>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/schedule/new"
-        element={
-          <ProtectedRoute>
-            <Layout><PostComposerPage /></Layout>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/schedule/edit/:id"
-        element={
-          <ProtectedRoute>
-            <Layout><PostComposerPage /></Layout>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/media"
-        element={
-          <ProtectedRoute>
-            <Layout><Media /></Layout>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/analytics"
-        element={
-          <ProtectedRoute>
-            <Layout><Analytics /></Layout>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/saved-ideas"
-        element={
-          <ProtectedRoute>
-            <Layout><SavedIdeasPage /></Layout>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/profile"
-        element={
-          <ProtectedRoute>
-            <Layout><Profile /></Layout>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/settings"
-        element={
-          <ProtectedRoute>
-            <Layout><SettingsPage /></Layout>
-          </ProtectedRoute>
-        }
-      />
-      {/* ── OAuth Callbacks ── */}
-      <Route
-        path="/auth/meta/callback"
-        element={
-          <ProtectedRoute>
-            <MetaCallback />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/auth/threads/callback"
-        element={
-          <ProtectedRoute>
-            <ThreadsCallback />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/auth/youtube/callback"
-        element={
-          <ProtectedRoute>
-            <YoutubeCallback />
-          </ProtectedRoute>
-        }
-      />
+      {/* ── Clio (landing) ── */}
+      <Route path="/" element={<ProtectedRoute><Layout><Clio /></Layout></ProtectedRoute>} />
+      <Route path="/clio" element={<Navigate to="/" replace />} />
 
-      <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      {/* ── Legacy redirects ── */}
+      <Route path="/dashboard" element={<Navigate to="/" replace />} />
+      <Route path="/command-center" element={<Navigate to="/" replace />} />
+
+      {/* ── Studio ── */}
+      <Route path="/studio" element={<ProtectedRoute><Layout><StudioHub /></Layout></ProtectedRoute>} />
+      <Route path="/studio/workflow" element={<ProtectedRoute><Layout><Studio /></Layout></ProtectedRoute>} />
+      <Route path="/media" element={<ProtectedRoute><Layout><Media /></Layout></ProtectedRoute>} />
+      <Route path="/saved-ideas" element={<ProtectedRoute><Layout><SavedIdeasPage /></Layout></ProtectedRoute>} />
+
+      {/* ── Office ── */}
+      <Route path="/office" element={<ProtectedRoute><Layout><OfficeHub /></Layout></ProtectedRoute>} />
+      <Route path="/schedule" element={<ProtectedRoute><Layout><Schedule /></Layout></ProtectedRoute>} />
+      <Route path="/schedule/new" element={<ProtectedRoute><Layout><PostComposerPage /></Layout></ProtectedRoute>} />
+      <Route path="/schedule/edit/:id" element={<ProtectedRoute><Layout><PostComposerPage /></Layout></ProtectedRoute>} />
+      <Route path="/analytics" element={<ProtectedRoute><Layout><Analytics /></Layout></ProtectedRoute>} />
+      <Route path="/revenue" element={<ProtectedRoute><Layout><Schedule /></Layout></ProtectedRoute>} />
+      <Route path="/pipeline" element={<ProtectedRoute><Layout><Schedule /></Layout></ProtectedRoute>} />
+
+      {/* ── Settings ── */}
+      <Route path="/profile" element={<ProtectedRoute><Layout><Profile /></Layout></ProtectedRoute>} />
+      <Route path="/settings" element={<ProtectedRoute><Layout><SettingsPage /></Layout></ProtectedRoute>} />
+
+      {/* ── OAuth Callbacks ── */}
+      <Route path="/auth/meta/callback" element={<ProtectedRoute><MetaCallback /></ProtectedRoute>} />
+      <Route path="/auth/threads/callback" element={<ProtectedRoute><ThreadsCallback /></ProtectedRoute>} />
+      <Route path="/auth/youtube/callback" element={<ProtectedRoute><YoutubeCallback /></ProtectedRoute>} />
+
+      {/* Fallback */}
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }

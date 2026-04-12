@@ -6,6 +6,7 @@ export default {
     extend: {
       fontFamily: {
         sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+        mono: ['Space Mono', 'Menlo', 'Monaco', 'monospace'],
       },
       colors: {
         card: {
@@ -61,8 +62,11 @@ export default {
       },
       borderRadius: {
         lg: 'var(--radius)',
-        md: 'calc(var(--radius) - 2px)',
-        sm: 'calc(var(--radius) - 4px)',
+        md: 'var(--radius)',
+        sm: 'var(--radius)',
+      },
+      transitionTimingFunction: {
+        'out-expo': 'cubic-bezier(0.19, 1, 0.22, 1)',
       },
     },
   },

@@ -4,87 +4,44 @@ import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { TokenHealthBanner } from './TokenHealthBanner';
 import {
-  Home,
   Settings as SettingsIcon,
   LogOut,
-  Calendar,
-  Image,
-  TrendingUp,
-  User,
   ChevronLeft,
-  X,
-  Sparkles,
-  Bookmark,
-  Video,
-  MessageCircle,
-  Repeat2,
   Sun,
   Moon,
+  MessageCircle,
+  Sparkles,
+  Briefcase,
 } from 'lucide-react';
 
 interface LayoutProps {
   children: ReactNode;
 }
 
-interface NavSection {
-  title: string;
-  items: NavItem[];
-}
-
-interface NavItem {
-  path: string;
-  label: string;
-  icon: any;
-}
-
-type BottomNavTab = 'studio' | 'settings' | null;
-
 export function Layout({ children }: LayoutProps) {
   const { user, signOut } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
-  const [activeBottomTab, setActiveBottomTab] = useState<BottomNavTab>(null);
 
   const [swipeProgress, setSwipeProgress] = useState(0);
   const touchStartX = useRef<number | null>(null);
   const touchStartY = useRef<number | null>(null);
   const isSwipingBack = useRef(false);
 
-  const navigationSections: NavSection[] = [
-    {
-      title: 'Headquarters',
-      items: [
-        { path: '/dashboard', label: 'Daily Pulse', icon: Home },
-      ],
-    },
-    {
-      title: 'Studio',
-      items: [
-        { path: '/studio',      label: 'Content Workflow',  icon: Video },
-        { path: '/schedule',    label: 'Content Schedule',  icon: Calendar },
-        { path: '/saved-ideas', label: 'Saved Ideas',       icon: Bookmark },
-        { path: '/media',       label: 'Media Library',     icon: Image },
-        { path: '/analytics',   label: 'Audience Growth',   icon: TrendingUp },
-      ],
-    },
-    {
-      title: 'Account',
-      items: [
-        { path: '/profile',  label: 'Profile',  icon: User },
-        { path: '/settings', label: 'Settings', icon: SettingsIcon },
-      ],
-    },
-  ];
+  // Determine active tab from current path
+  const getActiveTab = (): 'clio' | 'studio' | 'office' | 'settings' => {
+    const p = location.pathname;
+    if (p === '/settings' || p === '/profile') return 'settings';
+    if (p.startsWith('/studio') || p === '/media' || p === '/saved-ideas') return 'studio';
+    if (p.startsWith('/office') || p === '/schedule' || p === '/analytics' || p.startsWith('/deals') || p === '/revenue' || p === '/pipeline') return 'office';
+    return 'clio';
+  };
 
-  const isActive = (path: string) =>
-    location.pathname === path || location.pathname.startsWith(path + '/');
+  const activeTab = getActiveTab();
+  const canGoBack = () => !['/', '/dashboard', '/clio'].includes(location.pathname);
 
-  const closeBottomNav = () => setActiveBottomTab(null);
-  const openBottomTab = (tab: BottomNavTab) =>
-    setActiveBottomTab(activeBottomTab === tab ? null : tab);
-  const canGoBack = () => !['/', '/dashboard'].includes(location.pathname);
-
+  // Swipe-back gesture
   const handleTouchStart = (e: TouchEvent) => {
     const touch = e.touches[0];
     touchStartX.current = touch.clientX;
@@ -131,76 +88,11 @@ export function Layout({ children }: LayoutProps) {
     };
   }, [location.pathname, swipeProgress]);
 
-  const userInitial = user?.email?.[0]?.toUpperCase() ?? '?';
-
-  const renderNavLinks = (section: NavSection, onClick?: () => void) =>
-    section.items.map((item) => {
-      const Icon = item.icon;
-      const active = isActive(item.path);
-      return (
-        <Link
-          key={item.path}
-          to={item.path}
-          onClick={onClick}
-          className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150 ${
-            active
-              ? 'bg-primary/10 text-primary dark:bg-primary/15 dark:text-primary'
-              : 'text-muted-foreground hover:text-foreground hover:bg-accent'
-          }`}
-        >
-          <Icon className={`w-4 h-4 flex-shrink-0 ${active ? 'text-primary' : ''}`} />
-          {item.label}
-        </Link>
-      );
-    });
-
-  const renderBottomNavContent = () => {
-    if (!activeBottomTab) return null;
-
-    const sectionMap: Record<NonNullable<BottomNavTab>, NavSection> = {
-      studio: navigationSections[1],
-      settings: navigationSections[2],
-    };
-    const section = sectionMap[activeBottomTab];
-    const title = activeBottomTab === 'studio' ? 'Studio' : 'Account';
-
-    return (
-      <>
-        <div className="fixed inset-0 bg-black/50 z-40 lg:hidden backdrop-blur-sm" onClick={closeBottomNav} />
-        <div className="fixed bottom-16 left-0 right-0 bg-card border-t border-border z-50 lg:hidden max-h-[65vh] overflow-y-auto rounded-t-2xl shadow-2xl">
-          <div className="p-5">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-base font-semibold text-foreground">{title}</h3>
-              <button
-                onClick={closeBottomNav}
-                className="p-1.5 rounded-lg hover:bg-accent text-muted-foreground transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <div className="space-y-0.5">
-              {renderNavLinks(section, closeBottomNav)}
-              {activeBottomTab === 'settings' && (
-                <>
-                  <div className="border-t border-border my-3" />
-                  <button
-                    onClick={() => { signOut(); closeBottomNav(); }}
-                    className="flex items-center gap-3 px-3 py-2 rounded-lg w-full text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-all"
-                  >
-                    <LogOut className="w-4 h-4 flex-shrink-0" />
-                    Sign Out
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      </>
-    );
-  };
-
   return (
-    <div className="min-h-screen bg-background pb-16 lg:pb-0">
+    <div className="min-h-screen bg-background pb-14 lg:pb-0">
+      {/* Noise overlay */}
+      <div className="noise-overlay" />
+
       {/* Swipe-back indicator */}
       {swipeProgress > 0 && (
         <>
@@ -215,132 +107,131 @@ export function Layout({ children }: LayoutProps) {
               opacity: swipeProgress,
             }}
           >
-            <ChevronLeft className="w-7 h-7 text-primary" />
+            <ChevronLeft className="w-6 h-6 text-foreground" />
           </div>
         </>
       )}
 
-      {/* ── Top header ──────────────────────────────────── */}
-      <header className="bg-card border-b border-border sticky top-0 z-50">
+      {/* ── Top header ──────────────────────────────── */}
+      <header className="bg-background border-b border-border sticky top-0 z-50">
         <div className="px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-14">
+          <div className="flex items-center justify-between h-12">
             {/* Logo */}
-            <Link to="/dashboard" className="flex items-center gap-2 select-none group">
-              <div className="w-2 h-2 rounded-full bg-primary group-hover:scale-110 transition-transform" />
-              <span className="text-[15px] font-semibold tracking-tight text-foreground">
+            <Link to="/" className="flex items-center gap-2.5 select-none group">
+              <div className="w-1.5 h-1.5 bg-foreground group-hover:scale-125 transition-transform" />
+              <span className="font-mono text-[10px] font-bold tracking-[0.08em] uppercase text-foreground">
                 Creator Command
               </span>
             </Link>
 
-            {/* Desktop right side */}
-            <div className="hidden lg:flex items-center gap-2">
-              {/* Theme toggle */}
-              <button
-                onClick={toggleTheme}
-                className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-                title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-              >
-                {theme === 'dark'
-                  ? <Sun className="w-4 h-4" />
-                  : <Moon className="w-4 h-4" />
-                }
-              </button>
-              <span className="text-xs text-muted-foreground truncate max-w-[160px]">
-                {user?.email}
-              </span>
-              <div className="w-7 h-7 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-xs font-semibold select-none">
-                {userInitial}
-              </div>
-            </div>
+            {/* Desktop nav links (center) */}
+            <nav className="hidden lg:flex items-center gap-8">
+              {[
+                { to: '/', label: 'Clio', tab: 'clio' as const },
+                { to: '/studio', label: 'Studio', tab: 'studio' as const },
+                { to: '/office', label: 'Office', tab: 'office' as const },
+              ].map(({ to, label, tab }) => (
+                <Link
+                  key={tab}
+                  to={to}
+                  className={`font-mono text-[10px] font-bold tracking-[0.08em] uppercase relative py-1 transition-colors ${
+                    activeTab === tab
+                      ? 'text-foreground'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {label}
+                  {activeTab === tab && (
+                    <span className="absolute bottom-0 left-0 w-full h-px bg-foreground" />
+                  )}
+                </Link>
+              ))}
+            </nav>
 
-            {/* Mobile right side */}
-            <div className="lg:hidden flex items-center gap-2">
+            {/* Right side */}
+            <div className="flex items-center gap-3">
               <button
                 onClick={toggleTheme}
-                className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                className="p-1.5 text-muted-foreground hover:text-foreground transition-colors"
+                title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
               >
                 {theme === 'dark'
-                  ? <Sun className="w-4 h-4" />
-                  : <Moon className="w-4 h-4" />
+                  ? <Sun className="w-3.5 h-3.5" />
+                  : <Moon className="w-3.5 h-3.5" />
                 }
               </button>
-              <div className="w-7 h-7 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-xs font-semibold select-none">
-                {userInitial}
-              </div>
+              <Link
+                to="/settings"
+                className="p-1.5 text-muted-foreground hover:text-foreground transition-colors hidden lg:block"
+              >
+                <SettingsIcon className="w-3.5 h-3.5" />
+              </Link>
+              <button
+                onClick={() => signOut()}
+                className="p-1.5 text-muted-foreground hover:text-foreground transition-colors hidden lg:block"
+                title="Sign out"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+              </button>
             </div>
           </div>
         </div>
       </header>
 
-      {renderBottomNavContent()}
+      {/* ── Main content ─────────────────────────────── */}
+      <main className="min-w-0 overflow-x-hidden">
+        <TokenHealthBanner />
+        {children}
+      </main>
 
-      <div className="flex overflow-x-hidden">
-        {/* ── Desktop sidebar ──────────────────────────── */}
-        <aside className="w-56 bg-sidebar border-r border-sidebar-border min-h-[calc(100vh-3.5rem)] hidden lg:flex flex-col flex-shrink-0">
-          <nav className="flex-1 p-3 space-y-5 overflow-y-auto">
-            {navigationSections.map((section) => (
-              <div key={section.title}>
-                <p className="text-[10px] font-semibold tracking-widest text-muted-foreground uppercase px-3 mb-1.5">
-                  {section.title}
-                </p>
-                <div className="space-y-0.5">
-                  {renderNavLinks(section)}
-                </div>
-              </div>
-            ))}
-          </nav>
-
-          {/* Sidebar footer */}
-          <div className="p-3 border-t border-sidebar-border">
-            <button
-              onClick={() => signOut()}
-              className="flex items-center gap-3 px-3 py-2 rounded-lg w-full text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-all"
-            >
-              <LogOut className="w-4 h-4 flex-shrink-0" />
-              Sign Out
-            </button>
-          </div>
-        </aside>
-
-        {/* ── Main content ─────────────────────────────── */}
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 min-w-0 overflow-x-hidden">
-          <TokenHealthBanner />
-          {children}
-        </main>
-      </div>
-
-      {/* ── Mobile bottom nav ────────────────────────── */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-card border-t border-border z-50 lg:hidden">
-        <div className="flex items-center justify-around h-14">
+      {/* ── Mobile bottom nav: 3 tabs + gear ─────────── */}
+      <nav className="fixed bottom-0 left-0 right-0 bg-background border-t border-border z-50 lg:hidden">
+        <div className="flex items-center h-14">
+          {/* Clio */}
           <Link
-            to="/dashboard"
+            to="/"
             className={`flex flex-col items-center justify-center flex-1 h-full gap-1 transition-colors ${
-              isActive('/dashboard') ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
+              activeTab === 'clio' ? 'text-foreground' : 'text-muted-foreground'
             }`}
           >
-            <Home className="w-5 h-5" />
-            <span className="text-[9px] font-semibold uppercase tracking-wider">HQ</span>
+            <MessageCircle className="w-5 h-5" />
+            <span className="font-mono text-[8px] font-bold tracking-[0.1em] uppercase">Clio</span>
           </Link>
 
-          <button
-            onClick={() => openBottomTab('studio')}
+          {/* Studio */}
+          <Link
+            to="/studio"
             className={`flex flex-col items-center justify-center flex-1 h-full gap-1 transition-colors ${
-              activeBottomTab === 'studio' ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
+              activeTab === 'studio' ? 'text-foreground' : 'text-muted-foreground'
             }`}
           >
             <Sparkles className="w-5 h-5" />
-            <span className="text-[9px] font-semibold uppercase tracking-wider">Studio</span>
-          </button>
+            <span className="font-mono text-[8px] font-bold tracking-[0.1em] uppercase">Studio</span>
+          </Link>
 
-          <button
-            onClick={() => openBottomTab('settings')}
+          {/* Office */}
+          <Link
+            to="/office"
             className={`flex flex-col items-center justify-center flex-1 h-full gap-1 transition-colors ${
-              activeBottomTab === 'settings' ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
+              activeTab === 'office' ? 'text-foreground' : 'text-muted-foreground'
+            }`}
+          >
+            <Briefcase className="w-5 h-5" />
+            <span className="font-mono text-[8px] font-bold tracking-[0.1em] uppercase">Office</span>
+          </Link>
+
+          {/* Settings gear */}
+          <Link
+            to="/settings"
+            className={`flex flex-col items-center justify-center w-14 h-full gap-1 transition-colors ${
+              activeTab === 'settings' ? 'text-foreground' : 'text-muted-foreground'
             }`}
           >
             <SettingsIcon className="w-5 h-5" />
-            <span className="text-[9px] font-semibold uppercase tracking-wider">Account</span>
-          </button>
+            <span className="font-mono text-[8px] font-bold tracking-[0.1em] uppercase">
+              {/* intentionally no label for gear, just icon */}
+            </span>
+          </Link>
         </div>
       </nav>
     </div>
