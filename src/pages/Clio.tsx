@@ -11,6 +11,36 @@ import {
   RefreshCw,
 } from 'lucide-react';
 
+// Lightweight markdown-to-JSX for Clio responses
+function renderMarkdown(text: string) {
+  return text.split('\n').map((line, i) => {
+    // Convert **bold** and *italic*
+    const parts: (string | JSX.Element)[] = [];
+    let remaining = line;
+    let key = 0;
+    // Bold
+    while (remaining.includes('**')) {
+      const start = remaining.indexOf('**');
+      const end = remaining.indexOf('**', start + 2);
+      if (end === -1) break;
+      if (start > 0) parts.push(remaining.slice(0, start));
+      parts.push(<strong key={`b${i}-${key++}`}>{remaining.slice(start + 2, end)}</strong>);
+      remaining = remaining.slice(end + 2);
+    }
+    if (remaining) parts.push(remaining);
+
+    // Bullet list items: lines starting with "- "
+    const isListItem = line.trimStart().startsWith('- ');
+
+    return (
+      <span key={i} style={isListItem ? { display: 'block', paddingLeft: '1rem' } : undefined}>
+        {parts.length > 0 ? parts : line}
+        {'\n'}
+      </span>
+    );
+  });
+}
+
 // Cycling placeholder prompts
 const PLACEHOLDERS = [
   'What should I post today?',
@@ -194,7 +224,7 @@ export function Clio() {
         <div className="ie-border-b pb-6 mb-8 animate-reveal-up">
           <span className="t-micro accent-dot mb-3 block">Clio</span>
           <div className="t-body text-foreground leading-relaxed whitespace-pre-wrap">
-            {response}
+            {renderMarkdown(response)}
           </div>
         </div>
       )}
