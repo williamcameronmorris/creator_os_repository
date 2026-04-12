@@ -66,7 +66,7 @@ Deno.serve(async (req: Request) => {
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
     const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
 
-    const [profileResult, metricsResult, prevMetricsResult, postsResult, dealsResult] = await Promise.all([
+    const [profileResult, metricsResult, prevMetricsResult, postsResult, recentPostsResult, dealsResult] = await Promise.all([
       supabase
         .from("profiles")
         .select("full_name, display_name, instagram_avg_views, tiktok_avg_views, youtube_avg_views, instagram_access_token, instagram_business_account_id, tiktok_access_token, youtube_access_token")
@@ -96,6 +96,16 @@ Deno.serve(async (req: Request) => {
         .gte("published_at", thirtyDaysAgo)
         .order("engagement_rate", { ascending: false })
         .limit(10),
+
+      // Recent posts sorted by date (so Clio can answer "how did yesterday's post do")
+      supabase
+        .from("content_posts")
+        .select("title, platform, media_type, views, likes, comments, saves, shares, engagement_rate, published_at")
+        .eq("user_id", userId)
+        .eq("status", "published")
+        .gte("published_at", sevenDaysAgo)
+        .order("published_at", { ascending: false })
+        .limit(15),
 
       supabase
         .from("deals")
@@ -160,12 +170,25 @@ Deno.serve(async (req: Request) => {
       return `  - ${p}: ${d.views.toLocaleString()} views${changeStr}, ${d.avgEng.toFixed(2)}% avg engagement${followersStr}`;
     }).join("\n");
 
-    // Format top posts
+    // Format top posts (by engagement)
     const posts = postsResult.data || [];
     const topPostLines = posts.slice(0, 5).map((p, i) => {
       const engStr = p.engagement_rate ? ` (${Number(p.engagement_rate).toFixed(1)}% eng)` : "";
       const viewStr = p.views ? ` — ${Number(p.views).toLocaleString()} views` : "";
-      return `  ${i + 1}. [${p.platform}] "${p.title || "Untitled"}"${viewStr}${engStr}`;
+      const dateStr = p.published_at ? ` [${new Date(p.published_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}]` : "";
+      return `  ${i + 1}. [${p.platform}]${dateStr} "${p.title || "Untitled"}"${viewStr}${engStr}`;
+    }).join("\n");
+
+    // Format recent posts chronologically (for "how did yesterday's post do" type questions)
+    const recentPosts = recentPostsResult.data || [];
+    const recentPostLines = recentPosts.slice(0, 10).map((p) => {
+      const dateStr = p.published_at ? new Date(p.published_at).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }) : "unknown date";
+      const viewStr = p.views ? `${Number(p.views).toLocaleString()} views` : "no view data yet";
+      const likeStr = p.likes ? `, ${Number(p.likes).toLocaleString()} likes` : "";
+      const commentStr = p.comments ? `, ${Number(p.comments).toLocaleString()} comments` : "";
+      const saveStr = p.saves ? `, ${Number(p.saves).toLocaleString()} saves` : "";
+      const engStr = p.engagement_rate ? `, ${Number(p.engagement_rate).toFixed(1)}% eng` : "";
+      return `  - ${dateStr} [${p.platform}] "${p.title || "Untitled"}" — ${viewStr}${likeStr}${commentStr}${saveStr}${engStr}`;
     }).join("\n");
 
     // Format deals
@@ -192,6 +215,9 @@ ${platformLines || "  No platform data available"}
 
 TOP POSTS (last 30 days, ranked by engagement):
 ${topPostLines || "  No published posts yet"}
+
+RECENT POSTS (last 7 days, chronological — use this to answer questions about specific days):
+${recentPostLines || "  No posts in the last 7 days"}
 
 ACTIVE DEAL PIPELINE:
 ${dealLines}${deals.length > 0 ? `\nTotal pipeline value: $${totalDealValue.toLocaleString()}` : ""}

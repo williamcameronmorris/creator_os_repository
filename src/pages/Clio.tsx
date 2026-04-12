@@ -37,6 +37,7 @@ export function Clio() {
   const [hasDailyBrief, setHasDailyBrief] = useState(false);
   const [briefData, setBriefData] = useState<any>(null);
   const [briefLoading, setBriefLoading] = useState(true);
+  const [profileName, setProfileName] = useState('');
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   // Cycle placeholders
@@ -47,21 +48,34 @@ export function Clio() {
     return () => clearInterval(interval);
   }, []);
 
-  // Load daily brief (determines adaptive landing)
+  // Load profile name + daily brief in parallel
   useEffect(() => {
-    const loadBrief = async () => {
+    const loadData = async () => {
       if (!user) { setBriefLoading(false); return; }
       try {
         const today = new Date().toISOString().split('T')[0];
-        const { data } = await supabase
-          .from('ai_daily_briefs')
-          .select('*')
-          .eq('user_id', user.id)
-          .eq('brief_date', today)
-          .maybeSingle();
-        if (data) {
+        const [profileRes, briefRes] = await Promise.all([
+          supabase
+            .from('profiles')
+            .select('display_name, full_name')
+            .eq('id', user.id)
+            .maybeSingle(),
+          supabase
+            .from('ai_daily_briefs')
+            .select('*')
+            .eq('user_id', user.id)
+            .eq('brief_date', today)
+            .maybeSingle(),
+        ]);
+        if (profileRes.data) {
+          const name = profileRes.data.display_name
+            || profileRes.data.full_name?.split(' ')[0]
+            || '';
+          if (name) setProfileName(name);
+        }
+        if (briefRes.data) {
           setHasDailyBrief(true);
-          setBriefData(data);
+          setBriefData(briefRes.data);
         }
       } catch {
         // non-critical
@@ -69,7 +83,7 @@ export function Clio() {
         setBriefLoading(false);
       }
     };
-    loadBrief();
+    loadData();
   }, [user]);
 
   const handleSubmit = async () => {
@@ -104,8 +118,8 @@ export function Clio() {
     }
   };
 
-  const firstName = user?.user_metadata?.full_name?.split(' ')[0]
-    || user?.email?.split('@')[0]
+  const firstName = profileName
+    || user?.user_metadata?.full_name?.split(' ')[0]
     || 'Creator';
 
   // Suggestion cards for new users (no daily brief)

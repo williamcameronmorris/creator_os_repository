@@ -16,7 +16,13 @@ async function refreshAccessToken(refreshToken: string): Promise<{ accessToken: 
     body: new URLSearchParams({ refresh_token: refreshToken, client_id: clientId, client_secret: clientSecret, grant_type: "refresh_token" }),
   });
   const data = await res.json();
-  if (data.error) throw new Error(`Token refresh failed: ${data.error_description || data.error}`);
+  if (data.error) {
+    const desc = data.error_description || data.error;
+    if (data.error === "invalid_grant" || desc?.includes("Bad Request") || desc?.includes("revoked")) {
+      throw new Error(`YouTube token expired. Go to Settings → disconnect YouTube → reconnect it to fix this.`);
+    }
+    throw new Error(`Token refresh failed: ${desc}`);
+  }
   return { accessToken: data.access_token, expiresAt: new Date(Date.now() + (data.expires_in || 3600) * 1000).toISOString() };
 }
 
