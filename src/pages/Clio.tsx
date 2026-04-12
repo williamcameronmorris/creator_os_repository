@@ -80,11 +80,15 @@ export function Clio() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
       const res = await supabase.functions.invoke('ask-copilot', {
-        body: { question: query },
+        body: { userId: user!.id, question: query },
         headers: { Authorization: `Bearer ${session.access_token}` },
       });
-      if (res.data?.answer) {
+      if (res.error) {
+        setResponse(res.error.message || 'Something went wrong. Try again.');
+      } else if (res.data?.answer) {
         setResponse(res.data.answer);
+      } else {
+        setResponse('No response received. Try again.');
       }
     } catch {
       setResponse('Something went wrong. Try again.');
