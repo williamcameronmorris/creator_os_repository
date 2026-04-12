@@ -120,8 +120,8 @@ export function Studio() {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center animate-fade-in">
-          <div className="w-24 h-24 bg-green-500/10 rounded-full flex items-center justify-center mx-auto mb-6">
-            <CheckCircle className="w-12 h-12 text-green-500" />
+          <div className="mb-6">
+            <span className="font-mono text-[10px] font-bold tracking-[0.08em] uppercase text-foreground">Complete</span>
           </div>
           <h2 className="text-3xl font-bold text-foreground mb-2">Workflow Complete!</h2>
           <p className="text-muted-foreground">Your insight has been saved and loop closed.</p>
@@ -138,11 +138,11 @@ export function Studio() {
         completedStages={completedStages}
       />
       <div className="flex-1 flex max-w-7xl mx-auto w-full p-4 lg:p-6 gap-4 lg:gap-6 items-start">
-        <div className="flex-1 bg-card rounded-2xl shadow-sm border border-border h-full flex flex-col overflow-hidden">
+        <div className="flex-1 bg-card border border-border h-full flex flex-col overflow-hidden">
           <div className="p-4 lg:p-6 border-b border-border flex justify-between items-center">
             <div>
-              <h2 className="text-xl font-bold text-foreground capitalize">{activeStage} Stage</h2>
-              <p className="text-sm text-muted-foreground">
+              <h2 className="font-mono text-[10px] font-bold tracking-[0.08em] uppercase text-foreground mb-2">{activeStage}</h2>
+              <p className="text-sm text-muted-foreground t-body">
                 {activeStage === 'ideation' && "Analyze performance and generate winning ideas."}
                 {activeStage === 'scripting' && "Draft your hook, body, and CTA."}
                 {activeStage === 'creation' && "Upload media and check production quality."}
@@ -198,28 +198,28 @@ export function Studio() {
         </div>
 
         {aiSidebarOpen && (
-          <div className="w-80 bg-card rounded-2xl shadow-sm border border-border h-full flex flex-col hidden lg:flex">
+          <div className="w-80 bg-card border border-border h-full flex flex-col hidden lg:flex">
             <div className="p-4 border-b border-border flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Bot className="w-5 h-5 text-primary" />
-                <span className="font-bold text-foreground text-sm">AI Assistant</span>
+                <Bot className="w-5 h-5 text-foreground" />
+                <span className="font-mono text-[10px] font-bold tracking-[0.08em] uppercase text-foreground">AI Assistant</span>
               </div>
-              <div className={`text-xs px-2 py-1 rounded-full font-medium ${
+              <div className={`text-xs px-2 py-1 font-medium border ${
                 aiQuota
                   ? aiQuota.requestsRemaining <= 3
-                    ? 'bg-red-100 text-red-700'
-                    : 'bg-accent text-accent-foreground'
-                  : 'bg-accent text-accent-foreground'
+                    ? 'border-foreground text-foreground'
+                    : 'border-border text-muted-foreground'
+                  : 'border-border text-muted-foreground'
               }`}>
                 {aiQuota ? `${aiQuota.requestsRemaining} credits left` : '...'}
               </div>
             </div>
             <div className="flex-1 p-4 overflow-y-auto space-y-4">
               <div className="flex gap-3">
-                <div className="w-8 h-8 rounded-full bg-accent flex items-center justify-center flex-shrink-0">
-                  <Bot className="w-4 h-4 text-primary" />
+                <div className="w-8 h-8 border border-border flex items-center justify-center flex-shrink-0">
+                  <Bot className="w-4 h-4 text-foreground" />
                 </div>
-                <div className="bg-accent p-3 rounded-2xl rounded-tl-none text-sm text-foreground">
+                <div className="bg-background border border-border p-3 text-sm text-foreground">
                   {activeStage === 'analysis'
                     ? "Great job! Based on these metrics, your 'Hook' seems to be the strongest element. Let's double down on that."
                     : "I'm ready to help! Once you select an idea, I can generate 3 hook options for you."}
@@ -230,7 +230,7 @@ export function Studio() {
               <input
                 type="text"
                 placeholder="Ask AI for help..."
-                className="w-full px-4 py-3 bg-background border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-foreground placeholder:text-muted-foreground"
+                className="w-full px-4 py-3 bg-background border border-border text-sm focus:outline-none focus:ring-2 focus:ring-foreground/50 text-foreground placeholder:text-muted-foreground"
               />
             </div>
           </div>

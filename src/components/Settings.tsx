@@ -130,28 +130,28 @@ export function Settings() {
   return (
     <div className="max-w-4xl mx-auto space-y-8">
       <div>
-        <h2 className="text-3xl font-bold text-foreground mb-2">Settings</h2>
-        <p className="text-muted-foreground">Configure your pricing defaults and performance averages</p>
+        <h2 className="text-3xl font-black uppercase tracking-tight text-foreground mb-2">Settings</h2>
+        <p className="text-muted-foreground text-xs font-mono uppercase tracking-[0.08em]">Configure your pricing defaults and performance averages</p>
       </div>
 
       {error && (
-        <div className="p-3 border rounded-xl text-sm flex items-start gap-2 bg-destructive/10 border-destructive/50 text-destructive">
+        <div className="p-3 border border-destructive text-sm flex items-start gap-2 bg-destructive/10 text-destructive">
           <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
           {error}
         </div>
       )}
 
       {success && (
-        <div className="p-3 border rounded-xl text-sm flex items-start gap-2 bg-emerald-50 border-emerald-200 text-emerald-700">
+        <div className="p-3 border border-emerald-600 text-sm flex items-start gap-2 bg-emerald-50/50 text-emerald-700">
           <CheckCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
           {success}
         </div>
       )}
 
-      <div className="p-6 rounded-xl bg-card border border-border">
-        <h3 className="text-xl font-bold text-foreground mb-6 flex items-center gap-2">
+      <div className="p-6 bg-card border border-border">
+        <h3 className="text-lg font-black uppercase tracking-tight text-foreground mb-2 flex items-center gap-2">
           <Palette className="w-5 h-5" />
-          Appearance
+          <span className="text-xs font-mono tracking-[0.08em]">Appearance</span>
         </h3>
 
         <p className="text-muted-foreground text-sm mb-6">
@@ -162,10 +162,10 @@ export function Settings() {
           {/* Light Mode */}
           <button
             onClick={() => setTheme('light')}
-            className={`p-6 rounded-xl border-2 text-left transition-all ${
+            className={`p-6 border-2 text-left transition-all ${
               theme === 'light'
-                ? 'border-primary bg-primary/5'
-                : 'border-border bg-card hover:border-primary/40'
+                ? 'border-foreground bg-foreground/5'
+                : 'border-border bg-card hover:border-foreground/40'
             }`}
           >
             <div className="flex items-center gap-3 mb-3">
@@ -178,7 +178,7 @@ export function Settings() {
               </div>
             </div>
             {theme === 'light' && (
-              <div className="text-xs font-semibold text-primary flex items-center gap-1">
+              <div className="text-xs font-semibold text-foreground flex items-center gap-1">
                 <CheckCircle className="w-3 h-3" /> Currently active
               </div>
             )}
@@ -187,10 +187,10 @@ export function Settings() {
           {/* Dark Mode */}
           <button
             onClick={() => setTheme('dark')}
-            className={`p-6 rounded-xl border-2 text-left transition-all ${
+            className={`p-6 border-2 text-left transition-all ${
               theme === 'dark'
-                ? 'border-primary bg-primary/5'
-                : 'border-border bg-card hover:border-primary/40'
+                ? 'border-foreground bg-foreground/5'
+                : 'border-border bg-card hover:border-foreground/40'
             }`}
           >
             <div className="flex items-center gap-3 mb-3">
@@ -203,7 +203,7 @@ export function Settings() {
               </div>
             </div>
             {theme === 'dark' && (
-              <div className="text-xs font-semibold text-primary flex items-center gap-1">
+              <div className="text-xs font-semibold text-foreground flex items-center gap-1">
                 <CheckCircle className="w-3 h-3" /> Currently active
               </div>
             )}
@@ -211,10 +211,10 @@ export function Settings() {
         </div>
       </div>
 
-      <div className="p-6 rounded-xl bg-card border border-border">
-        <h3 className="text-xl font-bold text-foreground mb-6 flex items-center gap-2">
+      <div className="p-6 bg-card border border-border">
+        <h3 className="text-lg font-black uppercase tracking-tight text-foreground mb-2 flex items-center gap-2">
           <Link2 className="w-5 h-5" />
-          Connected Platforms
+          <span className="text-xs font-mono tracking-[0.08em]">Connected Platforms</span>
         </h3>
 
         <p className="text-muted-foreground text-sm mb-6">
@@ -282,17 +282,17 @@ export function Settings() {
             return (
               <div
                 key={platform.platform}
-                className="flex items-center justify-between p-4 rounded-xl border border-border bg-card"
+                className="flex items-center justify-between p-4 border border-border bg-card"
               >
                 <div className="flex items-center gap-4 flex-1 min-w-0">
-                  <div className={`flex items-center justify-center w-12 h-12 rounded-xl flex-shrink-0 ${config.iconBg}`}>
+                  <div className={`flex items-center justify-center w-12 h-12 flex-shrink-0 border border-border ${config.iconBg}`}>
               {config.icon}
                   </div>
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <h4 className="font-semibold text-foreground">{config.label}</h4>
                       {config.badge && (
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">
+                        <span className="text-xs px-2 py-0.5 border border-blue-600 bg-blue-50 text-blue-700 font-medium">
                           {config.badge}
                         </span>
                       )}
@@ -320,13 +320,13 @@ export function Settings() {
                   {platform.connected ? (
                     isInstagramViaMeta ? (
                       // Instagram connected via Meta — just show connected badge
-                      <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-emerald-600 bg-emerald-50 font-medium">
+                      <span className="flex items-center gap-1.5 px-3 py-1.5 border border-emerald-600 text-sm text-emerald-700 bg-emerald-50/50 font-medium">
                         <CheckCircle className="w-3.5 h-3.5" />
                         Connected via Meta
                       </span>
                     ) : (
                       <>
-                        <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-emerald-600 bg-emerald-50 font-medium">
+                        <span className="flex items-center gap-1.5 px-3 py-1.5 border border-emerald-600 text-sm text-emerald-700 bg-emerald-50/50 font-medium">
                           <CheckCircle className="w-3.5 h-3.5" />
                           Connected
                         </span>
@@ -335,7 +335,7 @@ export function Settings() {
                           <button
                             onClick={() => handleSyncPlatform(platform.platform)}
                             disabled={syncing === platform.platform}
-                            className="px-3 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center gap-2 disabled:opacity-50 text-muted-foreground hover:text-foreground hover:bg-accent"
+                            className="px-3 py-2 border border-border text-sm font-semibold transition-colors flex items-center gap-2 disabled:opacity-50 text-muted-foreground hover:text-foreground hover:bg-accent"
                           >
 <RefreshCw className={`w-4 h-4 ${syncing === platform.platform ? 'animate-spin' : ''}`} />
                             Sync
@@ -343,7 +343,7 @@ export function Settings() {
                         )}
                         <button
                           onClick={() => handleDisconnectPlatform(platform.platform)}
-                          className="px-3 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center gap-2 text-destructive hover:bg-destructive/10"
+                          className="px-3 py-2 border border-destructive text-sm font-semibold transition-colors flex items-center gap-2 text-destructive hover:bg-destructive/10"
                         >
                           <X className="w-4 h-4" />
                           Disconnect
@@ -359,7 +359,7 @@ export function Settings() {
                     ) : (
                       <button
                         onClick={() => handleConnectPlatform(platform.platform)}
-                        className="px-4 py-2 rounded-lg text-sm font-semibold transition-colors bg-primary text-primary-foreground hover:bg-primary/90"
+                        className="px-4 py-2 border border-foreground bg-foreground text-background text-sm font-semibold transition-colors hover:bg-background hover:text-foreground font-mono tracking-[0.04em]"
                       >
                         Connect
                       </button>

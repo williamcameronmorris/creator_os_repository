@@ -138,17 +138,17 @@ export function Schedule() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto">
+    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
       {/* Ã¢ÂÂÃ¢ÂÂ Page header Ã¢ÂÂÃ¢ÂÂ */}
       <div className="mb-6">
         <div className="flex items-start justify-between gap-3 mb-4">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-1">Content Schedule</h1>
-            <p className="text-sm text-muted-foreground">Manage your scheduled and draft posts</p>
+            <h1 className="t-display t-h1 mb-1">Content Schedule</h1>
+            <p className="t-micro text-muted-foreground">Manage your scheduled and draft posts</p>
           </div>
           <button
             onClick={handleNewPost}
-            className="flex items-center gap-2 px-4 sm:px-6 py-2.5 sm:py-3 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl font-medium transition-colors shadow-md text-sm sm:text-base flex-shrink-0"
+            className="btn-ie btn-ie-solid flex items-center gap-2 flex-shrink-0"
           >
             <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
             <span>New Post</span>
@@ -163,10 +163,10 @@ export function Schedule() {
               <button
                 key={f}
                 onClick={() => setFilter(f)}
-                className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl font-medium transition-colors shadow-sm text-sm ${
+                className={`px-3 sm:px-4 py-1.5 sm:py-2 font-medium transition-colors text-sm border ${
                   filter === f
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-card border border-border text-muted-foreground hover:bg-accent hover:text-foreground'
+                    ? 'bg-foreground text-background border-foreground'
+                    : 'border-border text-muted-foreground hover:bg-accent hover:text-foreground'
                 }`}
               >
                 {f === 'all' ? 'All' : f === 'scheduled' ? 'Scheduled' : f === 'draft' ? 'Drafts' : 'Published'}
@@ -177,17 +177,17 @@ export function Schedule() {
           {/* View toggle + calendar granularity */}
           <div className="flex items-center gap-2">
             {/* List / Calendar toggle */}
-            <div className="flex items-center bg-card border border-border rounded-xl overflow-hidden">
+            <div className="flex items-center border border-border overflow-hidden">
               <button
                 onClick={() => setViewMode('list')}
-                className={`p-2.5 transition-colors ${viewMode === 'list' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-accent'}`}
+                className={`p-2.5 transition-colors border-r border-border ${viewMode === 'list' ? 'bg-foreground text-background' : 'text-muted-foreground hover:bg-accent'}`}
                 title="List view"
               >
                 <List className="w-4 h-4" />
               </button>
               <button
                 onClick={() => setViewMode('calendar')}
-                className={`p-2.5 transition-colors ${viewMode === 'calendar' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-accent'}`}
+                className={`p-2.5 transition-colors ${viewMode === 'calendar' ? 'bg-foreground text-background' : 'text-muted-foreground hover:bg-accent'}`}
                 title="Calendar view"
               >
                 <LayoutGrid className="w-4 h-4" />
@@ -199,18 +199,18 @@ export function Schedule() {
               <div className="relative" ref={calDropdownRef}>
                 <button
                   onClick={() => setCalDropdownOpen(o => !o)}
-                  className="flex items-center gap-1.5 px-3 py-2 bg-card border border-border rounded-xl text-sm font-medium text-foreground hover:bg-accent transition-colors"
+                  className="flex items-center gap-1.5 px-3 py-2 border border-border text-sm font-medium text-foreground hover:bg-accent transition-colors"
                 >
                   {granularityLabels[calGranularity]}
                   <ChevronDown className={`w-3.5 h-3.5 text-muted-foreground transition-transform ${calDropdownOpen ? 'rotate-180' : ''}`} />
                 </button>
                 {calDropdownOpen && (
-                  <div className="absolute right-0 mt-1 w-32 bg-card border border-border rounded-xl shadow-lg overflow-hidden z-10">
+                  <div className="absolute right-0 mt-1 w-32 bg-card border border-border overflow-hidden z-10">
                     {(['daily', 'weekly', 'monthly'] as CalGranularity[]).map(g => (
                       <button
                         key={g}
                         onClick={() => { setCalGranularity(g); setCalDropdownOpen(false); }}
-                        className={`w-full px-3 py-2 text-sm text-left transition-colors ${calGranularity === g ? 'bg-primary/10 text-primary font-semibold' : 'text-foreground hover:bg-accent'}`}
+                        className={`w-full px-3 py-2 text-sm text-left transition-colors border-b border-border last:border-b-0 ${calGranularity === g ? 'bg-foreground text-background font-semibold' : 'text-foreground hover:bg-accent'}`}
                       >
                         {granularityLabels[g]}
                       </button>
@@ -237,13 +237,13 @@ export function Schedule() {
 
         {/* List view */}
         {viewMode === 'list' && loading && (
-          <div className="p-8 rounded-xl text-center bg-card border border-border">
+          <div className="p-8 text-center bg-card border border-border">
             <p className="text-muted-foreground">Loading...</p>
           </div>
         )}
 
         {viewMode === 'list' && !loading && filteredPosts.length === 0 && (
-          <div className="p-12 rounded-xl text-center bg-card border border-border shadow-md">
+          <div className="p-12 text-center bg-card border border-border">
             <Calendar className="w-16 h-16 mx-auto mb-4 text-muted-foreground opacity-50" />
             <h3 className="text-xl font-bold mb-2 text-foreground">
               {filter === 'all' ? 'No posts yet' : filter === 'scheduled' ? 'No scheduled posts' : filter === 'draft' ? 'No drafts' : 'No published posts'}
@@ -255,7 +255,7 @@ export function Schedule() {
             </p>
             <button
               onClick={handleNewPost}
-              className="inline-flex items-center gap-2 px-6 py-3 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl font-medium transition-colors shadow-md"
+              className="btn-ie btn-ie-solid inline-flex items-center gap-2"
             >
               <Plus className="w-5 h-5" />
               Create Post
@@ -270,13 +270,13 @@ export function Schedule() {
               return (
                 <div
                   key={post.id}
-                  className={`p-4 rounded-xl relative bg-card border border-border shadow-md hover:shadow-lg transition-shadow overflow-hidden ${
+                  className={`p-4 relative bg-card border border-border overflow-hidden ${
                     post.is_sponsored ? 'border-l-4 border-l-amber-500' : ''
                   }`}
                 >
                   <div className="flex items-start gap-3">
                     {/* Platform icon */}
-                    <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-chart-1/20 flex-shrink-0 mt-0.5">
+                    <div className="flex items-center justify-center w-10 h-10 border border-border bg-accent flex-shrink-0 mt-0.5">
                       <Icon className="w-5 h-5 text-chart-1" />
                     </div>
 
@@ -295,7 +295,7 @@ export function Schedule() {
                             </span>
                           )}
                           {post.status !== 'published' && (
-                            <span className={`px-1.5 py-0.5 text-xs rounded-full ${
+                            <span className={`px-1.5 py-0.5 text-xs rounded-full font-semibold ${
                               post.status === 'scheduled' ? 'bg-emerald-500/10 text-emerald-600' : 'bg-amber-500/10 text-amber-600'
                             }`}>
                               {post.status}
@@ -329,18 +329,18 @@ export function Schedule() {
                                 await supabase.from('content_posts_unified').update({ publish_status: null, publish_error: null }).eq('id', post.id);
                                 loadPosts();
                               }}
-                              className="p-1.5 rounded-lg transition-colors hover:bg-accent"
+                              className="p-1.5 transition-colors hover:bg-accent border border-border"
                               title="Retry publish"
                             >
                               <RefreshCw className="w-4 h-4 text-orange-500" />
                             </button>
                           )}
                           {post.status !== 'published' && (
-                            <button onClick={() => handleEdit(post)} className="p-1.5 rounded-lg transition-colors hover:bg-accent">
+                            <button onClick={() => handleEdit(post)} className="p-1.5 transition-colors hover:bg-accent border border-border">
                               <Edit className="w-4 h-4 text-muted-foreground hover:text-foreground" />
                             </button>
                           )}
-                          <button onClick={() => handleDelete(post.id)} className="p-1.5 rounded-lg transition-colors hover:bg-accent">
+                          <button onClick={() => handleDelete(post.id)} className="p-1.5 transition-colors hover:bg-accent border border-border">
                             <Trash2 className="w-4 h-4 text-muted-foreground hover:text-foreground" />
                           </button>
                         </div>
@@ -363,7 +363,7 @@ export function Schedule() {
                           )}
 
                           {post.publish_status === 'failed' && post.publish_error && (
-                            <div className="flex items-start gap-2 mt-2 p-2 rounded-lg bg-red-500/10 border border-red-500/20">
+                            <div className="flex items-start gap-2 mt-2 p-2 bg-red-500/10 border border-red-500/20">
                               <AlertTriangle className="w-3.5 h-3.5 text-red-500 flex-shrink-0 mt-0.5" />
                               <p className="text-xs text-red-600">{post.publish_error}</p>
                             </div>
@@ -384,11 +384,11 @@ export function Schedule() {
                         {/* Thumbnail Ã¢ÂÂ smaller on mobile, larger on desktop */}
                         {post.media_urls && post.media_urls.length > 0 && (
                           <div className="relative flex-shrink-0">
-                            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl overflow-hidden border border-border bg-accent">
+                            <div className="w-14 h-14 sm:w-16 sm:h-16 overflow-hidden border border-border bg-accent">
                               <img src={post.media_type === 'video' && post.thumbnail_url ? post.thumbnail_url : post.media_urls[0]} alt="" className="w-full h-full object-cover" />
                             </div>
                             {post.media_urls.length > 1 && (
-                              <div className="absolute -bottom-1 -right-1 px-1 py-0.5 bg-card border border-border rounded text-[10px] text-muted-foreground font-semibold shadow-sm">
+                              <div className="absolute -bottom-1 -right-1 px-1 py-0.5 bg-card border border-border text-[10px] text-muted-foreground font-semibold">
                                 +{post.media_urls.length - 1}
                               </div>
                             )}
@@ -406,12 +406,11 @@ export function Schedule() {
 
       {/* Ã¢ÂÂÃ¢ÂÂ Stats Ã¢ÂÂÃ¢ÂÂ */}
       <div className="mb-8">
-        <h2 className="text-xl sm:text-2xl font-bold text-foreground mb-4">Content Scheduling Stats</h2>
+        <h2 className="t-h2 font-bold text-foreground mb-4">Content Scheduling Stats</h2>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-6">
-          <div className="relative p-5 rounded-xl bg-card border border-border shadow-md overflow-hidden">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl" />
-            <div className="relative z-10">
+          <div className="p-5 bg-card border border-border overflow-hidden">
+            <div>
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-medium text-muted-foreground">Total Scheduled</span>
                 <div className="flex items-center gap-2">
@@ -431,7 +430,7 @@ export function Schedule() {
               {!isPremium ? (
                 <>
                   <div className="flex items-center gap-2">
-                    <div className="flex-1 h-2 bg-secondary rounded-full overflow-hidden">
+                    <div className="flex-1 h-2 bg-secondary overflow-hidden border border-border">
                       <div className="h-full bg-blue-500 transition-all duration-500" style={{ width: `${Math.min((totalScheduled / schedulingLimit) * 100, 100)}%` }} />
                     </div>
                     <span className="text-xs text-muted-foreground whitespace-nowrap">
@@ -449,9 +448,8 @@ export function Schedule() {
             </div>
           </div>
 
-          <div className="relative p-5 rounded-xl bg-card border border-border shadow-md overflow-hidden">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-3xl" />
-            <div className="relative z-10">
+          <div className="p-5 bg-card border border-border overflow-hidden">
+            <div>
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-medium text-muted-foreground">This Week</span>
                 <TrendingUp className="w-5 h-5 text-emerald-500" />
@@ -464,9 +462,8 @@ export function Schedule() {
             </div>
           </div>
 
-          <div className="relative p-5 rounded-xl bg-card border border-border shadow-md overflow-hidden">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-orange-500/10 rounded-full blur-3xl" />
-            <div className="relative z-10">
+          <div className="p-5 bg-card border border-border overflow-hidden">
+            <div>
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-medium text-muted-foreground">Publishing Soon</span>
                 <Clock className="w-5 h-5 text-orange-500" />
@@ -480,7 +477,7 @@ export function Schedule() {
           </div>
         </div>
 
-        <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-start gap-3">
+        <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 flex items-start gap-3">
           <CheckCircle2 className="w-5 h-5 text-emerald-500 flex-shrink-0 mt-0.5" />
           <div>
             <h4 className="font-semibold text-foreground mb-1">Auto-Publishing Active</h4>

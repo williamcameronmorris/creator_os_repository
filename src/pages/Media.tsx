@@ -131,11 +131,14 @@ export function Media() {
   });
 
   return (
-    <div className="max-w-7xl mx-auto">
+    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
       <div className="mb-8">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h1 className="text-3xl font-bold text-foreground mb-2">
+            <p className="font-mono text-[10px] font-bold tracking-[0.08em] uppercase text-muted-foreground mb-2">
+              Media Library
+            </p>
+            <h1 className="text-3xl sm:text-4xl font-black uppercase tracking-tight text-foreground mb-2">
               Media Library
             </h1>
             <p className="text-muted-foreground">
@@ -145,7 +148,7 @@ export function Media() {
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={uploading}
-            className="flex items-center gap-2 px-6 py-3 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl font-medium transition-colors disabled:opacity-50 shadow-md"
+            className="flex items-center gap-2 font-mono text-[10px] font-bold tracking-[0.08em] uppercase border border-foreground bg-foreground text-background px-4 py-2.5 hover:bg-background hover:text-foreground transition-colors disabled:opacity-50"
           >
             <Upload className="w-5 h-5" />
             {uploading ? 'Uploading...' : 'Upload Media'}
@@ -163,30 +166,30 @@ export function Media() {
         <div className="flex items-center gap-3">
           <button
             onClick={() => setFilter('all')}
-            className={`px-4 py-2 rounded-xl font-medium transition-colors shadow-sm ${
+            className={`px-4 py-2 font-medium transition-colors ${
               filter === 'all'
-                ? 'bg-primary text-primary-foreground'
-                : 'bg-card border border-border text-muted-foreground hover:bg-accent hover:text-foreground'
+                ? 'bg-foreground text-background'
+                : 'border border-border text-muted-foreground hover:bg-accent'
             }`}
           >
             All
           </button>
           <button
             onClick={() => setFilter('image')}
-            className={`px-4 py-2 rounded-xl font-medium transition-colors shadow-sm ${
+            className={`px-4 py-2 font-medium transition-colors ${
               filter === 'image'
-                ? 'bg-primary text-primary-foreground'
-                : 'bg-card border border-border text-muted-foreground hover:bg-accent hover:text-foreground'
+                ? 'bg-foreground text-background'
+                : 'border border-border text-muted-foreground hover:bg-accent'
             }`}
           >
             Images
           </button>
           <button
             onClick={() => setFilter('video')}
-            className={`px-4 py-2 rounded-xl font-medium transition-colors shadow-sm ${
+            className={`px-4 py-2 font-medium transition-colors ${
               filter === 'video'
-                ? 'bg-primary text-primary-foreground'
-                : 'bg-card border border-border text-muted-foreground hover:bg-accent hover:text-foreground'
+                ? 'bg-foreground text-background'
+                : 'border border-border text-muted-foreground hover:bg-accent'
             }`}
           >
             Videos
@@ -195,11 +198,11 @@ export function Media() {
       </div>
 
       {loading ? (
-        <div className="p-8 rounded-xl text-center bg-card border border-border">
+        <div className="p-8 text-center bg-card border border-border">
           <p className="text-muted-foreground">Loading...</p>
         </div>
       ) : filteredMedia.length === 0 ? (
-        <div className="p-12 rounded-xl text-center bg-card border border-border shadow-md">
+        <div className="p-12 text-center bg-card border border-border">
           <ImageIcon className="w-16 h-16 mx-auto mb-4 text-muted-foreground opacity-50" />
           <h3 className="text-xl font-bold mb-2 text-foreground">
             {filter === 'all' ? 'No media files yet' : filter === 'image' ? 'No images' : 'No videos'}
@@ -209,7 +212,7 @@ export function Media() {
           </p>
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="inline-flex items-center gap-2 px-6 py-3 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl font-medium transition-colors shadow-md"
+            className="inline-flex items-center gap-2 font-mono text-[10px] font-bold tracking-[0.08em] uppercase border border-foreground bg-foreground text-background px-4 py-2.5 hover:bg-background hover:text-foreground transition-colors"
           >
             <Upload className="w-5 h-5" />
             Upload Media
@@ -221,7 +224,7 @@ export function Media() {
             <div
               key={file.id}
               onClick={() => setSelectedFile(file)}
-              className="rounded-xl overflow-hidden cursor-pointer transition-all hover:scale-105 bg-card border border-border shadow-md hover:shadow-lg"
+              className="overflow-hidden cursor-pointer transition-all bg-card border border-border"
             >
               <div className="aspect-square bg-muted flex items-center justify-center overflow-hidden">
                 {file.file_type === 'video' ? (
@@ -234,7 +237,7 @@ export function Media() {
                 <p className="text-sm font-medium truncate text-foreground">
                   {file.file_name}
                 </p>
-                <p className="text-xs text-muted-foreground">
+                <p className="font-mono text-[10px] font-bold tracking-[0.08em] uppercase text-muted-foreground">
                   {formatFileSize(file.file_size)}
                 </p>
               </div>
@@ -246,7 +249,7 @@ export function Media() {
       {selectedFile && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={() => setSelectedFile(null)}>
           <div
-            className="w-full max-w-4xl max-h-[90vh] rounded-2xl overflow-hidden bg-card shadow-2xl"
+            className="w-full max-w-4xl max-h-[90vh] overflow-hidden bg-card"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between p-4 border-b border-border">
@@ -256,19 +259,19 @@ export function Media() {
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => handleDownload(selectedFile)}
-                  className="p-2 rounded-lg transition-colors hover:bg-accent"
+                  className="p-2 transition-colors hover:bg-accent"
                 >
                   <Download className="w-5 h-5 text-muted-foreground hover:text-foreground" />
                 </button>
                 <button
                   onClick={() => handleDelete(selectedFile)}
-                  className="p-2 rounded-lg transition-colors hover:bg-accent"
+                  className="p-2 transition-colors hover:bg-accent"
                 >
                   <Trash2 className="w-5 h-5 text-red-500" />
                 </button>
                 <button
                   onClick={() => setSelectedFile(null)}
-                  className="p-2 rounded-lg transition-colors hover:bg-accent"
+                  className="p-2 transition-colors hover:bg-accent"
                 >
                   <X className="w-5 h-5 text-muted-foreground hover:text-foreground" />
                 </button>
@@ -277,32 +280,32 @@ export function Media() {
 
             <div className="p-4">
               {selectedFile.file_type === 'video' ? (
-                <video src={selectedFile.file_url} controls className="w-full max-h-[70vh] rounded-lg" />
+                <video src={selectedFile.file_url} controls className="w-full max-h-[70vh]" />
               ) : (
-                <img src={selectedFile.file_url} alt={selectedFile.file_name} className="w-full max-h-[70vh] object-contain rounded-lg" />
+                <img src={selectedFile.file_url} alt={selectedFile.file_name} className="w-full max-h-[70vh] object-contain" />
               )}
-              <div className="mt-4 p-4 rounded-lg bg-muted">
+              <div className="mt-4 p-4 bg-muted">
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
-                    <p className="text-muted-foreground mb-1">File Size</p>
+                    <p className="font-mono text-[10px] font-bold tracking-[0.08em] uppercase text-muted-foreground mb-1">File Size</p>
                     <p className="font-medium text-foreground">
                       {formatFileSize(selectedFile.file_size)}
                     </p>
                   </div>
                   <div>
-                    <p className="text-muted-foreground mb-1">Uploaded</p>
+                    <p className="font-mono text-[10px] font-bold tracking-[0.08em] uppercase text-muted-foreground mb-1">Uploaded</p>
                     <p className="font-medium text-foreground">
                       {format(new Date(selectedFile.uploaded_at), 'MMM d, yyyy')}
                     </p>
                   </div>
                   <div>
-                    <p className="text-muted-foreground mb-1">Type</p>
+                    <p className="font-mono text-[10px] font-bold tracking-[0.08em] uppercase text-muted-foreground mb-1">Type</p>
                     <p className="font-medium text-foreground">
                       {selectedFile.file_type}
                     </p>
                   </div>
                   <div>
-                    <p className="text-muted-foreground mb-1">URL</p>
+                    <p className="font-mono text-[10px] font-bold tracking-[0.08em] uppercase text-muted-foreground mb-1">URL</p>
                     <a
                       href={selectedFile.file_url}
                       target="_blank"

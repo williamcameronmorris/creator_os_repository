@@ -213,12 +213,12 @@ export function SavedIdeas() {
     <div className="max-w-6xl mx-auto">
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-3xl font-bold text-foreground mb-2">Saved Content Ideas</h1>
-          <p className="text-muted-foreground">Store and organize your content inspiration</p>
+          <h1 className="text-3xl font-black uppercase tracking-tight text-foreground mb-2">Saved Content Ideas</h1>
+          <p className="text-muted-foreground text-xs font-mono uppercase tracking-[0.08em]">Store and organize your content inspiration</p>
         </div>
         <button
           onClick={() => setShowAddModal(true)}
-          className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white rounded-xl hover:from-violet-700 hover:to-fuchsia-700 transition-all shadow-lg hover:shadow-xl"
+          className="flex items-center gap-2 font-mono text-[10px] font-bold tracking-[0.08em] uppercase border border-foreground bg-foreground text-background px-4 py-2.5 hover:bg-background hover:text-foreground transition-colors"
         >
           <Plus className="w-5 h-5" />
           Save New Idea
@@ -233,14 +233,14 @@ export function SavedIdeas() {
             placeholder="Search ideas, tags..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 bg-card border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500"
+            className="w-full pl-10 pr-4 py-2.5 bg-card border border-border focus:outline-none focus:ring-2 focus:ring-foreground"
           />
         </div>
 
         <select
           value={filterPlatform}
           onChange={(e) => setFilterPlatform(e.target.value)}
-          className="px-4 py-2.5 bg-card border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500"
+          className="px-4 py-2.5 bg-card border border-border focus:outline-none focus:ring-2 focus:ring-foreground"
         >
           <option value="all">All Platforms</option>
           <option value="instagram">Instagram</option>
@@ -250,10 +250,10 @@ export function SavedIdeas() {
 
         <button
           onClick={() => setShowArchived(!showArchived)}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-lg transition-colors ${
+          className={`flex items-center gap-2 px-4 py-2.5 transition-colors ${
             showArchived
-              ? 'bg-violet-600 text-white'
-              : 'bg-card border border-border hover:bg-accent'
+              ? 'bg-foreground text-background'
+              : 'border border-border text-muted-foreground hover:bg-accent'
           }`}
         >
           {showArchived ? <ArchiveRestore className="w-5 h-5" /> : <Archive className="w-5 h-5" />}
@@ -288,7 +288,7 @@ export function SavedIdeas() {
           {!showArchived && !searchQuery && filterPlatform === 'all' && (
             <button
               onClick={() => setShowAddModal(true)}
-              className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white rounded-xl hover:from-violet-700 hover:to-fuchsia-700 transition-all shadow-lg hover:shadow-xl"
+              className="inline-flex items-center gap-2 font-mono text-[10px] font-bold tracking-[0.08em] uppercase border border-foreground bg-foreground text-background px-4 py-2.5 hover:bg-background hover:text-foreground transition-colors"
             >
               <Lightbulb className="w-5 h-5" />
               Save Your First Idea
@@ -300,7 +300,7 @@ export function SavedIdeas() {
           {filteredIdeas.map((idea) => (
             <div
               key={idea.id}
-              className="group relative p-6 bg-card border border-border rounded-xl hover:shadow-lg transition-all duration-200"
+              className="group relative p-6 bg-card border border-border transition-all duration-200"
             >
               <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center gap-2">
@@ -318,10 +318,10 @@ export function SavedIdeas() {
                 </div>
                 <button
                   onClick={() => toggleFavorite(idea)}
-                  className={`p-1.5 rounded-lg transition-colors ${
+                  className={`p-1.5 transition-colors border ${
                     idea.is_favorite
-                      ? 'text-yellow-500 bg-yellow-500/10'
-                      : 'text-muted-foreground hover:text-yellow-500 hover:bg-yellow-500/10'
+                      ? 'border-yellow-500 text-yellow-500 bg-yellow-500/10'
+                      : 'border-border text-muted-foreground hover:text-yellow-500 hover:border-yellow-500'
                   }`}
                 >
                   <Star className={`w-4 h-4 ${idea.is_favorite ? 'fill-current' : ''}`} />
@@ -343,7 +343,7 @@ export function SavedIdeas() {
                   {idea.tags.slice(0, 3).map((tag, index) => (
                     <span
                       key={index}
-                      className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-violet-500/10 text-violet-600 rounded-md"
+                      className="inline-flex items-center gap-1 px-2 py-1 text-xs border border-border text-foreground"
                     >
                       <Tag className="w-3 h-3" />
                       {tag}
@@ -364,14 +364,14 @@ export function SavedIdeas() {
               <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                 <button
                   onClick={() => handleEdit(idea)}
-                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-sm bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition-colors"
+                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-mono font-bold tracking-[0.04em] border border-foreground bg-foreground text-background hover:bg-background hover:text-foreground transition-colors"
                 >
                   <Edit className="w-4 h-4" />
                   Edit
                 </button>
                 <button
                   onClick={() => toggleArchive(idea)}
-                  className="flex items-center justify-center p-2 bg-secondary hover:bg-accent rounded-lg transition-colors"
+                  className="flex items-center justify-center p-2 border border-border hover:bg-accent transition-colors"
                   title={idea.is_archived ? 'Restore' : 'Archive'}
                 >
                   {idea.is_archived ? (
@@ -382,7 +382,7 @@ export function SavedIdeas() {
                 </button>
                 <button
                   onClick={() => handleDelete(idea.id)}
-                  className="flex items-center justify-center p-2 bg-red-500/10 hover:bg-red-500/20 text-red-600 rounded-lg transition-colors"
+                  className="flex items-center justify-center p-2 border border-border text-destructive hover:bg-destructive/10 transition-colors"
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>
@@ -394,14 +394,14 @@ export function SavedIdeas() {
 
       {showAddModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-card rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-card border border-border max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="sticky top-0 bg-card border-b border-border p-6 flex items-center justify-between">
               <h2 className="text-2xl font-bold text-foreground">
                 {editingIdea ? 'Edit Content Idea' : 'Save New Content Idea'}
               </h2>
               <button
                 onClick={resetForm}
-                className="p-2 hover:bg-secondary rounded-lg transition-colors"
+                className="p-2 border border-border hover:bg-accent transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -418,7 +418,7 @@ export function SavedIdeas() {
                   value={formData.title}
                   onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                   placeholder="e.g., Behind-the-scenes vlog"
-                  className="w-full px-4 py-2.5 bg-secondary border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500"
+                  className="w-full px-4 py-2.5 bg-secondary border border-border focus:outline-none focus:ring-2 focus:ring-foreground"
                 />
               </div>
 
@@ -431,7 +431,7 @@ export function SavedIdeas() {
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   placeholder="What's this idea about?"
                   rows={3}
-                  className="w-full px-4 py-2.5 bg-secondary border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500"
+                  className="w-full px-4 py-2.5 bg-secondary border border-border focus:outline-none focus:ring-2 focus:ring-foreground"
                 />
               </div>
 
@@ -443,7 +443,7 @@ export function SavedIdeas() {
                   <select
                     value={formData.platform}
                     onChange={(e) => setFormData({ ...formData, platform: e.target.value })}
-                    className="w-full px-4 py-2.5 bg-secondary border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500"
+                    className="w-full px-4 py-2.5 bg-secondary border border-border focus:outline-none focus:ring-2 focus:ring-foreground"
                   >
                     <option value="instagram">Instagram</option>
                     <option value="youtube">YouTube</option>
@@ -458,7 +458,7 @@ export function SavedIdeas() {
                   <select
                     value={formData.content_type}
                     onChange={(e) => setFormData({ ...formData, content_type: e.target.value })}
-                    className="w-full px-4 py-2.5 bg-secondary border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500"
+                    className="w-full px-4 py-2.5 bg-secondary border border-border focus:outline-none focus:ring-2 focus:ring-foreground"
                   >
                     {formData.platform === 'instagram' && (
                       <>
@@ -536,13 +536,13 @@ export function SavedIdeas() {
                 <button
                   type="button"
                   onClick={resetForm}
-                  className="flex-1 px-6 py-3 bg-secondary hover:bg-accent text-foreground rounded-xl transition-colors"
+                  className="flex-1 px-6 py-3 bg-secondary hover:bg-accent text-foreground border border-border transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 px-6 py-3 bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white rounded-xl hover:from-violet-700 hover:to-fuchsia-700 transition-all shadow-lg"
+                  className="flex-1 px-6 py-3 font-mono text-[10px] font-bold tracking-[0.08em] uppercase border border-foreground bg-foreground text-background hover:bg-background hover:text-foreground transition-colors"
                 >
                   {editingIdea ? 'Update Idea' : 'Save Idea'}
                 </button>

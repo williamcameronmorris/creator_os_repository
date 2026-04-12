@@ -313,12 +313,13 @@ export function Analytics() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto space-y-8">
+    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8 space-y-8">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Audience Growth</h1>
-          <p className="text-sm text-muted-foreground mt-1">Deep performance analytics across all connected platforms</p>
+          <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-2">Analytics</p>
+          <h1 className="text-3xl sm:text-4xl font-black text-foreground uppercase tracking-tight">Audience Growth</h1>
+          <p className="text-xs font-mono text-muted-foreground mt-3">Deep performance analytics across all connected platforms</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           {(['7d', '30d', '90d'] as const).map((range) => {
@@ -327,13 +328,13 @@ export function Analytics() {
               <button
                 key={range}
                 onClick={() => handleTimeRangeChange(range)}
-                className={`px-4 py-2 rounded-xl text-sm font-medium transition-all flex items-center gap-1.5 ${
+                className={`px-4 py-2 text-sm font-mono transition-all flex items-center gap-1.5 border ${
                   timeRange === range
-                    ? 'bg-primary text-primary-foreground shadow-sm'
-                    : 'bg-card border border-border text-muted-foreground hover:bg-accent'
+                    ? 'bg-foreground text-background border-foreground'
+                    : 'border-border text-muted-foreground hover:bg-accent/50'
                 }`}
               >
-                {range === '7d' ? '7 Days' : range === '30d' ? '30 Days' : '90 Days'}
+                {range === '7d' ? '7d' : range === '30d' ? '30d' : '90d'}
                 {locked && <Lock className="w-3 h-3" />}
               </button>
             );
@@ -341,17 +342,17 @@ export function Analytics() {
           {!isPremium && (
             <button
               onClick={() => { setPaywallFeature('Full Analytics Access'); setShowPaywall(true); }}
-              className="px-4 py-2 rounded-xl text-sm font-semibold bg-gradient-to-r from-orange-500 to-orange-600 text-white hover:shadow-lg transition-all flex items-center gap-2"
+              className="px-4 py-2 text-sm font-mono border border-border text-foreground hover:bg-accent/50 transition-all flex items-center gap-2"
             >
               <Crown className="w-4 h-4" />
-              Upgrade
+              UPGRADE
             </button>
           )}
         </div>
       </div>
 
       {!hasData ? (
-        <div className="p-16 rounded-xl text-center bg-card border border-border">
+        <div className="p-16 text-center bg-card border border-border">
           <TrendingUp className="w-16 h-16 mx-auto mb-4 text-muted-foreground/40" />
           <h3 className="text-xl font-bold mb-2 text-foreground">No analytics data yet</h3>
           <p className="text-muted-foreground">Connect your accounts in Settings and sync to start tracking performance.</p>
@@ -361,24 +362,24 @@ export function Analytics() {
           {/* Summary cards */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {[
-              { label: 'Total Engagement', value: summaryStats.totalEngagement, change: summaryStats.engagementChange, icon: TrendingUp, color: 'text-primary', bg: 'bg-primary/10' },
-              { label: 'Likes', value: summaryStats.totalLikes, change: summaryStats.likesChange, icon: Heart, color: 'text-pink-500', bg: 'bg-pink-500/10' },
-              { label: 'Comments', value: summaryStats.totalComments, change: summaryStats.commentsChange, icon: MessageCircle, color: 'text-blue-500', bg: 'bg-blue-500/10' },
-              { label: 'Followers', value: summaryStats.totalFollowers, change: summaryStats.followersChange, icon: Users, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
-            ].map(({ label, value, change, icon: Icon, color, bg }) => (
-              <div key={label} className="p-5 rounded-xl bg-card border border-border shadow-sm">
+              { label: 'Total Engagement', value: summaryStats.totalEngagement, change: summaryStats.engagementChange, icon: TrendingUp },
+              { label: 'Likes', value: summaryStats.totalLikes, change: summaryStats.likesChange, icon: Heart },
+              { label: 'Comments', value: summaryStats.totalComments, change: summaryStats.commentsChange, icon: MessageCircle },
+              { label: 'Followers', value: summaryStats.totalFollowers, change: summaryStats.followersChange, icon: Users },
+            ].map(({ label, value, change, icon: Icon }) => (
+              <div key={label} className="p-5 bg-card border border-border">
                 <div className="flex items-center justify-between mb-3">
-                  <div className={`w-10 h-10 rounded-xl ${bg} flex items-center justify-center`}>
-                    <Icon className={`w-5 h-5 ${color}`} />
+                  <div className="w-10 h-10 bg-accent flex items-center justify-center">
+                    <Icon className="w-5 h-5 text-foreground" />
                   </div>
                   {change !== 0 && (
-                    <span className={`text-xs font-semibold flex items-center gap-0.5 ${change > 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+                    <span className={`text-xs font-semibold flex items-center gap-0.5 ${change > 0 ? 'text-foreground' : 'text-muted-foreground'}`}>
                       {change > 0 ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />}
                       {Math.abs(change).toFixed(1)}%
                     </span>
                   )}
                 </div>
-                <p className="text-xs text-muted-foreground mb-1">{label}</p>
+                <p className="text-xs font-mono text-muted-foreground mb-1">{label}</p>
                 <p className="text-2xl font-bold text-foreground">{value.toLocaleString()}</p>
               </div>
             ))}
@@ -386,57 +387,59 @@ export function Analytics() {
 
           {/* Performance benchmark card */}
           {summaryStats.totalFollowers > 0 && (
-            <div className={`px-5 py-4 rounded-xl border flex items-start gap-4 ${benchmark.color}`}>
+            <div className="px-5 py-4 border border-border flex items-start gap-4">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1">
-                  <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${benchmark.color}`}>
+                  <span className="text-xs font-mono font-bold px-2 py-0.5 border border-border text-foreground">
                     {benchmark.label}
                   </span>
                   <span className="text-sm font-semibold">
                     {engagementRate.toFixed(2)}% engagement rate
                   </span>
                 </div>
-                <p className="text-xs opacity-80">{benchmark.tip}</p>
+                <p className="text-xs text-muted-foreground">{benchmark.tip}</p>
               </div>
               <div className="text-right flex-shrink-0">
-                <p className="text-[10px] opacity-60 mb-0.5">vs. Industry</p>
+                <p className="text-[10px] text-muted-foreground mb-0.5">vs. Industry</p>
                 <div className="flex items-center gap-1 text-[11px] font-medium">
-                  <span className="opacity-60">0.5%</span>
-                  <span className="opacity-40">avg</span>
-                  <span className="opacity-60 ml-1">3%</span>
-                  <span className="opacity-40">top</span>
+                  <span>0.5%</span>
+                  <span className="text-muted-foreground">avg</span>
+                  <span className="ml-1">3%</span>
+                  <span className="text-muted-foreground">top</span>
                 </div>
               </div>
             </div>
           )}
 
           {/* Engagement over time */}
-          <div className="p-6 rounded-xl bg-card border border-border shadow-sm">
+          <div className="p-6 bg-card border border-border">
+            <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-4">Engagement Metrics</p>
             <h3 className="text-lg font-bold text-foreground mb-5">Engagement Over Time</h3>
             <ResponsiveContainer width="100%" height={280}>
               <LineChart data={engagementTimeline} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                 <XAxis dataKey="date" stroke="#94a3b8" tick={{ fontSize: 11 }} />
                 <YAxis stroke="#94a3b8" tick={{ fontSize: 11 }} />
-                <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '0.75rem' }} />
+                <Tooltip contentStyle={{ backgroundColor: 'var(--card)', border: '1px solid var(--border)', borderRadius: '0' }} />
                 <Legend />
-                <Line type="monotone" dataKey="engagement" name="Total Engagement" stroke="#7c3aed" strokeWidth={2.5} dot={false} />
+                <Line type="monotone" dataKey="engagement" name="Total Engagement" stroke="#050505" strokeWidth={2.5} dot={false} />
                 <Line type="monotone" dataKey="likes" name="Likes" stroke="#E4405F" strokeWidth={1.5} dot={false} />
-                <Line type="monotone" dataKey="comments" name="Comments" stroke="#3b82f6" strokeWidth={1.5} dot={false} />
+                <Line type="monotone" dataKey="comments" name="Comments" stroke="#333" strokeWidth={1.5} dot={false} />
               </LineChart>
             </ResponsiveContainer>
           </div>
 
           {/* Follower Growth by Platform */}
           {followerGrowth.length > 1 && (
-            <div className="p-6 rounded-xl bg-card border border-border shadow-sm">
+            <div className="p-6 bg-card border border-border">
+              <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-4">Growth Metrics</p>
               <h3 className="text-lg font-bold text-foreground mb-5">Follower Growth by Platform</h3>
               <ResponsiveContainer width="100%" height={240}>
                 <LineChart data={followerGrowth} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                   <XAxis dataKey="date" stroke="#94a3b8" tick={{ fontSize: 11 }} />
                   <YAxis stroke="#94a3b8" tick={{ fontSize: 11 }} />
-                  <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '0.75rem' }} />
+                  <Tooltip contentStyle={{ backgroundColor: 'var(--card)', border: '1px solid var(--border)', borderRadius: '0' }} />
                   <Legend />
                   {Object.keys(PLATFORM_COLORS).map((p) => (
                     followerGrowth.some((d) => d[p] > 0) && (
@@ -451,7 +454,8 @@ export function Analytics() {
 
           {/* Platform comparison + Engagement distribution */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="p-6 rounded-xl bg-card border border-border shadow-sm">
+            <div className="p-6 bg-card border border-border">
+              <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-4">Comparison</p>
               <h3 className="text-lg font-bold text-foreground mb-5">Platform Comparison</h3>
               <ResponsiveContainer width="100%" height={240}>
                 <BarChart data={platformComparison} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
@@ -459,16 +463,17 @@ export function Analytics() {
                   <XAxis dataKey="platform" stroke="#94a3b8" tick={{ fontSize: 11 }}
                     tickFormatter={(v) => v.charAt(0).toUpperCase() + v.slice(1)} />
                   <YAxis stroke="#94a3b8" tick={{ fontSize: 11 }} />
-                  <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '0.75rem' }} />
+                  <Tooltip contentStyle={{ backgroundColor: 'var(--card)', border: '1px solid var(--border)', borderRadius: '0' }} />
                   <Legend />
-                  <Bar dataKey="likes" name="Likes" fill="#E4405F" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="comments" name="Comments" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="likes" name="Likes" fill="#E4405F" radius={[0, 0, 0, 0]} />
+                  <Bar dataKey="comments" name="Comments" fill="#333" radius={[0, 0, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
 
             {engagementDist.length > 0 && (
-              <div className="p-6 rounded-xl bg-card border border-border shadow-sm">
+              <div className="p-6 bg-card border border-border">
+                <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-4">Breakdown</p>
                 <h3 className="text-lg font-bold text-foreground mb-5">Engagement Breakdown</h3>
                 <ResponsiveContainer width="100%" height={240}>
                   <PieChart>
@@ -477,7 +482,7 @@ export function Analytics() {
                         <Cell key={i} fill={entry.color} />
                       ))}
                     </Pie>
-                    <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '0.75rem' }}
+                    <Tooltip contentStyle={{ backgroundColor: 'var(--card)', border: '1px solid var(--border)', borderRadius: '0' }}
                       formatter={(v: any) => v.toLocaleString()} />
                     <Legend />
                   </PieChart>
@@ -488,18 +493,19 @@ export function Analytics() {
 
           {/* Content format performance */}
           {formatBreakdown.length > 0 && (
-            <div className="p-6 rounded-xl bg-card border border-border shadow-sm">
+            <div className="p-6 bg-card border border-border">
+              <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-4">Performance</p>
               <h3 className="text-lg font-bold text-foreground mb-2">Content Format Performance</h3>
-              <p className="text-sm text-muted-foreground mb-5">Average engagement per post by format</p>
+              <p className="text-xs font-mono text-muted-foreground mb-5">Average engagement per post by format</p>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
                 {formatBreakdown.map((f) => {
                   const Icon = getFormatIcon(f.name);
                   return (
-                    <div key={f.name} className="p-4 rounded-xl bg-muted text-center">
-                      <Icon className="w-8 h-8 mx-auto mb-2 text-primary" />
-                      <p className="text-xs text-muted-foreground mb-1">{f.name}</p>
+                    <div key={f.name} className="p-4 bg-muted border border-border text-center">
+                      <Icon className="w-8 h-8 mx-auto mb-2 text-foreground" />
+                      <p className="text-xs font-mono text-muted-foreground mb-1">{f.name}</p>
                       <p className="text-2xl font-bold text-foreground">{f.avgEngagement.toLocaleString()}</p>
-                      <p className="text-xs text-muted-foreground mt-1">avg engagement · {f.posts} posts</p>
+                      <p className="text-xs font-mono text-muted-foreground mt-1">{f.posts} posts</p>
                     </div>
                   );
                 })}
@@ -509,8 +515,8 @@ export function Analytics() {
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                   <XAxis dataKey="name" stroke="#94a3b8" tick={{ fontSize: 11 }} />
                   <YAxis stroke="#94a3b8" tick={{ fontSize: 11 }} />
-                  <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '0.75rem' }} />
-                  <Bar dataKey="avgEngagement" name="Avg Engagement" fill="#7c3aed" radius={[4, 4, 0, 0]} />
+                  <Tooltip contentStyle={{ backgroundColor: 'var(--card)', border: '1px solid var(--border)', borderRadius: '0' }} />
+                  <Bar dataKey="avgEngagement" name="Avg Engagement" fill="#050505" radius={[0, 0, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -518,9 +524,10 @@ export function Analytics() {
 
           {/* Best time to post heatmap */}
           {topPosts.length > 2 && (
-            <div className="p-6 rounded-xl bg-card border border-border shadow-sm">
+            <div className="p-6 bg-card border border-border">
+              <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-4">Timing</p>
               <h3 className="text-lg font-bold text-foreground mb-1">Best Time to Post</h3>
-              <p className="text-sm text-muted-foreground mb-5">Engagement intensity by day and hour (darker = higher engagement)</p>
+              <p className="text-xs font-mono text-muted-foreground mb-5">Engagement intensity by day and hour (darker = higher engagement)</p>
               <div className="overflow-x-auto">
                 <div className="min-w-[640px]">
                   {/* Hour labels */}
@@ -537,10 +544,10 @@ export function Analytics() {
                         return (
                           <div
                             key={hourIdx}
-                            className="flex-1 h-6 rounded-sm mx-px"
+                            className="flex-1 h-6 mx-px"
                             style={{
                               backgroundColor: intensity > 0
-                                ? `rgba(124, 58, 237, ${0.08 + intensity * 0.85})`
+                                ? `rgba(5, 5, 5, ${0.08 + intensity * 0.85})`
                                 : 'hsl(var(--muted))',
                             }}
                             title={`${DAY_LABELS[dayIdx]} ${HOUR_LABELS[hourIdx]}: ${val} engagement`}
@@ -553,7 +560,7 @@ export function Analytics() {
                   <div className="flex items-center gap-2 mt-3 ml-10">
                     <span className="text-xs text-muted-foreground">Low</span>
                     {[0.1, 0.3, 0.5, 0.7, 0.9].map((i) => (
-                      <div key={i} className="w-6 h-4 rounded-sm" style={{ backgroundColor: `rgba(124, 58, 237, ${i})` }} />
+                      <div key={i} className="w-6 h-4" style={{ backgroundColor: `rgba(5, 5, 5, ${i})` }} />
                     ))}
                     <span className="text-xs text-muted-foreground">High</span>
                   </div>
@@ -563,14 +570,15 @@ export function Analytics() {
           )}
 
           {/* Top posts */}
-          <div className="p-6 rounded-xl bg-card border border-border shadow-sm">
-            <div className="flex items-center justify-between mb-5">
+          <div className="p-6 bg-card border border-border">
+            <div className="flex items-center justify-between mb-5 pb-4 border-b border-border">
               <div>
+                <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-2">Top Posts</p>
                 <h3 className="text-lg font-bold text-foreground">Top Performing Posts</h3>
-                <p className="text-sm text-muted-foreground mt-0.5">Ranked by engagement in selected period</p>
+                <p className="text-xs font-mono text-muted-foreground mt-2">Ranked by engagement in selected period</p>
               </div>
               {!isPremium && (
-                <span className="text-xs px-2 py-1 rounded-full bg-orange-500/10 text-orange-600 border border-orange-500/20 flex items-center gap-1">
+                <span className="text-xs px-2 py-1 border border-border text-muted-foreground flex items-center gap-1 flex-shrink-0">
                   <Lock className="w-3 h-3" /> Top 3 only
                 </span>
               )}
@@ -578,14 +586,14 @@ export function Analytics() {
             {topPosts.length === 0 ? (
               <p className="text-center py-8 text-muted-foreground text-sm">No published posts found in this period.</p>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-0">
                 {topPosts.map((post, idx) => {
                   const PlatIcon = getPlatformIcon(post.platform);
                   const FmtIcon = getFormatIcon(post.media_type);
                   return (
-                    <div key={post.id} className="flex items-start gap-4 p-4 rounded-xl bg-muted hover:bg-muted/80 transition-colors">
+                    <div key={post.id} className="flex items-start gap-4 p-4 border-b border-border hover:bg-accent/30 transition-colors data-row">
                       {/* Rank */}
-                      <div className="w-7 h-7 rounded-full bg-card border border-border flex items-center justify-center text-xs font-bold text-muted-foreground flex-shrink-0">
+                      <div className="w-7 h-7 bg-accent border border-border flex items-center justify-center text-xs font-bold text-foreground flex-shrink-0">
                         {idx + 1}
                       </div>
                       {/* Thumbnail */}
@@ -593,12 +601,12 @@ export function Analytics() {
                         <img
                           src={post.thumbnail_url}
                           alt="Post"
-                          className="w-16 h-16 rounded-xl object-cover flex-shrink-0"
+                          className="w-16 h-16 object-cover flex-shrink-0"
                           onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                         />
                       ) : (
-                        <div className="w-16 h-16 rounded-xl bg-card border border-border flex items-center justify-center flex-shrink-0">
-                          <FmtIcon className="w-6 h-6 text-muted-foreground" />
+                        <div className="w-16 h-16 bg-accent border border-border flex items-center justify-center flex-shrink-0">
+                          <FmtIcon className="w-6 h-6 text-foreground" />
                         </div>
                       )}
                       {/* Info */}
@@ -608,25 +616,25 @@ export function Analytics() {
                             style={{ color: PLATFORM_COLORS[post.platform] || '#64748b' }} />
                           <FmtIcon className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
                           {post.published_at && (
-                            <span className="text-xs text-muted-foreground">
+                            <span className="text-xs font-mono text-muted-foreground">
                               {format(parseISO(post.published_at), 'MMM d')}
                             </span>
                           )}
                           {post.permalink && (
                             <a href={post.permalink} target="_blank" rel="noopener noreferrer"
-                              className="ml-auto text-primary hover:text-primary/80 flex-shrink-0"
+                              className="ml-auto text-foreground hover:text-muted-foreground flex-shrink-0"
                               title="View post">
                               <ExternalLink className="w-3.5 h-3.5" />
                             </a>
                           )}
                         </div>
                         <p className="text-sm text-foreground line-clamp-2 mb-2">{post.caption || 'No caption'}</p>
-                        <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                        <div className="flex items-center gap-4 text-xs text-muted-foreground font-mono">
                           <span className="flex items-center gap-1"><Heart className="w-3 h-3 text-pink-500" />{post.likes.toLocaleString()}</span>
-                          <span className="flex items-center gap-1"><MessageCircle className="w-3 h-3 text-blue-500" />{post.comments.toLocaleString()}</span>
-                          <span className="font-semibold text-emerald-600">{post.engagement.toLocaleString()} total</span>
+                          <span className="flex items-center gap-1"><MessageCircle className="w-3 h-3" />{post.comments.toLocaleString()}</span>
+                          <span className="font-semibold text-foreground">{post.engagement.toLocaleString()} total</span>
                           {post.engagement_rate > 0 && (
-                            <span className="text-violet-600 font-medium">{post.engagement_rate.toFixed(1)}% rate</span>
+                            <span className="text-foreground font-semibold">{post.engagement_rate.toFixed(1)}%</span>
                           )}
                         </div>
                       </div>
@@ -636,9 +644,9 @@ export function Analytics() {
                 {!isPremium && (
                   <button
                     onClick={() => { setPaywallFeature('Full Top Posts Analytics'); setShowPaywall(true); }}
-                    className="w-full py-3 rounded-xl border-2 border-dashed border-orange-500/30 bg-orange-500/5 text-orange-600 text-sm font-medium hover:bg-orange-500/10 transition-colors flex items-center justify-center gap-2"
+                    className="w-full py-3 border border-border text-foreground text-sm font-mono hover:bg-accent/30 transition-colors flex items-center justify-center gap-2"
                   >
-                    <Lock className="w-4 h-4" /> View All Top Posts (Premium)
+                    <Lock className="w-4 h-4" /> VIEW ALL TOP POSTS (PREMIUM)
                   </button>
                 )}
               </div>
@@ -646,9 +654,10 @@ export function Analytics() {
           </div>
           {/* A/B test results */}
           {abResults.length > 0 && (
-            <div className="p-6 rounded-xl bg-card border border-border shadow-sm">
+            <div className="p-6 bg-card border border-border">
+              <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-4">Testing</p>
               <h3 className="text-lg font-bold text-foreground mb-1">A/B Time Test Results</h3>
-              <p className="text-sm text-muted-foreground mb-5">Compare engagement between your two scheduled time slots</p>
+              <p className="text-xs font-mono text-muted-foreground mb-5">Compare engagement between your two scheduled time slots</p>
               <div className="space-y-4">
                 {abResults.map((pair, idx) => {
                   const a = pair.A;
@@ -657,8 +666,8 @@ export function Analytics() {
                   const engB = (b.likes || 0) + (b.comments || 0);
                   const winner = engA > engB ? 'A' : engB > engA ? 'B' : null;
                   return (
-                    <div key={idx} className="rounded-xl border border-border overflow-hidden">
-                      <div className="px-4 py-2 bg-muted text-xs font-semibold text-muted-foreground uppercase">
+                    <div key={idx} className="border border-border overflow-hidden">
+                      <div className="px-4 py-2 bg-muted text-xs font-mono text-muted-foreground uppercase">
                         Test #{idx + 1} — {a.platform}
                       </div>
                       <div className="grid grid-cols-2 divide-x divide-border">
@@ -667,19 +676,19 @@ export function Analytics() {
                           const eng = (post.likes || 0) + (post.comments || 0);
                           const isWinner = winner === label;
                           return (
-                            <div key={label} className={`p-4 ${isWinner ? 'bg-emerald-50' : ''}`}>
+                            <div key={label} className="p-4">
                               <div className="flex items-center gap-2 mb-2">
-                                <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${isWinner ? 'bg-emerald-500 text-white' : 'bg-muted text-muted-foreground'}`}>
-                                  Version {label} {isWinner ? '🏆' : ''}
+                                <span className={`text-xs font-mono font-bold px-2 py-0.5 border ${isWinner ? 'border-foreground bg-foreground text-background' : 'border-border text-foreground'}`}>
+                                  Version {label} {isWinner && '✓'}
                                 </span>
                               </div>
-                              <p className="text-xs text-muted-foreground mb-1">
+                              <p className="text-xs font-mono text-muted-foreground mb-1">
                                 {post.scheduled_date ? formatInTz(post.scheduled_date, timezone) : 'Unknown time'}
                               </p>
                               <p className="text-sm text-foreground line-clamp-2 mb-2">{post.caption || 'No caption'}</p>
-                              <div className="flex gap-3 text-sm">
+                              <div className="flex gap-3 text-xs font-mono">
                                 <span className="text-pink-500 font-semibold">{(post.likes || 0)} likes</span>
-                                <span className="text-blue-500 font-semibold">{(post.comments || 0)} comments</span>
+                                <span className="text-foreground font-semibold">{(post.comments || 0)} comments</span>
                                 <span className="font-bold text-foreground">{eng} total</span>
                               </div>
                             </div>

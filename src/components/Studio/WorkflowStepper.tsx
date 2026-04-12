@@ -34,12 +34,12 @@ export function WorkflowStepper({ currentStage, onStageSelect, completedStages }
                   className="flex flex-col items-center gap-1.5 sm:gap-2 group cursor-pointer px-2"
                 >
                   <div className="relative">
-                    <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center transition-all duration-300 ${
+                    <div className={`w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center transition-all duration-300 border ${
                       isActive
-                        ? 'bg-primary text-primary-foreground shadow-lg scale-105 sm:scale-110'
+                        ? 'bg-foreground text-background border-foreground'
                         : isCompleted
-                        ? 'bg-green-500/10 text-green-500 border-2 border-green-500/20'
-                        : 'bg-accent text-muted-foreground border-2 border-transparent hover:bg-accent/80'
+                        ? 'text-foreground border-foreground'
+                        : 'text-muted-foreground border-border hover:border-foreground'
                     }`}>
                       {isCompleted && !isActive ? (
                         <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6" />
@@ -51,14 +51,14 @@ export function WorkflowStepper({ currentStage, onStageSelect, completedStages }
                     {index < stages.length - 1 && (
                       <div className={`absolute top-1/2 left-full h-0.5 -translate-y-1/2 ${
                         completedStages.includes(stages[index + 1].id) || currentStage === stages[index + 1].id
-                          ? 'bg-green-500/30'
+                          ? 'bg-foreground'
                           : 'bg-border'
                       }`} style={{ width: '1.5rem' }} />
                     )}
                   </div>
 
-                  <span className={`text-[10px] sm:text-xs font-semibold whitespace-nowrap truncate max-w-[70px] sm:max-w-none ${
-                    isActive ? 'text-primary' : isCompleted ? 'text-green-500' : 'text-muted-foreground'
+                  <span className={`font-mono text-[10px] font-bold tracking-[0.08em] uppercase whitespace-nowrap truncate max-w-[70px] sm:max-w-none ${
+                    isActive ? 'text-foreground' : isCompleted ? 'text-foreground' : 'text-muted-foreground'
                   }`}>
                     {stage.label}
                   </span>
