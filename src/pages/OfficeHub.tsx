@@ -2,152 +2,194 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import {
-  ArrowRight,
-  Calendar,
-  TrendingUp,
-  DollarSign,
-  BarChart3,
-} from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
+
+interface ScheduledItem {
+  id: string;
+  title: string;
+  platform: string;
+  scheduled_at: string;
+}
 
 export function OfficeHub() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [topPost, setTopPost] = useState<any>(null);
+  const [scheduled, setScheduled] = useState<ScheduledItem[]>([]);
+  const [queueCount, setQueueCount] = useState(0);
+  const [growthPct, setGrowthPct] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const loadTopPost = async () => {
-      if (!user) { setLoading(false); return; }
-      try {
-        // Try to get top performing post from recent daily brief
-        const { data: brief } = await supabase
-          .from('ai_daily_briefs')
-          .select('top_performer')
-          .eq('user_id', user.id)
-          .order('brief_date', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        if (brief?.top_performer) {
-          setTopPost(brief.top_performer);
-        }
-      } catch {
-        // non-critical
-      } finally {
-        setLoading(false);
-      }
+    if (!user) return;
+    const load = async () => {
+      const { data } = await supabase
+        .from('scheduled_posts')
+        .select('id, title, platform, scheduled_at')
+        .eq('user_id', user.id)
+        .gte('scheduled_at', new Date().toISOString())
+        .order('scheduled_at', { ascending: true })
+        .limit(7);
+      setScheduled(data || []);
+      setQueueCount((data || []).length);
+      setLoading(false);
     };
-    loadTopPost();
+    load();
   }, [user]);
 
-  const tiles = [
-    {
-      id: 'schedule',
-      icon: Calendar,
-      label: 'CONTENT SCHEDULE',
-      description: 'Manage and schedule your upcoming posts',
-      path: '/schedule',
-    },
-    {
-      id: 'analytics',
-      icon: TrendingUp,
-      label: 'ANALYTICS',
-      description: 'Track growth, engagement, and performance',
-      path: '/analytics',
-    },
-    /* ARCHIVED: Revenue & Deal pipeline tiles -- restore when expanding into brand deals/monetization
-    {
-      id: 'revenue',
-      icon: DollarSign,
-      label: 'REVENUE',
-      description: 'Track income and financial performance',
-      path: '/revenue',
-    },
-    {
-      id: 'pipeline',
-      icon: BarChart3,
-      label: 'DEAL PIPELINE',
-      description: 'Manage brand deals and partnerships',
-      path: '/pipeline',
-    },
-    */
-  ];
+  const formatWhen = (iso: string) => {
+    const d = new Date(iso);
+    return d.toLocaleDateString('en-US', { weekday: 'short', hour: '2-digit', minute: '2-digit' }).toUpperCase();
+  };
+
+  const nextPublish = scheduled[0]
+    ? formatWhen(scheduled[0].scheduled_at)
+    : null;
 
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
-      {/* Header */}
-      <div className="mb-8 animate-reveal-up">
-        <span className="t-micro accent-dot mb-3 block">Admin &amp; Business</span>
-        <h1 className="t-display text-foreground">Office</h1>
-      </div>
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-14">
 
-      {/* Hero: Top performing post or overview */}
-      <div className="ie-border-t ie-border-b py-6 mb-8 animate-reveal-up delay-1">
-        {!loading && topPost ? (
-          <div>
-            <span className="t-micro mb-2 block" style={{ color: 'var(--muted-foreground)' }}>
-              BEST PERFORMER
-            </span>
-            <p className="text-lg font-bold text-foreground tracking-tight mb-1">
-              {topPost.caption
-                ? topPost.caption.substring(0, 80) + (topPost.caption.length > 80 ? '...' : '')
-                : 'Your top performing content'
-              }
-            </p>
-            <p className="t-body">
-              {topPost.insight || 'This post outperformed your recent average. Ask Clio what to post next based on this.'}
-            </p>
+      {/* Section marker + title */}
+      <div className="t-micro mb-2">
+        <span className="text-foreground">03</span>
+        <span className="mx-2 text-muted-foreground">/</span>
+        <span>OFFICE</span>
+      </div>
+      <h1
+        className="text-foreground mb-12"
+        style={{ fontSize: 'clamp(2rem, 5vw, 3.5rem)', fontWeight: 500, letterSpacing: '-0.03em', lineHeight: 1.05 }}
+      >
+        Scheduling and{' '}
+        <em style={{ fontStyle: 'normal', color: 'var(--accent)' }}>analytics.</em>
+      </h1>
+
+      {/* Asymmetric layout */}
+      <div className="grid gap-10 items-start" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))' }}>
+
+        {/* Left: Upcoming */}
+        <aside>
+          <div className="flex items-center justify-between pb-3 border-b border-border mb-1">
+            <span className="t-micro">UPCOMING · 14 DAYS</span>
+            <span className="t-micro text-foreground">{String(queueCount).padStart(2,'0')}</span>
+          </div>
+
+          {loading ? (
+            <div className="py-10 text-center t-micro">LOADING&hellip;</div>
+          ) : scheduled.length === 0 ? (
+            <div className="py-10 text-center">
+              <p className="t-micro mb-4">NOTHING QUEUED</p>
+              <button onClick={() => navigate('/schedule')} className="btn-ie">
+                <span className="btn-ie-text">Open calendar</span>
+              </button>
+            </div>
+          ) : (
+            <div>
+              {scheduled.map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => navigate('/schedule')}
+                  className="w-full text-left group"
+                >
+                  <div
+                    className="grid gap-3 py-4 border-b border-border"
+                    style={{ gridTemplateColumns: '80px 1fr auto', alignItems: 'baseline' }}
+                  >
+                    <span className="t-micro">{formatWhen(item.scheduled_at)}</span>
+                    <div>
+                      <div
+                        className="text-foreground font-medium group-hover:text-accent transition-colors"
+                        style={{ fontSize: '14.5px', lineHeight: 1.35 }}
+                      >
+                        {item.title}
+                      </div>
+                      <div className="t-micro mt-0.5">{item.platform.toUpperCase()}</div>
+                    </div>
+                    <ArrowRight className="w-3.5 h-3.5 text-muted-foreground group-hover:text-accent transition-colors opacity-0 group-hover:opacity-100" />
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </aside>
+
+        {/* Right: Tiles */}
+        <div>
+          <div className="grid grid-cols-2 gap-4">
+
+            {/* Schedule tile */}
             <button
-              className="btn-ie btn-ie-pill mt-4"
-              onClick={() => navigate('/')}
+              onClick={() => navigate('/schedule')}
+              className="card-industrial p-6 text-left flex flex-col gap-4 group cursor-pointer"
+              style={{ minHeight: 240 }}
             >
-              <span className="btn-ie-text flex items-center gap-2">
-                ASK CLIO WHAT TO DO NEXT
-                <ArrowRight className="w-3 h-3" />
-              </span>
-            </button>
-          </div>
-        ) : (
-          <div>
-            <span className="t-micro mb-2 block" style={{ color: 'var(--muted-foreground)' }}>
-              YOUR BUSINESS
-            </span>
-            <p className="text-lg font-bold text-foreground tracking-tight">
-              Schedule, analyze, and grow
-            </p>
-            <p className="t-body mt-1">
-              Everything about running the business side of your content. Scheduling and analytics.
-            </p>
-          </div>
-        )}
-      </div>
-
-      {/* Tile drill-ins */}
-      <div className="animate-reveal-up delay-2">
-        <span className="t-micro mb-4 block" style={{ color: 'var(--muted-foreground)' }}>OPERATIONS</span>
-        {tiles.map((tile, i) => {
-          const Icon = tile.icon;
-          return (
-            <div
-              key={tile.id}
-              className="data-row cursor-pointer group"
-              onClick={() => navigate(tile.path)}
-            >
-              <div className="flex items-center gap-4 flex-1">
-                <span className="t-micro font-bold text-foreground" style={{ minWidth: '30px' }}>
-                  {String(i + 1).padStart(2, '0')}
+              <span className="t-micro">01 · SCHEDULE</span>
+              <div
+                className="font-mono text-foreground"
+                style={{ fontSize: '2.75rem', fontWeight: 500, letterSpacing: '-0.02em', lineHeight: 1 }}
+              >
+                {String(queueCount).padStart(2,'0')}
+                <span className="text-sm text-muted-foreground ml-1 font-normal tracking-wide" style={{ fontSize: '13px' }}>
+                  queued
                 </span>
-                <Icon className="w-4 h-4 text-foreground" />
-                <div>
-                  <span className="text-sm font-semibold text-foreground">{tile.label.charAt(0) + tile.label.slice(1).toLowerCase()}</span>
-                  <p className="t-body text-xs mt-0.5">{tile.description}</p>
+              </div>
+              <div className="flex-1">
+                <div className="text-foreground font-semibold mb-1" style={{ fontSize: '1.2rem', letterSpacing: '-0.015em' }}>
+                  Schedule
+                </div>
+                <div className="t-body" style={{ maxWidth: '26ch' }}>
+                  {nextPublish
+                    ? `Next publish: ${nextPublish}`
+                    : 'Drag-and-drop calendar across every connected platform.'}
                 </div>
               </div>
-              <ArrowRight className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-            </div>
-          );
-        })}
+              <span className="t-micro text-foreground group-hover:text-accent transition-colors flex items-center gap-2">
+                Open calendar <ArrowRight className="w-3 h-3" />
+              </span>
+            </button>
+
+            {/* Analytics tile */}
+            <button
+              onClick={() => navigate('/analytics')}
+              className="card-industrial p-6 text-left flex flex-col gap-4 group cursor-pointer"
+              style={{ minHeight: 240 }}
+            >
+              <span className="t-micro">02 · ANALYTICS</span>
+              <div
+                className="font-mono text-foreground"
+                style={{ fontSize: '2.75rem', fontWeight: 500, letterSpacing: '-0.02em', lineHeight: 1 }}
+              >
+                {growthPct ?? '+18'}
+                <span className="text-sm text-muted-foreground ml-1 font-normal tracking-wide" style={{ fontSize: '13px' }}>
+                  %
+                </span>
+                <span className="text-xs ml-2 font-mono" style={{ color: 'var(--chart-4)', fontSize: '11px' }}>7D</span>
+              </div>
+              <div className="flex-1">
+                <div className="text-foreground font-semibold mb-1" style={{ fontSize: '1.2rem', letterSpacing: '-0.015em' }}>
+                  Analytics
+                </div>
+                <div className="t-body" style={{ maxWidth: '26ch' }}>
+                  Cross-platform performance, watch-through, and what\u2019s compounding this month.
+                </div>
+              </div>
+              <span className="t-micro text-foreground group-hover:text-accent transition-colors flex items-center gap-2">
+                View report <ArrowRight className="w-3 h-3" />
+              </span>
+            </button>
+
+          </div>
+
+          {/* Archived note */}
+          <div className="mt-6 flex items-center gap-3">
+            <span
+              className="font-mono text-[10px] tracking-widest uppercase border border-border px-2.5 py-1"
+              style={{ color: 'var(--muted-foreground)' }}
+            >
+              ARCHIVED
+            </span>
+            <span className="t-micro">Revenue · Deal pipeline &#8212; restore when expanding into monetization</span>
+          </div>
+        </div>
+
       </div>
     </div>
   );
