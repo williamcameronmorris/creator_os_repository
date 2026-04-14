@@ -56,6 +56,7 @@ export function OfficeHub() {
       description: 'Track growth, engagement, and performance',
       path: '/analytics',
     },
+    /* ARCHIVED: Revenue & Deal pipeline tiles -- restore when expanding into brand deals/monetization
     {
       id: 'revenue',
       icon: DollarSign,
@@ -70,6 +71,7 @@ export function OfficeHub() {
       description: 'Manage brand deals and partnerships',
       path: '/pipeline',
     },
+    */
   ];
 
   return (
@@ -115,7 +117,7 @@ export function OfficeHub() {
               Schedule, analyze, and grow
             </p>
             <p className="t-body mt-1">
-              Everything about running the business side of your content. Scheduling, analytics, revenue tracking, and deal management.
+              Everything about running the business side of your content. Scheduling and analytics.
             </p>
           </div>
         )}
