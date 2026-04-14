@@ -68,7 +68,7 @@ export function OfficeHub() {
         {/* Left: Upcoming */}
         <aside>
           <div className="flex items-center justify-between pb-3 border-b border-border mb-1">
-            <span className="t-micro">UPCOMING · 14 DAYS</span>
+            <span className="t-micro">UPCOMING Â· 14 DAYS</span>
             <span className="t-micro text-foreground">{String(queueCount).padStart(2,'0')}</span>
           </div>
 
@@ -121,7 +121,7 @@ export function OfficeHub() {
               className="card-industrial p-6 text-left flex flex-col gap-4 group cursor-pointer"
               style={{ minHeight: 240 }}
             >
-              <span className="t-micro">01 · SCHEDULE</span>
+              <span className="t-micro">01 Â· SCHEDULE</span>
               <div
                 className="font-mono text-foreground"
                 style={{ fontSize: '2.75rem', fontWeight: 500, letterSpacing: '-0.02em', lineHeight: 1 }}
@@ -152,7 +152,7 @@ export function OfficeHub() {
               className="card-industrial p-6 text-left flex flex-col gap-4 group cursor-pointer"
               style={{ minHeight: 240 }}
             >
-              <span className="t-micro">02 · ANALYTICS</span>
+              <span className="t-micro">02 Â· ANALYTICS</span>
               <div
                 className="font-mono text-foreground"
                 style={{ fontSize: '2.75rem', fontWeight: 500, letterSpacing: '-0.02em', lineHeight: 1 }}
@@ -168,7 +168,7 @@ export function OfficeHub() {
                   Analytics
                 </div>
                 <div className="t-body" style={{ maxWidth: '26ch' }}>
-                  Cross-platform performance, watch-through, and what\u2019s compounding this month.
+                  Cross-platform performance, watch-through, and what’s compounding this month.
                 </div>
               </div>
               <span className="t-micro text-foreground group-hover:text-accent transition-colors flex items-center gap-2">
@@ -186,7 +186,7 @@ export function OfficeHub() {
             >
               ARCHIVED
             </span>
-            <span className="t-micro">Revenue · Deal pipeline &#8212; restore when expanding into monetization</span>
+            <span className="t-micro">Revenue Â· Deal pipeline &#8212; restore when expanding into monetization</span>
           </div>
         </div>
 
