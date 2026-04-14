@@ -29,7 +29,7 @@ function inlineMarkdown(text: string, lineKey: number) {
   return parts.length > 0 ? parts : [text];
 }
 
-// Detect numbered content ideas in Clio responses (e.g. "1. **Guitar Gear Collabs** — ...")
+// Detect numbered content ideas in Clio responses (e.g. "1. **Guitar Gear Collabs** â ...")
 // Returns { ideas: [{number, title, description}], preamble, postscript }
 function parseActionableIdeas(text: string) {
   const lines = text.split('\n');
@@ -41,8 +41,8 @@ function parseActionableIdeas(text: string) {
   let currentIdea: { number: number; title: string; description: string; raw: string } | null = null;
 
   for (const line of lines) {
-    // Match patterns like "1. **Title** — description" or "1. Title — description"
-    const ideaMatch = line.match(/^(\d+)\.\s+\*{0,2}(.+?)\*{0,2}\s*[—\-–:]\s*(.+)/);
+    // Match patterns like "1. **Title** â description" or "1. Title â description"
+    const ideaMatch = line.match(/^(\d+)\.\s+\*{0,2}(.+?)\*{0,2}\s*[â\-â:]\s*(.+)/);
     if (ideaMatch) {
       if (currentIdea) ideas.push(currentIdea);
       foundFirstIdea = true;
@@ -226,20 +226,25 @@ export function Clio() {
     },
   ];
 
+
   return (
-    <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
-      {/* Greeting */}
-      <div className="mb-8 animate-reveal-up">
-        <span className="t-micro accent-dot mb-3 block">
-          {getGreeting()}
-        </span>
-        <h1 className="t-display text-foreground">
-          {firstName}.
-        </h1>
+    <div className="max-w-3xl mx-auto px-4 sm:px-6 py-10 sm:py-14">
+
+      {/* Section marker */}
+      <div className="t-micro mb-8 animate-reveal-up">
+        <span className="text-foreground">01</span>
+        <span className="mx-2">/</span>
+        <span>CLIO</span>
       </div>
 
-      {/* Copilot input: THE interface */}
-      <div className="ie-border-b ie-border-t py-6 mb-8 animate-reveal-up delay-1">
+      {/* Greeting */}
+      <div className="mb-10 animate-reveal-up">
+        <span className="t-micro accent-dot mb-3 block">{getGreeting()}</span>
+        <h1 className="t-display text-foreground">{firstName}.</h1>
+      </div>
+
+      {/* Copilot input */}
+      <div className="ie-border-b ie-border-t py-6 mb-10 animate-reveal-up delay-1">
         <div className="relative">
           <textarea
             ref={inputRef}
@@ -248,24 +253,18 @@ export function Clio() {
             onKeyDown={handleKeyDown}
             placeholder={PLACEHOLDERS[placeholderIdx]}
             rows={2}
-            className="w-full bg-transparent text-foreground text-lg font-medium leading-relaxed resize-none focus:outline-none placeholder:text-muted-foreground/50"
-            style={{ letterSpacing: '-0.01em' }}
+            className="w-full bg-transparent text-foreground font-medium resize-none outline-none placeholder:text-muted-foreground"
+            style={{ fontSize: '1.0625rem', letterSpacing: '-0.01em', lineHeight: 1.5 }}
           />
-          <div className="flex items-center justify-between mt-3">
-            <span className="t-micro">Ask Clio anything</span>
+          <div className="flex items-center justify-between mt-4">
+            <span className="t-micro">ASK ANYTHING ABOUT YOUR CONTENT</span>
             <button
               onClick={handleSubmit}
-              disabled={!query.trim() || isLoading}
-              className="btn-ie btn-ie-solid btn-ie-pill px-4 py-2 disabled:opacity-30 disabled:cursor-not-allowed"
+              disabled={isLoading || !query.trim()}
+              className="btn-ie btn-ie-solid disabled:opacity-40 disabled:cursor-not-allowed"
+              style={{ fontSize: '10px', padding: '0.5rem 1.25rem' }}
             >
-              <span className="btn-ie-text flex items-center gap-2">
-                {isLoading ? (
-                  <RefreshCw className="w-3 h-3 animate-spin" />
-                ) : (
-                  <Send className="w-3 h-3" />
-                )}
-                {isLoading ? 'THINKING' : 'ASK'}
-              </span>
+              <span className="btn-ie-text">{isLoading ? 'THINKING…' : 'SEND'}</span>
             </button>
           </div>
         </div>
@@ -275,16 +274,15 @@ export function Clio() {
       {response && (() => {
         const parsed = parseActionableIdeas(response);
         if (parsed) {
-          // Actionable ideas: render as tappable cards
           return (
-            <div className="pb-6 mb-8 animate-reveal-up">
-              <span className="t-micro accent-dot mb-3 block">Clio</span>
+            <div className="pb-6 mb-10 animate-reveal-up">
+              <span className="t-micro accent-dot mb-4 block">Clio</span>
               {parsed.preamble && (
                 <div className="t-body text-foreground leading-relaxed whitespace-pre-wrap mb-4">
                   {renderMarkdown(parsed.preamble)}
                 </div>
               )}
-              <div className="space-y-0">
+              <div>
                 {parsed.ideas.map((idea) => (
                   <button
                     key={idea.number}
@@ -295,38 +293,33 @@ export function Clio() {
                       });
                       navigate(`/studio/workflow?${params.toString()}`);
                     }}
-                    className="w-full text-left data-row group ie-border-b"
+                    className="w-full text-left group"
                   >
-                    <span className="t-micro font-bold text-foreground" style={{ minWidth: '30px' }}>
-                      {String(idea.number).padStart(2, '0')}
-                    </span>
-                    <div className="flex-1 ml-4">
-                      <span className="text-sm font-semibold text-foreground block">
-                        {idea.title}
+                    <div className="flex items-baseline gap-4 py-4 border-b border-border hover:bg-transparent transition-colors">
+                      <span className="t-micro font-bold text-foreground" style={{ minWidth: '1.5rem' }}>
+                        {String(idea.number).padStart(2, '0')}
                       </span>
-                      <span className="t-body text-muted-foreground text-xs mt-0.5 block line-clamp-2">
-                        {idea.description}
+                      <div className="flex-1">
+                        <span className="text-sm font-semibold text-foreground block group-hover:text-accent transition-colors">
+                          {idea.title}
+                        </span>
+                        {idea.description && (
+                          <span className="t-body block mt-0.5">{idea.description}</span>
+                        )}
+                      </div>
+                      <span className="t-micro text-muted-foreground group-hover:text-accent transition-colors">
+                        START →
                       </span>
-                    </div>
-                    <div className="flex items-center gap-2 ml-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <span className="t-micro text-muted-foreground whitespace-nowrap">SCRIPT IT</span>
-                      <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
                     </div>
                   </button>
                 ))}
               </div>
-              {parsed.postscript && (
-                <div className="t-body text-foreground leading-relaxed whitespace-pre-wrap mt-4 ie-border-b pb-6">
-                  {renderMarkdown(parsed.postscript)}
-                </div>
-              )}
             </div>
           );
         }
-        // Non-actionable response: plain markdown
         return (
-          <div className="ie-border-b pb-6 mb-8 animate-reveal-up">
-            <span className="t-micro accent-dot mb-3 block">Clio</span>
+          <div className="pb-6 mb-10 animate-reveal-up">
+            <span className="t-micro accent-dot mb-4 block">Clio</span>
             <div className="t-body text-foreground leading-relaxed whitespace-pre-wrap">
               {renderMarkdown(response)}
             </div>
@@ -338,69 +331,60 @@ export function Clio() {
       {!response && !briefLoading && (
         <>
           {hasDailyBrief && briefData ? (
-            /* Returning user: Daily Brief */
             <div className="animate-reveal-up delay-2">
-              <span className="t-micro accent-dot mb-4 block">Your Daily Brief</span>
+              <span className="t-micro accent-dot mb-5 block">Your Daily Brief</span>
 
               {briefData.top_performer && (
                 <div className="card-industrial p-5 mb-4">
-                  <span className="t-micro mb-2 block" style={{ color: 'var(--muted-foreground)' }}>TOP PERFORMER</span>
+                  <span className="t-micro mb-2 block">TOP PERFORMER</span>
                   <p className="text-sm font-medium text-foreground mb-1">
-                    {briefData.top_performer.caption?.substring(0, 80) || 'Your best recent post'}
-                    {briefData.top_performer.caption?.length > 80 ? '...' : ''}
+                    {(briefData.top_performer.caption || '').substring(0, 80) || 'Your best recent post'}
+                    {(briefData.top_performer.caption || '').length > 80 ? '…' : ''}
                   </p>
                   <p className="t-body">
-                    {briefData.top_performer.insight || 'Outperformed your average engagement.'}
+                    {briefData.top_performer.insight || 'Outperformed your average engagement rate.'}
                   </p>
                 </div>
               )}
 
-              {briefData.recommendations && briefData.recommendations.length > 0 && (
-                <div className="space-y-0">
-                  <span className="t-micro mb-3 block" style={{ color: 'var(--muted-foreground)' }}>RECOMMENDATIONS</span>
-                  {briefData.recommendations.slice(0, 3).map((rec: any, i: number) => (
-                    <div
-                      key={i}
-                      className="data-row cursor-pointer group"
-                      onClick={() => {
-                        setQuery(rec.action || rec.suggestion || '');
-                        inputRef.current?.focus();
-                      }}
-                    >
-                      <span className="t-micro font-bold text-foreground" style={{ minWidth: '30px' }}>
-                        {String(i + 1).padStart(2, '0')}
-                      </span>
-                      <span className="text-sm text-foreground flex-1 ml-4">
-                        {rec.suggestion || rec.title}
-                      </span>
-                      <ArrowRight className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-                    </div>
-                  ))}
+              {briefData.recommended_action && (
+                <div className="card-industrial p-5 mb-4">
+                  <span className="t-micro mb-2 block">RECOMMENDED TODAY</span>
+                  <p className="text-sm font-medium text-foreground">
+                    {briefData.recommended_action}
+                  </p>
+                </div>
+              )}
+
+              {briefData.trending_topic && (
+                <div className="card-industrial p-5">
+                  <span className="t-micro mb-2 block">TRENDING IN YOUR NICHE</span>
+                  <p className="text-sm font-medium text-foreground">
+                    {briefData.trending_topic}
+                  </p>
                 </div>
               )}
             </div>
           ) : (
-            /* New user: Suggestion cards */
+            /* New user: suggestion cards */
             <div className="animate-reveal-up delay-2">
-              <span className="t-micro accent-dot mb-4 block">Get Started</span>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-0">
-                {suggestions.map((s, i) => {
+              <span className="t-micro accent-dot mb-5 block">Start here</span>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {suggestions.map((s) => {
                   const Icon = s.icon;
                   return (
                     <button
-                      key={i}
-                      onClick={() => {
-                        setQuery(s.prompt);
-                        inputRef.current?.focus();
-                      }}
-                      className={`card-industrial p-5 text-left group ${
-                        i < suggestions.length - 1 ? 'sm:ie-border-r' : ''
-                      }`}
+                      key={s.label}
+                      onClick={s.prompt ? () => { setQuery(s.prompt); inputRef.current?.focus(); } : s.action}
+                      className="card-industrial p-5 text-left group flex items-start gap-4 cursor-pointer"
                     >
-                      <Icon className="w-5 h-5 text-foreground mb-3" />
-                      <span className="t-micro block mb-2 text-foreground">{s.label}</span>
-                      <p className="t-body">{s.description}</p>
-                      <ArrowRight className="w-4 h-4 text-muted-foreground mt-3 opacity-0 group-hover:opacity-100 transition-opacity transform group-hover:translate-x-1" />
+                      <div className="w-8 h-8 flex items-center justify-center border border-border flex-shrink-0 group-hover:border-accent transition-colors">
+                        <Icon className="w-4 h-4 text-muted-foreground group-hover:text-accent transition-colors" />
+                      </div>
+                      <div>
+                        <div className="t-micro text-foreground mb-1">{s.label}</div>
+                        <div className="t-body">{s.description}</div>
+                      </div>
                     </button>
                   );
                 })}
@@ -409,6 +393,7 @@ export function Clio() {
           )}
         </>
       )}
+
     </div>
   );
 }
