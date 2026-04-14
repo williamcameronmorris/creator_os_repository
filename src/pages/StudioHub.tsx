@@ -2,158 +2,189 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import {
-  ArrowRight,
-  Image,
-  Bookmark,
-  Sparkles,
-  Plus,
-} from 'lucide-react';
+import { ArrowRight, Pencil, FileText, Mic, Zap } from 'lucide-react';
+
+interface DraftItem {
+  id: string;
+  title: string;
+  updated_at: string;
+  platform?: string;
+}
 
 export function StudioHub() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [hasWorkflows, setHasWorkflows] = useState(false);
-  const [latestWorkflow, setLatestWorkflow] = useState<any>(null);
+  const [recentDrafts, setRecentDrafts] = useState<DraftItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!user) return;
     const load = async () => {
-      if (!user) { setLoading(false); return; }
-      try {
-        const { data } = await supabase
-          .from('content_workflow_stages')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        if (data) {
-          setHasWorkflows(true);
-          setLatestWorkflow(data);
-        }
-      } catch {
-        // non-critical
-      } finally {
-        setLoading(false);
-      }
+      const { data } = await supabase
+        .from('scripts')
+        .select('id, title, updated_at, platform')
+        .eq('user_id', user.id)
+        .order('updated_at', { ascending: false })
+        .limit(5);
+      setRecentDrafts(data || []);
+      setLoading(false);
     };
     load();
   }, [user]);
 
+  const formatWhen = (iso: string) => {
+    const d = new Date(iso);
+    const now = new Date();
+    const diff = Math.floor((now.getTime() - d.getTime()) / 86400000);
+    if (diff === 0) return 'TODAY';
+    if (diff === 1) return 'YESTERDAY';
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }).toUpperCase();
+  };
+
   const tiles = [
     {
-      id: 'workflow',
-      icon: Sparkles,
-      label: 'CONTENT WORKFLOW',
-      description: 'Ideate, script, create, schedule, and analyze',
-      path: '/studio/workflow',
+      index: '01',
+      label: 'SCRIPT',
+      icon: Pencil,
+      title: 'New Script',
+      sub: 'Start from a blank page or let Clio generate a first draft from your idea.',
+      cta: 'Open editor',
+      action: () => navigate('/studio/script'),
     },
     {
-      id: 'media',
-      icon: Image,
-      label: 'MEDIA LIBRARY',
-      description: 'Your uploaded photos, videos, and assets',
-      path: '/media',
+      index: '02',
+      label: 'TEMPLATES',
+      icon: FileText,
+      title: 'Templates',
+      sub: 'Hook frameworks, story structures, and scripting systems for every format.',
+      cta: 'Browse',
+      action: () => navigate('/studio/templates'),
     },
     {
-      id: 'ideas',
-      icon: Bookmark,
-      label: 'SAVED IDEAS',
-      description: 'Content ideas you\'ve bookmarked for later',
-      path: '/saved-ideas',
+      index: '03',
+      label: 'MEDIA',
+      icon: Mic,
+      title: 'Media',
+      sub: 'Your recordings, b-roll notes, and assets — organized by project.',
+      cta: 'View library',
+      action: () => navigate('/media'),
+    },
+    {
+      index: '04',
+      label: 'IDEAS',
+      icon: Zap,
+      title: 'Saved Ideas',
+      sub: 'Concepts and angles Clio surfaced that you haven\u2019t acted on yet.',
+      cta: 'Review',
+      action: () => navigate('/saved-ideas'),
     },
   ];
 
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
-      {/* Header */}
-      <div className="mb-8 animate-reveal-up">
-        <span className="t-micro accent-dot mb-3 block">Creative Hub</span>
-        <h1 className="t-display text-foreground">Studio</h1>
-      </div>
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-14">
 
-      {/* Hero: Continue or Start */}
-      <div className="ie-border-t ie-border-b py-6 mb-8 animate-reveal-up delay-1">
-        {!loading && hasWorkflows && latestWorkflow ? (
-          /* Continue in progress */
-          <div
-            className="flex items-center justify-between cursor-pointer group"
-            onClick={() => navigate('/studio/workflow')}
-          >
-            <div>
-              <span className="t-micro mb-2 block" style={{ color: 'var(--muted-foreground)' }}>
-                IN PROGRESS
-              </span>
-              <p className="text-lg font-bold text-foreground tracking-tight">
-                {latestWorkflow.idea_content
-                  ? latestWorkflow.idea_content.substring(0, 60) + (latestWorkflow.idea_content.length > 60 ? '...' : '')
-                  : 'Untitled Project'
-                }
-              </p>
-              <p className="t-body mt-1">
-                Currently at the <strong className="text-foreground">{latestWorkflow.current_stage}</strong> stage
-              </p>
-            </div>
-            <div className="btn-ie btn-ie-solid btn-ie-pill">
-              <span className="btn-ie-text flex items-center gap-2">
-                CONTINUE
-                <ArrowRight className="w-3 h-3" />
-              </span>
-            </div>
-          </div>
-        ) : (
-          /* Start fresh */
-          <div
-            className="flex items-center justify-between cursor-pointer group"
-            onClick={() => navigate('/studio/workflow')}
-          >
-            <div>
-              <span className="t-micro mb-2 block" style={{ color: 'var(--muted-foreground)' }}>
-                READY TO CREATE
-              </span>
-              <p className="text-lg font-bold text-foreground tracking-tight">
-                Start a new content piece
-              </p>
-              <p className="t-body mt-1">
-                From idea to published post, Clio guides the whole process.
-              </p>
-            </div>
-            <div className="btn-ie btn-ie-solid btn-ie-pill">
-              <span className="btn-ie-text flex items-center gap-2">
-                <Plus className="w-3 h-3" />
-                NEW
-              </span>
-            </div>
-          </div>
-        )}
+      {/* Section marker + title */}
+      <div className="t-micro mb-2">
+        <span className="text-foreground">02</span>
+        <span className="mx-2 text-muted-foreground">/</span>
+        <span>STUDIO</span>
       </div>
+      <h1
+        className="text-foreground mb-12"
+        style={{ fontSize: 'clamp(2rem, 5vw, 3.5rem)', fontWeight: 500, letterSpacing: '-0.03em', lineHeight: 1.05 }}
+      >
+        Write, produce,{' '}
+        <em style={{ fontStyle: 'normal', color: 'var(--accent)' }}>and publish.</em>
+      </h1>
 
-      {/* Tile drill-ins */}
-      <div className="animate-reveal-up delay-2">
-        <span className="t-micro mb-4 block" style={{ color: 'var(--muted-foreground)' }}>TOOLS</span>
-        {tiles.map((tile, i) => {
-          const Icon = tile.icon;
-          return (
-            <div
-              key={tile.id}
-              className="data-row cursor-pointer group"
-              onClick={() => navigate(tile.path)}
-            >
-              <div className="flex items-center gap-4 flex-1">
-                <span className="t-micro font-bold text-foreground" style={{ minWidth: '30px' }}>
-                  {String(i + 1).padStart(2, '0')}
-                </span>
-                <Icon className="w-4 h-4 text-foreground" />
-                <div>
-                  <span className="text-sm font-semibold text-foreground">{tile.label.charAt(0) + tile.label.slice(1).toLowerCase()}</span>
-                  <p className="t-body text-xs mt-0.5">{tile.description}</p>
-                </div>
-              </div>
-              <ArrowRight className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+      {/* Asymmetric layout: 35 / 65 */}
+      <div
+        className="grid gap-10 items-start"
+        style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))' }}
+      >
+        {/* Left: recent drafts */}
+        <aside>
+          <div className="flex items-center justify-between pb-3 border-b border-border mb-1">
+            <span className="t-micro">RECENT DRAFTS</span>
+            <span className="t-micro text-foreground">{recentDrafts.length}</span>
+          </div>
+
+          {loading ? (
+            <div className="py-10 text-center t-micro">LOADING&hellip;</div>
+          ) : recentDrafts.length === 0 ? (
+            <div className="py-10 text-center">
+              <p className="t-micro mb-4">NO DRAFTS YET</p>
+              <button
+                onClick={() => navigate('/studio/script')}
+                className="btn-ie"
+              >
+                <span className="btn-ie-text">Start your first script</span>
+              </button>
             </div>
-          );
-        })}
+          ) : (
+            <div>
+              {recentDrafts.map((draft) => (
+                <button
+                  key={draft.id}
+                  onClick={() => navigate(`/studio/script/${draft.id}`)}
+                  className="w-full text-left group"
+                >
+                  <div className="grid gap-3 py-4 border-b border-border hover:bg-transparent transition-colors"
+                    style={{ gridTemplateColumns: '56px 1fr auto', alignItems: 'baseline' }}>
+                    <span className="t-micro">{formatWhen(draft.updated_at)}</span>
+                    <div>
+                      <div
+                        className="text-foreground font-medium group-hover:text-accent transition-colors"
+                        style={{ fontSize: '14.5px', lineHeight: 1.35 }}
+                      >
+                        {draft.title || 'Untitled draft'}
+                      </div>
+                      {draft.platform && (
+                        <div className="t-micro mt-0.5">{draft.platform.toUpperCase()}</div>
+                      )}
+                    </div>
+                    <ArrowRight className="w-3.5 h-3.5 text-muted-foreground group-hover:text-accent transition-colors opacity-0 group-hover:opacity-100" />
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </aside>
+
+        {/* Right: tile grid */}
+        <div>
+          <div className="grid grid-cols-2 gap-4">
+            {tiles.map((tile) => {
+              const Icon = tile.icon;
+              return (
+                <button
+                  key={tile.index}
+                  onClick={tile.action}
+                  className="card-industrial p-6 text-left flex flex-col gap-4 group cursor-pointer"
+                  style={{ minHeight: 220 }}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="t-micro">{tile.index} · {tile.label}</span>
+                    <Icon className="w-4 h-4 text-muted-foreground group-hover:text-accent transition-colors" />
+                  </div>
+                  <div className="flex-1">
+                    <div
+                      className="text-foreground font-semibold mb-2"
+                      style={{ fontSize: '1.25rem', letterSpacing: '-0.015em' }}
+                    >
+                      {tile.title}
+                    </div>
+                    <div className="t-body" style={{ maxWidth: '28ch' }}>{tile.sub}</div>
+                  </div>
+                  <span className="t-micro text-foreground group-hover:text-accent transition-colors flex items-center gap-2">
+                    {tile.cta}
+                    <ArrowRight className="w-3 h-3" />
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </div>
     </div>
   );
