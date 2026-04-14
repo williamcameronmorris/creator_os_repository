@@ -29,75 +29,67 @@ export function Layout({ children }: LayoutProps) {
   const touchStartY = useRef<number | null>(null);
   const isSwipingBack = useRef(false);
 
-  // Determine active tab from current path
   const getActiveTab = (): 'clio' | 'studio' | 'office' | 'settings' => {
     const p = location.pathname;
     if (p === '/settings' || p === '/profile') return 'settings';
     if (p.startsWith('/studio') || p === '/media' || p === '/saved-ideas') return 'studio';
-    if (p.startsWith('/office') || p === '/schedule' || p === '/analytics' || p.startsWith('/deals') || p === '/revenue' || p === '/pipeline') return 'office';
+    if (p.startsWith('/office') || p === '/schedule' || p === '/analytics' || p.startsWith('/daily-pulse')) return 'office';
     return 'clio';
   };
 
   const activeTab = getActiveTab();
   const canGoBack = () => !['/', '/dashboard', '/clio'].includes(location.pathname);
 
-  // Swipe-back gesture
-  const handleTouchStart = (e: TouchEvent) => {
-    const touch = e.touches[0];
-    touchStartX.current = touch.clientX;
-    touchStartY.current = touch.clientY;
-    if (touch.clientX <= 50 && canGoBack()) isSwipingBack.current = true;
-  };
-
-  const handleTouchMove = (e: TouchEvent) => {
-    if (!isSwipingBack.current || touchStartX.current === null || touchStartY.current === null) return;
-    const touch = e.touches[0];
-    const deltaX = touch.clientX - touchStartX.current;
-    const deltaY = touch.clientY - touchStartY.current;
-    if (Math.abs(deltaY) > Math.abs(deltaX)) {
-      isSwipingBack.current = false;
-      setSwipeProgress(0);
-      return;
-    }
-    if (deltaX > 0) {
-      setSwipeProgress(Math.min(deltaX / 300, 1));
-      if (deltaX > 10) e.preventDefault();
-    }
-  };
-
-  const handleTouchEnd = () => {
-    if (!isSwipingBack.current) return;
-    if (swipeProgress > 0.4) navigate(-1);
-    isSwipingBack.current = false;
-    setSwipeProgress(0);
-    touchStartX.current = null;
-    touchStartY.current = null;
-  };
-
   useEffect(() => {
-    const s = (e: TouchEvent) => handleTouchStart(e);
-    const m = (e: TouchEvent) => handleTouchMove(e);
-    const en = () => handleTouchEnd();
-    document.addEventListener('touchstart', s, { passive: false });
-    document.addEventListener('touchmove', m, { passive: false });
-    document.addEventListener('touchend', en);
-    return () => {
-      document.removeEventListener('touchstart', s);
-      document.removeEventListener('touchmove', m);
-      document.removeEventListener('touchend', en);
+    const handleTouchStart = (e: TouchEvent) => {
+      touchStartX.current = e.touches[0].clientX;
+      touchStartY.current = e.touches[0].clientY;
+      isSwipingBack.current = false;
     };
-  }, [location.pathname, swipeProgress]);
+    const handleTouchMove = (e: TouchEvent) => {
+      if (touchStartX.current === null || touchStartY.current === null) return;
+      if (!canGoBack()) return;
+      const deltaX = e.touches[0].clientX - touchStartX.current;
+      const deltaY = e.touches[0].clientY - touchStartY.current;
+      if (Math.abs(deltaY) > Math.abs(deltaX)) {
+        isSwipingBack.current = false;
+        setSwipeProgress(0);
+        return;
+      }
+      if (deltaX > 0) {
+        setSwipeProgress(Math.min(deltaX / 300, 1));
+        if (deltaX > 120) isSwipingBack.current = true;
+      } else {
+        setSwipeProgress(0);
+        isSwipingBack.current = false;
+      }
+    };
+    const handleTouchEnd = () => {
+      if (isSwipingBack.current) navigate(-1);
+      setSwipeProgress(0);
+      touchStartX.current = null;
+      touchStartY.current = null;
+      isSwipingBack.current = false;
+    };
+    document.addEventListener('touchstart', handleTouchStart, { passive: true });
+    document.addEventListener('touchmove', handleTouchMove, { passive: true });
+    document.addEventListener('touchend', handleTouchEnd);
+    return () => {
+      document.removeEventListener('touchstart', handleTouchStart);
+      document.removeEventListener('touchmove', handleTouchMove);
+      document.removeEventListener('touchend', handleTouchEnd);
+    };
+  }, [location.pathname]);
 
   return (
-    <div className="min-h-screen bg-background pb-14 lg:pb-0">
-      {/* Noise overlay */}
-      <div className="noise-overlay" />
+    <div className="min-h-screen bg-background flex flex-col">
+      <TokenHealthBanner />
 
-      {/* Swipe-back indicator */}
+      {/* Swipe back indicator */}
       {swipeProgress > 0 && (
         <>
           <div
-            className="fixed inset-0 bg-black z-[60] pointer-events-none"
+            className="fixed inset-0 z-[60] pointer-events-none"
             style={{ opacity: swipeProgress * 0.15 }}
           />
           <div
@@ -112,81 +104,65 @@ export function Layout({ children }: LayoutProps) {
         </>
       )}
 
-      {/* ââ Top header ââââââââââââââââââââââââââââââââ */}
+      {/* Top header */}
       <header className="bg-background border-b border-border sticky top-0 z-50">
         <div className="px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-12">
-            {/* Logo */}
-            <Link to="/" className="flex items-center gap-2.5 select-none group">
-              <div className="w-1.5 h-1.5 bg-foreground group-hover:scale-125 transition-transform" />
-              <span className="font-mono text-[10px] font-bold tracking-[0.08em] uppercase text-foreground">
-                Creator Command
+
+            {/* Wordmark */}
+            <Link to="/" className="flex items-center gap-2 select-none group">
+              <span
+                className="font-sans font-bold text-lg tracking-tight text-foreground"
+                style={{ letterSpacing: '-0.02em' }}
+              >
+                Clio
+              </span>
+              <span
+                className="font-mono text-[9px] font-medium tracking-widest text-muted-foreground uppercase"
+                style={{ letterSpacing: '0.1em' }}
+              >
+                v0.4
               </span>
             </Link>
 
-            {/* Desktop nav links (center) */}
-            <nav className="hidden lg:flex items-center gap-8">
-              {[
-                { to: '/', label: 'Clio', tab: 'clio' as const },
-                { to: '/studio', label: 'Studio', tab: 'studio' as const },
-                { to: '/office', label: 'Office', tab: 'office' as const },
-              ].map(({ to, label, tab }) => (
-                <Link
-                  key={tab}
-                  to={to}
-                  className={`font-mono text-[10px] font-bold tracking-[0.08em] uppercase relative py-1 transition-colors ${
-                    activeTab === tab
-                      ? 'text-foreground'
-                      : 'text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  {label}
-                  {activeTab === tab && (
-                    <span className="absolute bottom-0 left-0 w-full h-px bg-foreground" />
-                  )}
-                </Link>
-              ))}
-            </nav>
-
-            {/* Right side */}
+            {/* Right controls */}
             <div className="flex items-center gap-3">
               <button
                 onClick={toggleTheme}
-                className="p-1.5 text-muted-foreground hover:text-foreground transition-colors"
-                title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
+                className="w-7 h-7 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+                aria-label="Toggle theme"
               >
-                {theme === 'dark'
-                  ? <Sun className="w-3.5 h-3.5" />
-                  : <Moon className="w-3.5 h-3.5" />
-                }
+                {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
               </button>
               <Link
                 to="/settings"
-                className="p-1.5 text-muted-foreground hover:text-foreground transition-colors hidden lg:block"
+                className="w-7 h-7 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
               >
-                <SettingsIcon className="w-3.5 h-3.5" />
+                <SettingsIcon className="w-4 h-4" />
               </Link>
-              <button
-                onClick={() => signOut()}
-                className="p-1.5 text-muted-foreground hover:text-foreground transition-colors hidden lg:block"
-                title="Sign out"
-              >
-                <LogOut className="w-3.5 h-3.5" />
-              </button>
+              {user && (
+                <button
+                  onClick={() => signOut()}
+                  className="w-7 h-7 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+                  aria-label="Sign out"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
+              )}
             </div>
           </div>
         </div>
       </header>
 
-      {/* ââ Main content âââââââââââââââââââââââââââââââ */}
-      <main className="min-w-0 overflow-x-hidden">
-        <TokenHealthBanner />
+      {/* Main content */}
+      <main className="flex-1 pb-20">
         {children}
       </main>
 
-      {/* ââ Mobile bottom nav: 3 tabs + gear âââââââââââ */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-background border-t border-border z-50 lg:hidden">
+      {/* Bottom nav */}
+      <nav className="fixed bottom-0 left-0 right-0 bg-background border-t border-border z-50">
         <div className="flex items-center h-14">
+
           {/* Clio */}
           <Link
             to="/"
@@ -195,7 +171,7 @@ export function Layout({ children }: LayoutProps) {
             }`}
           >
             <MessageCircle className="w-5 h-5" />
-            <span className="font-mono text-[8px] font-bold tracking-[0.1em] uppercase">Clio</span>
+            <span className="font-mono text-[8px] font-bold tracking-widest uppercase">Clio</span>
           </Link>
 
           {/* Studio */}
@@ -206,7 +182,7 @@ export function Layout({ children }: LayoutProps) {
             }`}
           >
             <Sparkles className="w-5 h-5" />
-            <span className="font-mono text-[8px] font-bold tracking-[0.1em] uppercase">Studio</span>
+            <span className="font-mono text-[8px] font-bold tracking-widest uppercase">Studio</span>
           </Link>
 
           {/* Office */}
@@ -217,7 +193,7 @@ export function Layout({ children }: LayoutProps) {
             }`}
           >
             <Briefcase className="w-5 h-5" />
-            <span className="font-mono text-[8px] font-bold tracking-[0.1em] uppercase">Office</span>
+            <span className="font-mono text-[8px] font-bold tracking-widest uppercase">Office</span>
           </Link>
 
           {/* Settings */}
@@ -228,8 +204,9 @@ export function Layout({ children }: LayoutProps) {
             }`}
           >
             <SettingsIcon className="w-5 h-5" />
-            <span className="font-mono text-[8px] font-bold tracking-[0.1em] uppercase">Settings</span>
+            <span className="font-mono text-[8px] font-bold tracking-widest uppercase">Settings</span>
           </Link>
+
         </div>
       </nav>
     </div>
