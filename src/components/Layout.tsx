@@ -112,7 +112,7 @@ export function Layout({ children }: LayoutProps) {
         </>
       )}
 
-      {/* ── Top header ──────────────────────────────── */}
+      {/* ââ Top header ââââââââââââââââââââââââââââââââ */}
       <header className="bg-background border-b border-border sticky top-0 z-50">
         <div className="px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-12">
@@ -178,13 +178,13 @@ export function Layout({ children }: LayoutProps) {
         </div>
       </header>
 
-      {/* ── Main content ─────────────────────────────── */}
+      {/* ââ Main content âââââââââââââââââââââââââââââââ */}
       <main className="min-w-0 overflow-x-hidden">
         <TokenHealthBanner />
         {children}
       </main>
 
-      {/* ── Mobile bottom nav: 3 tabs + gear ─────────── */}
+      {/* ââ Mobile bottom nav: 3 tabs + gear âââââââââââ */}
       <nav className="fixed bottom-0 left-0 right-0 bg-background border-t border-border z-50 lg:hidden">
         <div className="flex items-center h-14">
           {/* Clio */}
@@ -220,17 +220,15 @@ export function Layout({ children }: LayoutProps) {
             <span className="font-mono text-[8px] font-bold tracking-[0.1em] uppercase">Office</span>
           </Link>
 
-          {/* Settings gear */}
+          {/* Settings */}
           <Link
             to="/settings"
-            className={`flex flex-col items-center justify-center w-14 h-full gap-1 transition-colors ${
+            className={`flex flex-col items-center justify-center flex-1 h-full gap-1 transition-colors ${
               activeTab === 'settings' ? 'text-foreground' : 'text-muted-foreground'
             }`}
           >
             <SettingsIcon className="w-5 h-5" />
-            <span className="font-mono text-[8px] font-bold tracking-[0.1em] uppercase">
-              {/* intentionally no label for gear, just icon */}
-            </span>
+            <span className="font-mono text-[8px] font-bold tracking-[0.1em] uppercase">Settings</span>
           </Link>
         </div>
       </nav>
