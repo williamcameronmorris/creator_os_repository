@@ -5,8 +5,8 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
-        mono: ['Space Mono', 'Menlo', 'Monaco', 'monospace'],
+        sans: ['Switzer', 'system-ui', '-apple-system', 'sans-serif'],
+        mono: ['JetBrains Mono', 'Menlo', 'Monaco', 'monospace'],
       },
       colors: {
         card: {
@@ -64,9 +64,6 @@ export default {
         lg: 'var(--radius)',
         md: 'var(--radius)',
         sm: 'var(--radius)',
-      },
-      transitionTimingFunction: {
-        'out-expo': 'cubic-bezier(0.19, 1, 0.22, 1)',
       },
     },
   },
