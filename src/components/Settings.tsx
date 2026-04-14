@@ -223,7 +223,7 @@ export function Settings() {
 
         <div className="space-y-4">
           {platforms.map((platform) => {
-            // ── Platform display config ──────────────────────────────────────
+            // ââ Platform display config ââââââââââââââââââââââââââââââââââââââ
             type PlatformKey = typeof platform.platform;
 
             const platformConfig: Record<PlatformKey, {
@@ -242,7 +242,6 @@ export function Settings() {
                     <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
                   </svg>
                 ),
-                badge: 'Connects Instagram Business too',
               },
               instagram: {
                 label: 'Instagram',
@@ -276,13 +275,13 @@ export function Settings() {
 
             const config = platformConfig[platform.platform];
 
-            // Instagram row is informational when connected via Facebook — hide separate connect button
+            // Instagram row is informational when connected via Facebook â hide separate connect button
             const isInstagramViaMeta = platform.platform === 'instagram' && platform.connected;
 
             return (
               <div
                 key={platform.platform}
-                className="flex items-center justify-between p-4 border border-border bg-card"
+                className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 border border-border bg-card"
               >
                 <div className="flex items-center gap-4 flex-1 min-w-0">
                   <div className={`flex items-center justify-center w-12 h-12 flex-shrink-0 border border-border ${config.iconBg}`}>
@@ -307,7 +306,7 @@ export function Settings() {
                           </span>
                         )}
                         {platform.followers != null && platform.followers > 0 && (
-                          <span> · {platform.followers.toLocaleString()} followers</span>
+                          <span> Â· {platform.followers.toLocaleString()} followers</span>
                         )}
                       </div>
                     ) : (
@@ -316,10 +315,10 @@ export function Settings() {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                <div className="flex items-center gap-2 flex-shrink-0 self-start sm:self-auto sm:ml-2">
                   {platform.connected ? (
                     isInstagramViaMeta ? (
-                      // Instagram connected via Meta — just show connected badge
+                      // Instagram connected via Meta â just show connected badge
                       <span className="flex items-center gap-1.5 px-3 py-1.5 border border-emerald-600 text-sm text-emerald-700 bg-emerald-50/50 font-medium">
                         <CheckCircle className="w-3.5 h-3.5" />
                         Connected via Meta
@@ -372,7 +371,7 @@ export function Settings() {
         </div>
       </div>
 
-      {/* ARCHIVED: CPM Tier — part of Brand Deals feature, re-enable when Brand Deals is active
+      {/* ARCHIVED: CPM Tier â part of Brand Deals feature, re-enable when Brand Deals is active
       <div className="p-6 rounded-xl bg-card border border-border">
         <h3 className="text-xl font-bold text-foreground mb-6 flex items-center gap-2">
           <DollarSign className="w-5 h-5" />
@@ -436,7 +435,7 @@ export function Settings() {
       </div>
       END ARCHIVED: CPM Tier */}
 
-      {/* ARCHIVED: Performance Averages — part of Brand Deals feature, re-enable when Brand Deals is active
+      {/* ARCHIVED: Performance Averages â part of Brand Deals feature, re-enable when Brand Deals is active
       <div className="p-6 rounded-xl bg-card border border-border">
         <h3 className="text-xl font-bold text-foreground mb-6 flex items-center gap-2">
           <TrendingUp className="w-5 h-5" />
@@ -515,7 +514,7 @@ export function Settings() {
       </div>
       END ARCHIVED: Performance Averages */}
 
-      {/* ARCHIVED: Default Terms — part of Brand Deals feature, re-enable when Brand Deals is active
+      {/* ARCHIVED: Default Terms â part of Brand Deals feature, re-enable when Brand Deals is active
       <div className="p-6 rounded-xl bg-card border border-border">
         <h3 className="text-xl font-bold text-foreground mb-6">Default Terms</h3>
 
@@ -563,7 +562,7 @@ export function Settings() {
       </div>
       END ARCHIVED: Default Terms */}
 
-      {/* ARCHIVED: Save Settings button — re-enable with Default Terms when Brand Deals is active
+      {/* ARCHIVED: Save Settings button â re-enable with Default Terms when Brand Deals is active
       <div className="flex justify-end">
         <button
           onClick={handleSave}
