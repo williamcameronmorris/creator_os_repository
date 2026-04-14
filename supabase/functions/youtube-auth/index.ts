@@ -42,7 +42,7 @@ Deno.serve(async (req: Request) => {
       throw new Error("Missing required fields: code, redirect_uri, userId");
     }
 
-    // ─── Step 1: Exchange auth code for tokens ───────────────────────────────
+    // âââ Step 1: Exchange auth code for tokens âââââââââââââââââââââââââââââââ
     const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -66,7 +66,7 @@ Deno.serve(async (req: Request) => {
     const expiresIn: number = tokenData.expires_in || 3600;
     const tokenExpiresAt = new Date(Date.now() + expiresIn * 1000).toISOString();
 
-    // ─── Step 2: Fetch channel info ──────────────────────────────────────────
+    // âââ Step 2: Fetch channel info ââââââââââââââââââââââââââââââââââââââââââ
     const channelRes = await fetch(
       "https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&mine=true",
       { headers: { Authorization: `Bearer ${accessToken}` } }
@@ -83,8 +83,8 @@ Deno.serve(async (req: Request) => {
     const channelName = channel.snippet?.title || "";
     const subscriberCount = parseInt(channel.statistics?.subscriberCount || "0");
 
-    // ─── Step 3: Store tokens and channel info in profiles ───────────────────
-    const { error: profileError } = await supabase
+    // âââ Step 3: Store tokens and channel info in profiles âââââââââââââââââââ
+    const { data: updatedRows, error: profileError } = await supabase
       .from("profiles")
       .update({
         youtube_access_token: accessToken,
@@ -95,13 +95,32 @@ Deno.serve(async (req: Request) => {
         youtube_followers: subscriberCount,
         last_youtube_sync: null, // will be set after sync
       })
-      .eq("id", userId);
+      .eq("id", userId)
+      .select("id");
+
+    if (!updatedRows || updatedRows.length === 0) {
+      // Row didn't exist — create it so the token actually lands somewhere
+      const { error: insertError } = await supabase
+        .from("profiles")
+        .insert({
+          id: userId,
+          youtube_access_token: accessToken,
+          youtube_refresh_token: refreshToken,
+          youtube_token_expires_at: tokenExpiresAt,
+          youtube_channel_id: channelId,
+          youtube_handle: channelName,
+          youtube_followers: subscriberCount,
+        });
+      if (insertError) {
+        throw new Error(`Failed to create profile with YouTube credentials: ${insertError.message}`);
+      }
+    }
 
     if (profileError) {
       throw new Error(`Failed to store YouTube credentials: ${profileError.message}`);
     }
 
-    // ─── Step 4: Trigger youtube-sync fire-and-forget ────────────────────────
+    // âââ Step 4: Trigger youtube-sync fire-and-forget ââââââââââââââââââââââââ
     fetch(`${supabaseUrl}/functions/v1/youtube-sync`, {
       method: "POST",
       headers: {
