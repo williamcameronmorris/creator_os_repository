@@ -34,8 +34,8 @@ export function Schedule() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'scheduled' | 'draft' | 'published'>('all');
-  const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
-  const [calGranularity, setCalGranularity] = useState<CalGranularity>('monthly');
+  const [viewMode, setViewMode] = useState<'list' | 'calendar'>('calendar');
+  const [calGranularity, setCalGranularity] = useState<CalGranularity>('weekly');
   const [calDropdownOpen, setCalDropdownOpen] = useState(false);
   const calDropdownRef = useRef<HTMLDivElement>(null);
 
