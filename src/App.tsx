@@ -102,34 +102,35 @@ function AppContent() {
 
   return (
     <Routes>
-      {/* ââ Clio (landing) ââ */}
+      {/* Ã¢ÂÂÃ¢ÂÂ Clio (landing) Ã¢ÂÂÃ¢ÂÂ */}
       <Route path="/" element={<ProtectedRoute><Layout><Clio /></Layout></ProtectedRoute>} />
       <Route path="/clio" element={<Navigate to="/" replace />} />
 
-      {/* ââ Legacy redirects ââ */}
+      {/* Ã¢ÂÂÃ¢ÂÂ Legacy redirects Ã¢ÂÂÃ¢ÂÂ */}
       <Route path="/dashboard" element={<Navigate to="/" replace />} />
       <Route path="/command-center" element={<Navigate to="/" replace />} />
 
-      {/* ââ Studio ââ */}
+      {/* Ã¢ÂÂÃ¢ÂÂ Studio Ã¢ÂÂÃ¢ÂÂ */}
       <Route path="/studio" element={<ProtectedRoute><Layout><StudioHub /></Layout></ProtectedRoute>} />
       <Route path="/studio/workflow" element={<ProtectedRoute><Layout><Studio /></Layout></ProtectedRoute>} />
       <Route path="/media" element={<ProtectedRoute><Layout><Media /></Layout></ProtectedRoute>} />
       <Route path="/saved-ideas" element={<ProtectedRoute><Layout><SavedIdeasPage /></Layout></ProtectedRoute>} />
 
-      {/* ââ Office ââ */}
+      {/* Ã¢ÂÂÃ¢ÂÂ Office Ã¢ÂÂÃ¢ÂÂ */}
       <Route path="/office" element={<ProtectedRoute><Layout><OfficeHub /></Layout></ProtectedRoute>} />
       <Route path="/schedule" element={<ProtectedRoute><Layout><Schedule /></Layout></ProtectedRoute>} />
       <Route path="/schedule/new" element={<ProtectedRoute><Layout><PostComposerPage /></Layout></ProtectedRoute>} />
       <Route path="/schedule/edit/:id" element={<ProtectedRoute><Layout><PostComposerPage /></Layout></ProtectedRoute>} />
+      <Route path="/compose" element={<ProtectedRoute><Layout><ComposePost /></Layout></ProtectedRoute>} />
       <Route path="/analytics" element={<ProtectedRoute><Layout><Analytics /></Layout></ProtectedRoute>} />
       <Route path="/revenue" element={<ProtectedRoute><Layout><Schedule /></Layout></ProtectedRoute>} />
       <Route path="/pipeline" element={<ProtectedRoute><Layout><Schedule /></Layout></ProtectedRoute>} />
 
-      {/* ââ Settings ââ */}
+      {/* Ã¢ÂÂÃ¢ÂÂ Settings Ã¢ÂÂÃ¢ÂÂ */}
       <Route path="/profile" element={<ProtectedRoute><Layout><Profile /></Layout></ProtectedRoute>} />
       <Route path="/settings" element={<ProtectedRoute><Layout><SettingsPage /></Layout></ProtectedRoute>} />
 
-      {/* ââ OAuth Callbacks ââ */}
+      {/* Ã¢ÂÂÃ¢ÂÂ OAuth Callbacks Ã¢ÂÂÃ¢ÂÂ */}
       <Route path="/auth/meta/callback" element={<ProtectedRoute><MetaCallback /></ProtectedRoute>} />
       <Route path="/auth/threads/callback" element={<ProtectedRoute><ThreadsCallback /></ProtectedRoute>} />
       <Route path="/auth/youtube/callback" element={<ProtectedRoute><YoutubeCallback /></ProtectedRoute>} />
