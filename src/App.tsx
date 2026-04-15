@@ -17,6 +17,7 @@ import { SavedIdeasPage } from './pages/SavedIdeasPage';
 import { Profile } from './pages/Profile';
 import { SettingsPage } from './pages/SettingsPage';
 import { PostComposerPage } from './pages/PostComposerPage';
+import { ComposePost } from './pages/ComposePost';
 import { MetaCallback } from './components/MetaCallback';
 import { ThreadsCallback } from './components/ThreadsCallback';
 import { YoutubeCallback } from './components/YoutubeCallback';
@@ -101,21 +102,21 @@ function AppContent() {
 
   return (
     <Routes>
-      {/* ── Clio (landing) ── */}
+      {/* ââ Clio (landing) ââ */}
       <Route path="/" element={<ProtectedRoute><Layout><Clio /></Layout></ProtectedRoute>} />
       <Route path="/clio" element={<Navigate to="/" replace />} />
 
-      {/* ── Legacy redirects ── */}
+      {/* ââ Legacy redirects ââ */}
       <Route path="/dashboard" element={<Navigate to="/" replace />} />
       <Route path="/command-center" element={<Navigate to="/" replace />} />
 
-      {/* ── Studio ── */}
+      {/* ââ Studio ââ */}
       <Route path="/studio" element={<ProtectedRoute><Layout><StudioHub /></Layout></ProtectedRoute>} />
       <Route path="/studio/workflow" element={<ProtectedRoute><Layout><Studio /></Layout></ProtectedRoute>} />
       <Route path="/media" element={<ProtectedRoute><Layout><Media /></Layout></ProtectedRoute>} />
       <Route path="/saved-ideas" element={<ProtectedRoute><Layout><SavedIdeasPage /></Layout></ProtectedRoute>} />
 
-      {/* ── Office ── */}
+      {/* ââ Office ââ */}
       <Route path="/office" element={<ProtectedRoute><Layout><OfficeHub /></Layout></ProtectedRoute>} />
       <Route path="/schedule" element={<ProtectedRoute><Layout><Schedule /></Layout></ProtectedRoute>} />
       <Route path="/schedule/new" element={<ProtectedRoute><Layout><PostComposerPage /></Layout></ProtectedRoute>} />
@@ -124,11 +125,11 @@ function AppContent() {
       <Route path="/revenue" element={<ProtectedRoute><Layout><Schedule /></Layout></ProtectedRoute>} />
       <Route path="/pipeline" element={<ProtectedRoute><Layout><Schedule /></Layout></ProtectedRoute>} />
 
-      {/* ── Settings ── */}
+      {/* ââ Settings ââ */}
       <Route path="/profile" element={<ProtectedRoute><Layout><Profile /></Layout></ProtectedRoute>} />
       <Route path="/settings" element={<ProtectedRoute><Layout><SettingsPage /></Layout></ProtectedRoute>} />
 
-      {/* ── OAuth Callbacks ── */}
+      {/* ââ OAuth Callbacks ââ */}
       <Route path="/auth/meta/callback" element={<ProtectedRoute><MetaCallback /></ProtectedRoute>} />
       <Route path="/auth/threads/callback" element={<ProtectedRoute><ThreadsCallback /></ProtectedRoute>} />
       <Route path="/auth/youtube/callback" element={<ProtectedRoute><YoutubeCallback /></ProtectedRoute>} />
