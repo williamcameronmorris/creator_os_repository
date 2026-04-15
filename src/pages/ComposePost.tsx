@@ -6,8 +6,6 @@ import { ArrowLeft, Check } from 'lucide-react';
 
 const PLATFORMS = [
   { id: 'threads',   label: 'Threads',   limit: 500  },
-  { id: 'twitter',   label: 'X',         limit: 280  },
-  { id: 'linkedin',  label: 'LinkedIn',  limit: 3000 },
   { id: 'instagram', label: 'Instagram', limit: 2200 },
 ] as const;
 
