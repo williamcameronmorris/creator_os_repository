@@ -6,9 +6,9 @@ import { ArrowRight } from 'lucide-react';
 
 interface ScheduledItem {
   id: string;
-  title: string;
+  caption: string;
   platform: string;
-  scheduled_at: string;
+  scheduled_date: string;
 }
 
 export function OfficeHub() {
@@ -23,11 +23,11 @@ export function OfficeHub() {
     if (!user) return;
     const load = async () => {
       const { data } = await supabase
-        .from('scheduled_posts')
-        .select('id, title, platform, scheduled_at')
+        .from('content_posts_unified')
+        .select('id, caption, platform, scheduled_date, status')
         .eq('user_id', user.id)
-        .gte('scheduled_at', new Date().toISOString())
-        .order('scheduled_at', { ascending: true })
+        .eq('status', 'scheduled').gte('scheduled_date', new Date().toISOString())
+        .order('scheduled_date', { ascending: true })
         .limit(7);
       setScheduled(data || []);
       setQueueCount((data || []).length);
@@ -42,7 +42,7 @@ export function OfficeHub() {
   };
 
   const nextPublish = scheduled[0]
-    ? formatWhen(scheduled[0].scheduled_at)
+    ? formatWhen(scheduled[0].scheduled_date)
     : null;
 
   return (
@@ -93,13 +93,13 @@ export function OfficeHub() {
                     className="grid gap-3 py-4 border-b border-border"
                     style={{ gridTemplateColumns: '80px 1fr auto', alignItems: 'baseline' }}
                   >
-                    <span className="t-micro">{formatWhen(item.scheduled_at)}</span>
+                    <span className="t-micro">{formatWhen(item.scheduled_date)}</span>
                     <div>
                       <div
                         className="text-foreground font-medium group-hover:text-accent transition-colors"
                         style={{ fontSize: '14.5px', lineHeight: 1.35 }}
                       >
-                        {item.title}
+                        {item.caption ? item.caption.slice(0, 60) + (item.caption.length > 60 ? "…" : "") : "Untitled"}
                       </div>
                       <div className="t-micro mt-0.5">{item.platform.toUpperCase()}</div>
                     </div>
