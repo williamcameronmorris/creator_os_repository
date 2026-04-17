@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: typecheck / test / build
+    runs-on: ubuntu-latest
+    env:
+      # Unit tests don't hit Supabase, but modules that import ./lib/supabase
+      # throw at load without these. Real values are injected at deploy time.
+      VITE_SUPABASE_URL: http://localhost:54321
+      VITE_SUPABASE_ANON_KEY: ci-anon-key
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - run: npm ci
+
+      # Typecheck currently has ~268 pre-existing errors. Tracked as advisory
+      # (continue-on-error) so the signal is visible in CI without blocking
+      # PRs; flip to a hard gate once the debt is cleared.
+      - name: Typecheck (advisory)
+        run: npm run typecheck
+        continue-on-error: true
+
+      - run: npm run test
+
+      - run: npm run build
