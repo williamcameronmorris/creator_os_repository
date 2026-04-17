@@ -17,6 +17,7 @@
  */
 
 import { supabase } from './supabase';
+import { generateOAuthState } from './oauthState';
 
 const META_APP_ID = import.meta.env.VITE_META_APP_ID || '';
 const THREADS_APP_ID = import.meta.env.VITE_THREADS_APP_ID || META_APP_ID;
@@ -181,6 +182,7 @@ export function getMetaAuthUrl(): string {
     redirect_uri: META_REDIRECT_URI,
     scope: scopes,
     response_type: 'code',
+    state: generateOAuthState('meta'),
   });
 
   return `https://www.facebook.com/v25.0/dialog/oauth?${params.toString()}`;
@@ -207,6 +209,7 @@ export function getThreadsAuthUrl(): string {
     redirect_uri: THREADS_REDIRECT_URI,
     scope: scopes,
     response_type: 'code',
+    state: generateOAuthState('threads'),
   });
 
   return `https://threads.net/oauth/authorize?${params.toString()}`;

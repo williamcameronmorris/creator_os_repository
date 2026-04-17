@@ -19,27 +19,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Mount guard: prevents setState after unmount and stops a stale getSession
+    // resolution from clobbering a newer onAuthStateChange event.
+    let mounted = true;
+
     // Safety net: never leave the app stuck loading longer than 5s.
-    const timeout = setTimeout(() => setLoading(false), 5000);
+    const timeout = setTimeout(() => {
+      if (mounted) setLoading(false);
+    }, 5000);
 
     supabase.auth.getSession()
       .then(({ data: { session } }) => {
-        setUser(session?.user ?? null);
+        if (mounted) setUser(session?.user ?? null);
       })
       .catch(() => {
-        setUser(null);
+        if (mounted) setUser(null);
       })
       .finally(() => {
         clearTimeout(timeout);
-        setLoading(false);
+        if (mounted) setLoading(false);
       });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!mounted) return;
       setUser(session?.user ?? null);
       setLoading(false);
     });
 
     return () => {
+      mounted = false;
       clearTimeout(timeout);
       subscription.unsubscribe();
     };

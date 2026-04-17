@@ -33,11 +33,14 @@ export function Media() {
   const loadMedia = async () => {
     if (!user) return;
 
+    // Bounded to the 200 most-recent uploads. Larger libraries should switch
+    // to virtualized list + range-based loading (follow-up).
     const { data, error } = await supabase
       .from('media_library')
       .select('*')
       .eq('user_id', user.id)
-      .order('uploaded_at', { ascending: false });
+      .order('uploaded_at', { ascending: false })
+      .range(0, 199);
 
     if (!error && data) {
       setMedia(data);
