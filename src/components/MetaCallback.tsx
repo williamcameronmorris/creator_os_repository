@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { exchangeMetaCode, type MetaPage } from '../lib/meta';
+import { consumeOAuthState } from '../lib/oauthState';
 import { CheckCircle, AlertCircle, Loader } from 'lucide-react';
 
 /**
@@ -26,6 +27,7 @@ export function MetaCallback() {
 
   // Pull params at component level so they can be used in dep array
   const code = searchParams.get('code');
+  const stateParam = searchParams.get('state');
   const oauthError = searchParams.get('error');
   const errorDescription = searchParams.get('error_description');
 
@@ -50,6 +52,15 @@ export function MetaCallback() {
     }
 
     const handleExchange = async () => {
+      // CSRF defense: refuse callbacks whose state we didn't issue. Consumes
+      // the stored value either way to prevent replay.
+      if (!consumeOAuthState('meta', stateParam)) {
+        setStatus('error');
+        setMessage('Security check failed (invalid OAuth state). Please start the connection again from Settings.');
+        setTimeout(() => navigate('/settings'), 5000);
+        return;
+      }
+
       try {
         setMessage('Exchanging authorization code for access tokens...');
         const result = await exchangeMetaCode(code, user.id);

@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { CheckCircle, AlertCircle, Loader } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { consumeOAuthState } from '../lib/oauthState';
 
 /**
  * YoutubeCallback
@@ -26,6 +27,7 @@ export function YoutubeCallback() {
   const [channel, setChannel] = useState<{ name: string; subscribers: number } | null>(null);
 
   const code = searchParams.get('code');
+  const stateParam = searchParams.get('state');
   const oauthError = searchParams.get('error');
   const errorDescription = searchParams.get('error_description');
 
@@ -58,6 +60,14 @@ export function YoutubeCallback() {
     }
 
     const handleExchange = async () => {
+      // CSRF defense: refuse callbacks whose state we didn't issue.
+      if (!consumeOAuthState('youtube', stateParam)) {
+        setStatus('error');
+        setMessage('Security check failed (invalid OAuth state). Please start the connection again from Settings.');
+        setTimeout(() => navigate('/settings'), 5000);
+        return;
+      }
+
       try {
         setMessage('Exchanging authorization code for access tokens...');
 

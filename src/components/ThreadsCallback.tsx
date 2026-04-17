@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { exchangeThreadsCode } from '../lib/meta';
+import { consumeOAuthState } from '../lib/oauthState';
 import { CheckCircle, AlertCircle, Loader } from 'lucide-react';
 
 /**
@@ -25,6 +26,7 @@ export function ThreadsCallback() {
   const [handle, setHandle] = useState('');
 
   const code = searchParams.get('code');
+  const stateParam = searchParams.get('state');
   const oauthError = searchParams.get('error');
   const errorDescription = searchParams.get('error_description');
 
@@ -46,6 +48,14 @@ export function ThreadsCallback() {
     if (!user) return;
 
     const handleExchange = async () => {
+      // CSRF defense: refuse callbacks whose state we didn't issue.
+      if (!consumeOAuthState('threads', stateParam)) {
+        setStatus('error');
+        setMessage('Security check failed (invalid OAuth state). Please start the connection again from Settings.');
+        setTimeout(() => navigate('/settings'), 5000);
+        return;
+      }
+
       try {
         setMessage('Exchanging authorization code for Threads access token...');
         const result = await exchangeThreadsCode(code, user.id);

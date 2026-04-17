@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { generateOAuthState } from './oauthState';
 export { getMetaAuthUrl, getThreadsAuthUrl, disconnectMeta, disconnectThreads } from './meta';
 
 export interface PlatformStatus {
@@ -111,6 +112,7 @@ export function getYouTubeAuthUrl(): string {
     // prompt=consent forces Google to re-issue a refresh_token every time.
     // Without this, refresh_token is only returned on the very first authorization.
     prompt: 'consent',
+    state: generateOAuthState('youtube'),
   });
   return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
 }

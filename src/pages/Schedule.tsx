@@ -59,12 +59,15 @@ export function Schedule() {
 
   const loadPosts = async () => {
     if (!user) return;
+    // Bounded to the 200 most-recent posts; older posts can be loaded via
+    // a date-range filter on the calendar view (follow-up).
     const { data, error } = await supabase
       .from('content_posts_unified')
       .select('id, platform, caption, media_urls, scheduled_date, scheduled_for, status, deal_id, is_sponsored, publish_status, publish_error, platform_post_id, published_at, thumbnail_url, media_type')
       .eq('user_id', user.id)
       .in('status', ['scheduled', 'draft', 'published'])
-      .order('published_at', { ascending: false, nullsFirst: false });
+      .order('published_at', { ascending: false, nullsFirst: false })
+      .range(0, 199);
 
     if (!error && data) setPosts(data);
     setLoading(false);

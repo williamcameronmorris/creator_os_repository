@@ -70,10 +70,14 @@ export default function BrandLibrary() {
 
   const loadProspects = async () => {
     try {
+      // Bounded fetch: cap at 200 most-recent rows so the page can't OOM a
+      // user with thousands of prospects. True pagination (load-more / infinite
+      // scroll) is a follow-up; this prevents the worst case today.
       const { data, error } = await supabase
         .from('brand_prospects')
         .select('*')
-        .order('updated_at', { ascending: false });
+        .order('updated_at', { ascending: false })
+        .range(0, 199);
 
       if (error) throw error;
       setProspects(data || []);
