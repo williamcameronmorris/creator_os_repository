@@ -92,7 +92,7 @@ export function Settings() {
     if (!user) return;
     setSyncing(platform);
     try{
-      await syncPlatform(user.id, platform);
+      await syncPlatform(platform);
       await loadPlatforms();
       setSuccess(`${platform} synced successfully`);
       setTimeout(() => setSuccess(''), 3000);

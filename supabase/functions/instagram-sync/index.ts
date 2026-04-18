@@ -28,11 +28,31 @@ Deno.serve(async (req: Request) => {
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { userId } = await req.json();
-    if (!userId) throw new Error("Missing required field: userId");
+    // ── Verify caller's session JWT; derive userId from the token, not the body.
+    // The edge runtime's verify_jwt gate accepts anon/service keys as "valid JWTs",
+    // so we must explicitly resolve the caller to a real user here.
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: "Missing Authorization header" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    const jwt = authHeader.replace(/^Bearer\s+/i, "");
+    const anon = createClient(supabaseUrl, supabaseAnonKey);
+    const { data: { user }, error: userError } = await anon.auth.getUser(jwt);
+    if (userError || !user) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    const userId = user.id;
+
+    const supabase = createClient(supabaseUrl, supabaseKey);
 
     // ── Look up IG Business Account ID + Page Access Token from the profile ──
     const { data: profile, error: profileError } = await supabase

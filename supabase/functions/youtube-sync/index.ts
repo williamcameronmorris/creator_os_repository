@@ -37,25 +37,36 @@ Deno.serve(async (req: Request) => {
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
-    const body = await req.json();
-    const { userId } = body;
-    let { accessToken, refreshToken } = body;
-    if (!userId) throw new Error("Missing userId");
 
-    if (!accessToken) {
-      const { data: profile } = await supabase.from("profiles").select("youtube_access_token, youtube_refresh_token, youtube_token_expires_at").eq("id", userId).maybeSingle();
-      if (!profile?.youtube_access_token && !profile?.youtube_refresh_token) throw new Error("YouTube not connected");
-      accessToken = profile.youtube_access_token;
-      refreshToken = profile.youtube_refresh_token;
-      const expiresAt = profile.youtube_token_expires_at ? new Date(profile.youtube_token_expires_at).getTime() : 0;
-      if ((!accessToken || Date.now() > expiresAt - 5 * 60 * 1000) && refreshToken) {
-        const refreshed = await refreshAccessToken(refreshToken);
-        accessToken = refreshed.accessToken;
-        await supabase.from("profiles").update({ youtube_access_token: accessToken, youtube_token_expires_at: refreshed.expiresAt }).eq("id", userId);
-      }
+    // ── Verify caller's session JWT; derive userId from the token, not the body.
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: "Missing Authorization header" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
+    const jwt = authHeader.replace(/^Bearer\s+/i, "");
+    const anon = createClient(supabaseUrl, supabaseAnonKey);
+    const { data: { user }, error: userError } = await anon.auth.getUser(jwt);
+    if (userError || !user) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+    const userId = user.id;
+
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
+    // ── Always fetch tokens from the profile — never trust tokens from the body.
+    const { data: profile } = await supabase.from("profiles").select("youtube_access_token, youtube_refresh_token, youtube_token_expires_at").eq("id", userId).maybeSingle();
+    if (!profile?.youtube_access_token && !profile?.youtube_refresh_token) throw new Error("YouTube not connected");
+    let accessToken: string | null = profile.youtube_access_token;
+    const refreshToken: string | null = profile.youtube_refresh_token;
+    const expiresAt = profile.youtube_token_expires_at ? new Date(profile.youtube_token_expires_at).getTime() : 0;
+    if ((!accessToken || Date.now() > expiresAt - 5 * 60 * 1000) && refreshToken) {
+      const refreshed = await refreshAccessToken(refreshToken);
+      accessToken = refreshed.accessToken;
+      await supabase.from("profiles").update({ youtube_access_token: accessToken, youtube_token_expires_at: refreshed.expiresAt }).eq("id", userId);
+    }
+    if (!accessToken) throw new Error("YouTube access token unavailable after refresh attempt");
 
     const channelRes = await fetch("https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&mine=true", { headers: { Authorization: `Bearer ${accessToken}` } });
     if (!channelRes.ok) throw new Error(`Channel API error: ${channelRes.statusText}`);

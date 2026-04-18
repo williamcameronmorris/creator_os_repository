@@ -88,37 +88,13 @@ export default function ActionDashboard({ onNavigate, embedded = false }: Action
       if (!user) return;
       const { data: profile } = await supabase
         .from('profiles')
-        .select('instagram_access_token, tiktok_access_token, youtube_access_token')
+        .select('instagram_connected, tiktok_connected, youtube_connected')
         .eq('id', user.id)
         .maybeSingle();
-      const syncPromises: Promise<Response>[] = [];
-      if (profile?.instagram_access_token) {
-        syncPromises.push(
-          fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/instagram-sync`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
-            body: JSON.stringify({ userId: user.id, accessToken: profile.instagram_access_token }),
-          })
-        );
-      }
-      if (profile?.tiktok_access_token) {
-        syncPromises.push(
-          fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/tiktok-sync`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
-            body: JSON.stringify({ userId: user.id, accessToken: profile.tiktok_access_token }),
-          })
-        );
-      }
-      if (profile?.youtube_access_token) {
-        syncPromises.push(
-          fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/youtube-sync`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
-            body: JSON.stringify({ userId: user.id, accessToken: profile.youtube_access_token }),
-          })
-        );
-      }
+      const syncPromises: Promise<{ error: unknown }>[] = [];
+      if (profile?.instagram_connected) syncPromises.push(supabase.functions.invoke('instagram-sync'));
+      if (profile?.tiktok_connected)    syncPromises.push(supabase.functions.invoke('tiktok-sync'));
+      if (profile?.youtube_connected)   syncPromises.push(supabase.functions.invoke('youtube-sync'));
       await Promise.all(syncPromises);
       const newInsights = await generateInsights(user.id);
       await saveInsights(user.id, newInsights);

@@ -169,47 +169,20 @@ export async function disconnectPlatform(
 }
 
 export async function syncPlatform(
-  userId: string,
   platform: 'instagram' | 'facebook' | 'threads' | 'tiktok' | 'youtube'
 ): Promise<void> {
-  // Facebook and Threads use dedicated token fields; others use the <platform>_access_token pattern
-  const tokenField =
-    platform === 'facebook' ? 'facebook_page_access_token' :
-    platform === 'threads'  ? 'threads_access_token' :
-    `${platform}_access_token`;
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select(tokenField)
-    .eq('id', userId)
-    .maybeSingle();
-
-  const accessToken = (profile as any)?.[tokenField];
-  if (!accessToken) {
-    throw new Error(`${platform} not connected`);
-  }
-
-  // Only call sync edge functions for platforms that have them
-  const syncablePlatforms = ['instagram', 'tiktok', 'youtube', 'threads'];
-  if (!syncablePlatforms.includes(platform)) {
-    // For facebook/threads, a full sync would be triggered from their dedicated pages
+  // Only instagram/tiktok/youtube have sync edge functions. Facebook and Threads
+  // sync from their dedicated pages; calling this for them is a no-op.
+  const syncablePlatforms = ['instagram', 'tiktok', 'youtube'] as const;
+  if (!syncablePlatforms.includes(platform as typeof syncablePlatforms[number])) {
     return;
   }
 
-  const response = await fetch(
-    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/${platform}-sync`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-      },
-      body: JSON.stringify({ userId, accessToken }),
-    }
-  );
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || `Failed to sync ${platform}`);
+  // invoke() sends the current user's session JWT in the Authorization header,
+  // which the edge function verifies to derive userId. No tokens are sent
+  // from the client — the edge function fetches them from the DB itself.
+  const { error } = await supabase.functions.invoke(`${platform}-sync`);
+  if (error) {
+    throw new Error(error.message || `Failed to sync ${platform}`);
   }
 }
