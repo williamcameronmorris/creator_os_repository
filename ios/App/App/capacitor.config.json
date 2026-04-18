@@ -1,11 +1,12 @@
 {
-	"appId": "com.branddealos.app",
-	"appName": "Brand Deal OS",
+	"appId": "com.creatorcommand.app",
+	"appName": "Creator Command",
 	"webDir": "dist",
 	"packageClassList": [
 		"AppPlugin",
 		"HapticsPlugin",
 		"KeyboardPlugin",
+		"PreferencesPlugin",
 		"StatusBarPlugin"
 	]
 }

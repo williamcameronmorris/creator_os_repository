@@ -10,6 +10,7 @@ import { PostPreview } from './PostPreview';
 import { DateTimePicker } from './DateTimePicker';
 import { useTimezone } from '../hooks/useTimezone';
 import { utcToLocalInput, localInputToUtc, nowAsLocalInput } from '../lib/timezone';
+import { getDraft, setDraft, clearDraft as clearDraftStorage } from '../lib/draftStorage';
 
 interface PostComposerProps {
   onClose: () => void;
@@ -191,31 +192,29 @@ export function PostComposer({ onClose, onSuccess, asPage = false, editPost }: P
 
   useEffect(() => {
     if (editPost) return;
-    try {
-      const saved = localStorage.getItem(DRAFT_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed.caption      && !caption) setCaption(parsed.caption);
-        if (parsed.platforms)                setPlatforms(new Set(parsed.platforms as Platform[]));
-        if (parsed.scheduledDate)            setScheduledDate(parsed.scheduledDate);
-      }
-    } catch (_) {}
+    let cancelled = false;
+    getDraft(DRAFT_KEY).then((draft) => {
+      if (cancelled || !draft) return;
+      if (draft.caption      && !caption) setCaption(draft.caption);
+      if (draft.platforms)                setPlatforms(new Set(draft.platforms as Platform[]));
+      if (draft.scheduledDate)            setScheduledDate(draft.scheduledDate);
+    });
+    return () => { cancelled = true; };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (editPost) return;
     if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
     autosaveTimer.current = setTimeout(() => {
-      try {
-        localStorage.setItem(DRAFT_KEY, JSON.stringify({ caption, platforms: Array.from(platforms), scheduledDate }));
+      setDraft(DRAFT_KEY, { caption, platforms: Array.from(platforms), scheduledDate }).then(() => {
         setAutosaveStatus('saved');
         setTimeout(() => setAutosaveStatus('idle'), 2000);
-      } catch (_) {}
+      });
     }, 1000);
     return () => { if (autosaveTimer.current) clearTimeout(autosaveTimer.current); };
   }, [caption, platforms, scheduledDate]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const clearDraft = () => { try { localStorage.removeItem(DRAFT_KEY); } catch (_) {} };
+  const clearDraft = () => { void clearDraftStorage(DRAFT_KEY); };
 
   // ── Limits ────────────────────────────────────────────────────────────────
   const lowestCaptionLimit = Math.min(...Array.from(platforms).map(p => PLATFORM_LIMITS[p].caption));
