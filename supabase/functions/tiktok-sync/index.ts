@@ -7,20 +7,47 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+function json(status: number, body: unknown) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, {
-      status: 200,
-      headers: corsHeaders,
-    });
+    return new Response(null, { status: 200, headers: corsHeaders });
   }
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-    const { userId, accessToken } = await req.json();
+    // ── Verify caller's session JWT; derive userId from the token, not the body.
+    // The edge runtime's verify_jwt gate accepts anon/service keys as "valid JWTs",
+    // so we must explicitly resolve the caller to a real user here.
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) return json(401, { error: "Missing Authorization header" });
+    const jwt = authHeader.replace(/^Bearer\s+/i, "");
+
+    const anon = createClient(supabaseUrl, supabaseAnonKey);
+    const { data: { user }, error: userError } = await anon.auth.getUser(jwt);
+    if (userError || !user) return json(401, { error: "Unauthorized" });
+    const userId = user.id;
+
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // ── Fetch the token from the profile — never trust a token from the body.
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("tiktok_access_token")
+      .eq("id", userId)
+      .maybeSingle();
+
+    if (profileError) throw new Error("Failed to load profile");
+    const accessToken = profile?.tiktok_access_token;
+    if (!accessToken) return json(400, { error: "TikTok not connected" });
 
     const userInfoResponse = await fetch(
       `https://open.tiktokapis.com/v2/user/info/?fields=open_id,union_id,avatar_url,display_name,follower_count,following_count,likes_count,video_count`,
@@ -160,26 +187,9 @@ Deno.serve(async (req: Request) => {
       { onConflict: "user_id,platform,date" }
     );
 
-    return new Response(
-      JSON.stringify({ success: true, videosCount: videos.length }),
-      {
-        headers: {
-          ...corsHeaders,
-          "Content-Type": "application/json",
-        },
-      }
-    );
+    return json(200, { success: true, videosCount: videos.length });
   } catch (error) {
     console.error("TikTok sync error:", error);
-    return new Response(
-      JSON.stringify({ error: error.message }),
-      {
-        status: 400,
-        headers: {
-          ...corsHeaders,
-          "Content-Type": "application/json",
-        },
-      }
-    );
+    return json(400, { error: (error as Error).message });
   }
 });
