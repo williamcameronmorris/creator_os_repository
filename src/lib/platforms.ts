@@ -12,7 +12,7 @@ export interface PlatformStatus {
   label?: string;
 }
 
-export async function getPlatformStatus(userId: string): romise<PlatformStatus[]> {
+export async function getPlatformStatus(userId: string): Promise<PlatformStatus[]> {
   const { data: profile } = await supabase
     .from('profiles')
     .select([
