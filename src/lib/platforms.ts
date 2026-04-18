@@ -12,18 +12,18 @@ export interface PlatformStatus {
   label?: string;
 }
 
-export async function getPlatformStatus(userId: string): romise<PlatformStatus[]> {
+export async function getPlatformStatus(userId: string): Promise<PlatformStatus[]> {
   const { data: profile } = await supabase
     .from('profiles')
     .select([
       // Meta / Facebook / Instagram Business / Threads
-      'meta_access_token',
-      'facebook_page_id', 'facebook_page_name', 'facebook_page_followers', 'last_facebook_sync',
-      'instagram_business_account_id', 'instagram_handle', 'instagram_followers', 'instagram_access_token', 'last_instagram_sync',
-      'threads_access_token', 'threads_handle', 'threads_followers', 'last_threads_sync',
+      'facebook_connected',
+      'facebook_page_name', 'facebook_page_followers', 'last_facebook_sync',
+      'instagram_connected', 'instagram_handle', 'instagram_followers', 'last_instagram_sync',
+      'threads_connected', 'threads_handle', 'threads_followers', 'last_threads_sync',
       // TikTok / YouTube
-      'tiktok_handle', 'tiktok_followers', 'tiktok_access_token', 'last_tiktok_sync',
-      'youtube_handle', 'youtube_followers', 'youtube_access_token', 'last_youtube_sync',
+      'tiktok_connected', 'tiktok_handle', 'tiktok_followers', 'last_tiktok_sync',
+      'youtube_connected', 'youtube_handle', 'youtube_followers', 'last_youtube_sync',
     ].join(', '))
     .eq('id', userId)
     .maybeSingle();
@@ -41,7 +41,7 @@ export async function getPlatformStatus(userId: string): romise<PlatformStatus[]
   return [
     {
       platform: 'facebook',
-      connected: !!profile.meta_access_token && !!profile.facebook_page_id,
+      connected: !!profile.facebook_connected,
       username: profile.facebook_page_name || undefined,
       label: profile.facebook_page_name || undefined,
       followers: profile.facebook_page_followers || undefined,
@@ -49,29 +49,28 @@ export async function getPlatformStatus(userId: string): romise<PlatformStatus[]
     },
     {
       platform: 'instagram',
-      // Connected via Meta if we have a business account ID, or legacy token
-      connected: !!profile.instagram_business_account_id || !!profile.instagram_access_token,
+      connected: !!profile.instagram_connected,
       username: profile.instagram_handle || undefined,
       followers: profile.instagram_followers || undefined,
       lastSynced: profile.last_instagram_sync || undefined,
     },
     {
       platform: 'threads',
-      connected: !!profile.threads_access_token,
+      connected: !!profile.threads_connected,
       username: profile.threads_handle || undefined,
       followers: profile.threads_followers || undefined,
       lastSynced: profile.last_threads_sync || undefined,
     },
     {
       platform: 'tiktok',
-      connected: !!profile.tiktok_access_token,
+      connected: !!profile.tiktok_connected,
       username: profile.tiktok_handle || undefined,
       followers: profile.tiktok_followers || undefined,
       lastSynced: profile.last_tiktok_sync || undefined,
     },
     {
       platform: 'youtube',
-      connected: !!profile.youtube_access_token,
+      connected: !!profile.youtube_connected,
       username: profile.youtube_handle || undefined,
       followers: profile.youtube_followers || undefined,
       lastSynced: profile.last_youtube_sync || undefined,
