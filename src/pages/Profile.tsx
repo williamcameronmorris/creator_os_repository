@@ -25,12 +25,20 @@ interface ProfileData {
   tiktok_followers: number;
   threads_handle: string;
   threads_followers: number;
-  instagram_access_token: string | null;
-  youtube_access_token: string | null;
-  tiktok_access_token: string | null;
-  threads_access_token: string | null;
+  instagram_connected: boolean;
+  youtube_connected: boolean;
+  tiktok_connected: boolean;
+  threads_connected: boolean;
   timezone: string;
 }
+
+const PROFILE_COLUMNS = [
+  'full_name', 'display_name', 'bio', 'phone', 'city', 'state', 'website', 'timezone',
+  'instagram_handle', 'instagram_followers', 'instagram_connected',
+  'youtube_handle', 'youtube_followers', 'youtube_connected',
+  'tiktok_handle', 'tiktok_followers', 'tiktok_connected',
+  'threads_handle', 'threads_followers', 'threads_connected',
+].join(', ');
 
 const emptyProfile: ProfileData = {
   full_name: '',
@@ -48,10 +56,10 @@ const emptyProfile: ProfileData = {
   tiktok_followers: 0,
   threads_handle: '',
   threads_followers: 0,
-  instagram_access_token: null,
-  youtube_access_token: null,
-  tiktok_access_token: null,
-  threads_access_token: null,
+  instagram_connected: false,
+  youtube_connected: false,
+  tiktok_connected: false,
+  threads_connected: false,
   timezone: 'America/New_York',
 };
 
@@ -76,7 +84,7 @@ export function Profile() {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('*')
+        .select(PROFILE_COLUMNS)
         .eq('id', user.id)
         .maybeSingle();
       if (!error && data) setProfile({ ...emptyProfile, ...data });
@@ -171,7 +179,7 @@ export function Profile() {
       bg: 'bg-pink-50',
       handle: profile.instagram_handle,
       followers: profile.instagram_followers,
-      connected: !!profile.instagram_access_token,
+      connected: profile.instagram_connected,
     },
     {
       key: 'youtube',
@@ -181,7 +189,7 @@ export function Profile() {
       bg: 'bg-red-50',
       handle: profile.youtube_handle,
       followers: profile.youtube_followers,
-      connected: !!profile.youtube_access_token,
+      connected: profile.youtube_connected,
     },
     {
       key: 'threads',
@@ -191,7 +199,7 @@ export function Profile() {
       bg: 'bg-gray-100',
       handle: profile.threads_handle,
       followers: profile.threads_followers,
-      connected: !!profile.threads_access_token,
+      connected: profile.threads_connected,
     },
     {
       key: 'tiktok',
@@ -201,7 +209,7 @@ export function Profile() {
       bg: 'bg-gray-100',
       handle: profile.tiktok_handle,
       followers: profile.tiktok_followers,
-      connected: !!profile.tiktok_access_token,
+      connected: profile.tiktok_connected,
     },
   ];
 

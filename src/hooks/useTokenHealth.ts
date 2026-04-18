@@ -34,10 +34,10 @@ export function useTokenHealth(): { platformHealth: PlatformHealth[]; loading: b
       const { data: profile } = await supabase
         .from('profiles')
         .select(
-          'instagram_access_token, instagram_token_expires_at, ' +
-          'youtube_access_token, youtube_token_expires_at, ' +
-          'tiktok_access_token, tiktok_token_expires_at, ' +
-          'threads_access_token, threads_token_expires_at'
+          'instagram_connected, instagram_token_expires_at, ' +
+          'youtube_connected, youtube_token_expires_at, ' +
+          'tiktok_connected, tiktok_token_expires_at, ' +
+          'threads_connected, threads_token_expires_at'
         )
         .eq('id', user.id)
         .maybeSingle();
@@ -50,10 +50,10 @@ export function useTokenHealth(): { platformHealth: PlatformHealth[]; loading: b
       const check = (
         platform: string,
         label: string,
-        token: string | null | undefined,
+        connected: boolean | null | undefined,
         expiresAt: string | null | undefined
       ): PlatformHealth => {
-        if (!token) return { platform, status: 'missing', label };
+        if (!connected) return { platform, status: 'missing', label };
         if (expiresAt) {
           const expMs = new Date(expiresAt).getTime();
           if (expMs - now < SOON_MS) return { platform, status: 'expired', label };
@@ -62,10 +62,10 @@ export function useTokenHealth(): { platformHealth: PlatformHealth[]; loading: b
       };
 
       const health: PlatformHealth[] = [
-        check('instagram', 'Instagram', profile?.instagram_access_token, profile?.instagram_token_expires_at),
-        check('youtube', 'YouTube', profile?.youtube_access_token, profile?.youtube_token_expires_at),
-        check('tiktok', 'TikTok', profile?.tiktok_access_token, profile?.tiktok_token_expires_at),
-        check('threads', 'Threads', profile?.threads_access_token, profile?.threads_token_expires_at),
+        check('instagram', 'Instagram', profile?.instagram_connected, profile?.instagram_token_expires_at),
+        check('youtube', 'YouTube', profile?.youtube_connected, profile?.youtube_token_expires_at),
+        check('tiktok', 'TikTok', profile?.tiktok_connected, profile?.tiktok_token_expires_at),
+        check('threads', 'Threads', profile?.threads_connected, profile?.threads_token_expires_at),
       ].filter((h) => h.status !== 'missing'); // only show platforms that were at some point connected
 
       setPlatformHealth(health);

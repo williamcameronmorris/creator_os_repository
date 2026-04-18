@@ -197,7 +197,7 @@ export function useDailyPulse() {
         dealsResult,
         credentialsResult,
       ] = await Promise.all([
-        supabase.from('profiles').select('display_name, full_name, youtube_access_token, instagram_access_token, instagram_business_account_id, tiktok_access_token, threads_access_token').eq('id', user.id).maybeSingle(),
+        supabase.from('profiles').select('display_name, full_name, youtube_connected, instagram_connected, tiktok_connected, threads_connected').eq('id', user.id).maybeSingle(),
         supabase.from('daily_pulse_sessions').select('*').eq('user_id', user.id).eq('session_date', today).maybeSingle(),
         // 30-day rolling window — always captures recent content regardless of where we are in the week
         supabase.from('content_posts')
@@ -229,10 +229,10 @@ export function useDailyPulse() {
       const connectedSet = new Set((credentialsResult.data || []).map((c: { platform: string }) => c.platform));
       const profile = profileResult.data;
       const platforms = {
-        instagram: connectedSet.has('instagram') || !!(profile?.instagram_access_token || profile?.instagram_business_account_id),
-        tiktok: connectedSet.has('tiktok') || !!profile?.tiktok_access_token,
-        youtube: connectedSet.has('youtube') || !!profile?.youtube_access_token,
-        threads: connectedSet.has('threads') || !!profile?.threads_access_token,
+        instagram: connectedSet.has('instagram') || !!profile?.instagram_connected,
+        tiktok: connectedSet.has('tiktok') || !!profile?.tiktok_connected,
+        youtube: connectedSet.has('youtube') || !!profile?.youtube_connected,
+        threads: connectedSet.has('threads') || !!profile?.threads_connected,
       };
       setConnectedPlatforms(platforms);
       const hasConnectedAccounts = platforms.instagram || platforms.tiktok || platforms.youtube || platforms.threads;
