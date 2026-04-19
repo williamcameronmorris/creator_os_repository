@@ -22,7 +22,7 @@ export async function getPlatformStatus(userId: string): Promise<PlatformStatus[
       'threads_access_token', 'threads_handle', 'threads_followers', 'last_threads_sync',
       // TikTok / YouTube
       'tiktok_access_token', 'tiktok_handle', 'tiktok_followers', 'last_tiktok_sync',
-      'youtube_access_token', 'youtube_handle', 'youtube_followers', 'last_youtube_sync',
+      'youtube_access_token', 'youtube_refresh_token', 'youtube_channel_id', 'youtube_handle', 'youtube_followers', 'last_youtube_sync',
     ].join(', '))
     .eq('id', userId)
     .maybeSingle();
