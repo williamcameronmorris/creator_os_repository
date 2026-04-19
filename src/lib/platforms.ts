@@ -69,7 +69,7 @@ export async function getPlatformStatus(userId: string): Promise<PlatformStatus[
     },
     {
       platform: 'youtube',
-      connected: !!(profile.youtube_access_token),
+      connected: !!(profile.youtube_refresh_token || profile.youtube_channel_id),
       username: profile.youtube_handle || undefined,
       followers: profile.youtube_followers || undefined,
       lastSynced: profile.last_youtube_sync || undefined,
@@ -154,7 +154,9 @@ export async function disconnectPlatform(
       break;
     case 'youtube':
       updates.youtube_access_token = '';
+      updates.youtube_refresh_token = '';
       updates.youtube_channel_id = '';
+      updates.youtube_token_expires_at = null;
       break;
   }
 
