@@ -93,6 +93,7 @@ Deno.serve(async (req: Request) => {
         youtube_channel_id: channelId,
         youtube_handle: channelName,
         youtube_followers: subscriberCount,
+        youtube_connected: true,
         last_youtube_sync: null, // will be set after sync
       })
       .eq("id", userId)
@@ -110,6 +111,7 @@ Deno.serve(async (req: Request) => {
           youtube_channel_id: channelId,
           youtube_handle: channelName,
           youtube_followers: subscriberCount,
+          youtube_connected: true,
         });
       if (insertError) {
         throw new Error(`Failed to create profile with YouTube credentials: ${insertError.message}`);
