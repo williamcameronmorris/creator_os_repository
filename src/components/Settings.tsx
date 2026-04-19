@@ -306,7 +306,7 @@ export function Settings() {
                           </span>
                         )}
                         {platform.followers != null && platform.followers > 0 && (
-                          <span> Â· {platform.followers.toLocaleString()} followers</span>
+                          <span> · {platform.followers.toLocaleString()} followers</span>
                         )}
                       </div>
                     ) : (
