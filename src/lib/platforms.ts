@@ -17,13 +17,12 @@ export async function getPlatformStatus(userId: string): Promise<PlatformStatus[
     .from('profiles')
     .select([
       // Meta / Facebook / Instagram Business / Threads
-      'facebook_connected',
-      'facebook_page_name', 'facebook_page_followers', 'last_facebook_sync',
-      'instagram_connected', 'instagram_handle', 'instagram_followers', 'last_instagram_sync',
-      'threads_connected', 'threads_handle', 'threads_followers', 'last_threads_sync',
+      'facebook_page_access_token', 'facebook_page_name', 'facebook_page_followers', 'last_facebook_sync',
+      'instagram_access_token', 'instagram_handle', 'instagram_followers', 'last_instagram_sync',
+      'threads_access_token', 'threads_handle', 'threads_followers', 'last_threads_sync',
       // TikTok / YouTube
-      'tiktok_connected', 'tiktok_handle', 'tiktok_followers', 'last_tiktok_sync',
-      'youtube_connected', 'youtube_handle', 'youtube_followers', 'last_youtube_sync',
+      'tiktok_access_token', 'tiktok_handle', 'tiktok_followers', 'last_tiktok_sync',
+      'youtube_access_token', 'youtube_handle', 'youtube_followers', 'last_youtube_sync',
     ].join(', '))
     .eq('id', userId)
     .maybeSingle();
@@ -41,7 +40,7 @@ export async function getPlatformStatus(userId: string): Promise<PlatformStatus[
   return [
     {
       platform: 'facebook',
-      connected: !!profile.facebook_connected,
+      connected: !!(profile.facebook_page_access_token),
       username: profile.facebook_page_name || undefined,
       label: profile.facebook_page_name || undefined,
       followers: profile.facebook_page_followers || undefined,
@@ -49,28 +48,28 @@ export async function getPlatformStatus(userId: string): Promise<PlatformStatus[
     },
     {
       platform: 'instagram',
-      connected: !!profile.instagram_connected,
+      connected: !!(profile.instagram_access_token),
       username: profile.instagram_handle || undefined,
       followers: profile.instagram_followers || undefined,
       lastSynced: profile.last_instagram_sync || undefined,
     },
     {
       platform: 'threads',
-      connected: !!profile.threads_connected,
+      connected: !!(profile.threads_access_token),
       username: profile.threads_handle || undefined,
       followers: profile.threads_followers || undefined,
       lastSynced: profile.last_threads_sync || undefined,
     },
     {
       platform: 'tiktok',
-      connected: !!profile.tiktok_connected,
+      connected: !!(profile.tiktok_access_token),
       username: profile.tiktok_handle || undefined,
       followers: profile.tiktok_followers || undefined,
       lastSynced: profile.last_tiktok_sync || undefined,
     },
     {
       platform: 'youtube',
-      connected: !!profile.youtube_connected,
+      connected: !!(profile.youtube_access_token),
       username: profile.youtube_handle || undefined,
       followers: profile.youtube_followers || undefined,
       lastSynced: profile.last_youtube_sync || undefined,
