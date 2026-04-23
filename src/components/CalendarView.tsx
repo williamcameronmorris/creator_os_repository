@@ -7,6 +7,7 @@ interface CalPost {
   platform: string;
   caption: string;
   scheduled_date: string;
+  scheduled_for?: string | null;
   status: string;
 }
 
@@ -65,11 +66,12 @@ export function CalendarView({ posts, timezone, onPostClick, granularity = 'mont
   // Build postsByDay map: "YYYY-MM-DD" → posts[]
   const postsByDay: Record<string, CalPost[]> = {};
   for (const post of posts) {
-    if (!post.scheduled_date) continue;
+    const dateStr = post.scheduled_for || post.scheduled_date;
+    if (!dateStr) continue;
     try {
       const key = new Intl.DateTimeFormat('en-CA', {
         timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit',
-      }).format(new Date(post.scheduled_date));
+      }).format(new Date(dateStr));
       if (!postsByDay[key]) postsByDay[key] = [];
       postsByDay[key].push(post);
     } catch (_) { /* skip */ }
@@ -210,8 +212,9 @@ export function CalendarView({ posts, timezone, onPostClick, granularity = 'mont
                     {dayPosts.map(post => {
                       const Icon = PLATFORM_ICONS[post.platform] || Calendar;
                       const color = PLATFORM_COLORS[post.platform] || 'bg-gray-500';
-                      const time = post.scheduled_date
-                        ? new Intl.DateTimeFormat('en-US', { timeZone: timezone, hour: 'numeric', minute: '2-digit', hour12: true }).format(new Date(post.scheduled_date))
+                      const timeStr = post.scheduled_for || post.scheduled_date;
+                      const time = timeStr
+                        ? new Intl.DateTimeFormat('en-US', { timeZone: timezone, hour: 'numeric', minute: '2-digit', hour12: true }).format(new Date(timeStr))
                         : '';
                       return (
                         <button key={post.id} onClick={() => onPostClick(post)}
@@ -244,9 +247,11 @@ export function CalendarView({ posts, timezone, onPostClick, granularity = 'mont
   const todayKey = toLocalDateKey(today);
   const isViewingToday = dayKey === todayKey;
   const dayPosts = (postsByDay[dayKey] || []).sort((a, b) => {
-    if (!a.scheduled_date) return 1;
-    if (!b.scheduled_date) return -1;
-    return new Date(a.scheduled_date).getTime() - new Date(b.scheduled_date).getTime();
+    const aDate = a.scheduled_for || a.scheduled_date;
+    const bDate = b.scheduled_for || b.scheduled_date;
+    if (!aDate) return 1;
+    if (!bDate) return -1;
+    return new Date(aDate).getTime() - new Date(bDate).getTime();
   });
 
   const dayLabel = isViewingToday ? 'Today' : dayOffset === 1 ? 'Tomorrow' : dayOffset === -1 ? 'Yesterday'
@@ -283,8 +288,9 @@ export function CalendarView({ posts, timezone, onPostClick, granularity = 'mont
             {dayPosts.map(post => {
               const Icon = PLATFORM_ICONS[post.platform] || Calendar;
               const color = PLATFORM_COLORS[post.platform] || 'bg-gray-500';
-              const time = post.scheduled_date
-                ? new Intl.DateTimeFormat('en-US', { timeZone: timezone, hour: 'numeric', minute: '2-digit', hour12: true }).format(new Date(post.scheduled_date))
+              const dailyTimeStr = post.scheduled_for || post.scheduled_date;
+              const time = dailyTimeStr
+                ? new Intl.DateTimeFormat('en-US', { timeZone: timezone, hour: 'numeric', minute: '2-digit', hour12: true }).format(new Date(dailyTimeStr))
                 : null;
               return (
                 <button key={post.id} onClick={() => onPostClick(post)}
