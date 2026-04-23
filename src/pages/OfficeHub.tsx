@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { useTimezone } from '../hooks/useTimezone';
+import { formatInTz } from '../lib/timezone';
 import { ArrowRight } from 'lucide-react';
 
 interface ScheduledItem {
@@ -14,6 +16,7 @@ interface ScheduledItem {
 export function OfficeHub() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { timezone } = useTimezone();
   const [scheduled, setScheduled] = useState<ScheduledItem[]>([]);
   const [queueCount, setQueueCount] = useState(0);
   const [growthPct, setGrowthPct] = useState<string | null>(null);
@@ -36,10 +39,16 @@ export function OfficeHub() {
     load();
   }, [user]);
 
-  const formatWhen = (iso: string) => {
-    const d = new Date(iso);
-    return d.toLocaleDateString('en-US', { weekday: 'short', hour: '2-digit', minute: '2-digit' }).toUpperCase();
-  };
+  const formatWhen = (iso: string) =>
+    formatInTz(iso, timezone, {
+      weekday: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+      month: undefined,
+      day: undefined,
+      year: undefined,
+    }).toUpperCase();
 
   const nextPublish = scheduled[0]
     ? formatWhen(scheduled[0].scheduled_date)
