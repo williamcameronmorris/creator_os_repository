@@ -14,6 +14,7 @@ interface Post {
   caption: string;
   media_urls: string[];
   scheduled_date: string | null;
+  scheduled_for: string | null;
   status: string;
   deal_id?: string | null;
   is_sponsored?: boolean;
@@ -59,17 +60,27 @@ export function Schedule() {
 
   const loadPosts = async () => {
     if (!user) return;
-    // Bounded to the 200 most-recent posts; older posts can be loaded via
-    // a date-range filter on the calendar view (follow-up).
-    const { data, error } = await supabase
+    const selectCols = 'id, platform, caption, media_urls, scheduled_date, scheduled_for, status, deal_id, is_sponsored, publish_status, publish_error, platform_post_id, published_at, thumbnail_url, media_type';
+
+    // Scheduled + draft posts are few; always load all of them so they
+    // are never pushed out by the published-posts pagination window.
+    const { data: activePosts } = await supabase
       .from('content_posts_unified')
-      .select('id, platform, caption, media_urls, scheduled_date, scheduled_for, status, deal_id, is_sponsored, publish_status, publish_error, platform_post_id, published_at, thumbnail_url, media_type')
+      .select(selectCols)
       .eq('user_id', user.id)
-      .in('status', ['scheduled', 'draft', 'published'])
-      .order('published_at', { ascending: false, nullsFirst: false })
+      .in('status', ['scheduled', 'draft'])
+      .order('scheduled_for', { ascending: true, nullsFirst: false });
+
+    // Published posts: most recent 200.
+    const { data: publishedPosts } = await supabase
+      .from('content_posts_unified')
+      .select(selectCols)
+      .eq('user_id', user.id)
+      .eq('status', 'published')
+      .order('published_at', { ascending: false })
       .range(0, 199);
 
-    if (!error && data) setPosts(data);
+    setPosts([...(activePosts || []), ...(publishedPosts || [])]);
     setLoading(false);
   };
 
@@ -123,14 +134,16 @@ export function Schedule() {
   const next24Hours = new Date(now.getTime() + 24 * 60 * 60 * 1000);
 
   const thisWeekPosts = scheduledPosts.filter(p => {
-    if (!p.scheduled_date) return false;
-    const d = new Date(p.scheduled_date);
+    const dateStr = p.scheduled_for || p.scheduled_date;
+    if (!dateStr) return false;
+    const d = new Date(dateStr);
     return d >= now && d <= next7Days;
   }).length;
 
   const publishingSoonPosts = scheduledPosts.filter(p => {
-    if (!p.scheduled_date) return false;
-    const d = new Date(p.scheduled_date);
+    const dateStr = p.scheduled_for || p.scheduled_date;
+    if (!dateStr) return false;
+    const d = new Date(dateStr);
     return d >= now && d <= next24Hours;
   }).length;
 
@@ -231,7 +244,7 @@ export function Schedule() {
         {/* Calendar view */}
         {viewMode === 'calendar' && !loading && (
           <CalendarView
-            posts={posts.filter(p => p.status === 'scheduled' && p.scheduled_date)}
+            posts={posts.filter(p => p.status === 'scheduled' && (p.scheduled_date || p.scheduled_for))}
             timezone={timezone}
             onPostClick={p => handleEdit(p as Post)}
             granularity={calGranularity}
@@ -356,12 +369,12 @@ export function Schedule() {
                             {post.caption || 'No caption'}
                           </p>
 
-                          {post.scheduled_date && (
+                          {(post.scheduled_for || post.scheduled_date) && (
                             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                               <Clock className="w-3.5 h-3.5 flex-shrink-0" />
                               {post.publish_status === 'published' && post.published_at
                                 ? `Published ${formatInTz(post.published_at, timezone)}`
-                                : formatInTz(post.scheduled_date, timezone)}
+                                : formatInTz((post.scheduled_for || post.scheduled_date), timezone)}
                             </div>
                           )}
 
