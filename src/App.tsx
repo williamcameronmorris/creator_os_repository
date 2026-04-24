@@ -8,6 +8,7 @@ import { Onboarding } from './components/Onboarding';
 import { Layout } from './components/Layout';
 import { Clio } from './pages/Clio';
 import { StudioHub } from './pages/StudioHub';
+import { StudioChallenge } from './pages/StudioChallenge';
 import { Studio } from './pages/Studio';
 import { OfficeHub } from './pages/OfficeHub';
 import { Schedule } from './pages/Schedule';
