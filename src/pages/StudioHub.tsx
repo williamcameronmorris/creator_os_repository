@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { ArrowRight, Pencil, FileText, Mic, Zap } from 'lucide-react';
+import { ArrowRight, Pencil, FileText, Mic, Zap, Flame } from 'lucide-react';
 
 interface DraftItem {
   id: string;
@@ -77,6 +77,15 @@ export function StudioHub() {
       sub: 'Concepts and angles Clio surfaced that you haven\u2019t acted on yet.',
       cta: 'Review',
       action: () => navigate('/saved-ideas'),
+    },
+      {
+      index: '05',
+      label: 'CHALLENGE',
+      icon: Flame,
+      title: '30-Day Challenge',
+      sub: 'Pick a track. Show up daily. Track the numbers that matter.',
+      cta: 'Open challenge',
+      action: () => navigate('/studio/challenge'),
     },
   ];
 

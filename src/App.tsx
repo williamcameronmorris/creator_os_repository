@@ -8,6 +8,7 @@ import { Onboarding } from './components/Onboarding';
 import { Layout } from './components/Layout';
 import { Clio } from './pages/Clio';
 import { StudioHub } from './pages/StudioHub';
+import { StudioChallenge } from './pages/StudioChallenge';
 import { Studio } from './pages/Studio';
 import { OfficeHub } from './pages/OfficeHub';
 import { Schedule } from './pages/Schedule';
@@ -114,6 +115,7 @@ function AppContent() {
       {/* Ã¢ÂÂÃ¢ÂÂ Studio Ã¢ÂÂÃ¢ÂÂ */}
       <Route path="/studio" element={<ProtectedRoute><Layout><StudioHub /></Layout></ProtectedRoute>} />
       <Route path="/studio/workflow" element={<ProtectedRoute><Layout><Studio /></Layout></ProtectedRoute>} />
+      <Route path="/studio/challenge" element={<ProtectedRoute><Layout><StudioChallenge /></Layout></ProtectedRoute>} />
       <Route path="/media" element={<ProtectedRoute><Layout><Media /></Layout></ProtectedRoute>} />
       <Route path="/saved-ideas" element={<ProtectedRoute><Layout><SavedIdeasPage /></Layout></ProtectedRoute>} />
 
