@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useChallenge } from '../hooks/useChallenge';
 import { TrackPicker } from '../components/challenge/TrackPicker';
 import { BaselineForm } from '../components/challenge/BaselineForm';
+import { ChallengeOverview } from '../components/challenge/ChallengeOverview';
 
 /**
  * StudioChallenge — /studio/challenge
@@ -13,10 +14,11 @@ import { BaselineForm } from '../components/challenge/BaselineForm';
  *   2. Error
  *   3. No active challenge → TrackPicker
  *   4. Active challenge, no baseline yet → BaselineForm
- *   5. Active challenge, baseline captured → Phase 3 overview placeholder
+ *   5. Active challenge, baseline captured → ChallengeOverview (full Phase 3 view)
  */
 export function StudioChallenge() {
   const navigate = useNavigate();
+  const challenge = useChallenge();
   const {
     loading,
     error,
@@ -24,11 +26,9 @@ export function StudioChallenge() {
     activeProgress,
     activeTrack,
     hasBaseline,
-    currentDay,
-    completedCount,
     startChallenge,
     captureBaseline,
-  } = useChallenge();
+  } = challenge;
 
   const [startError, setStartError] = useState<string | null>(null);
 
@@ -78,7 +78,7 @@ export function StudioChallenge() {
             )}
             <TrackPicker tracks={tracks} onStart={handleStart} />
           </>
-        )}
+         )}
 
         {!loading && !error && activeProgress && activeTrack && !hasBaseline && (
           <BaselineForm
@@ -90,11 +90,7 @@ export function StudioChallenge() {
         )}
 
         {!loading && !error && activeProgress && activeTrack && hasBaseline && (
-          <ActiveChallengePlaceholder
-            trackName={activeTrack.name}
-            currentDay={currentDay}
-            completedCount={completedCount}
-          />
+          <ChallengeOverview state={challenge} />
         )}
       </div>
     </div>
@@ -113,46 +109,6 @@ function LoadingState() {
         <div className="h-[360px] bg-card animate-pulse" />
         <div className="h-[360px] bg-card animate-pulse" />
       </div>
-    </div>
-  );
-}
-
-// -----------------------------
-// Phase 3 will replace this with the full overview (bento grid, day panel, metrics chart, checkpoint flow).
-// Keeping a minimal stub so the flow is complete end-to-end: user can start → baseline → see confirmation.
-
-interface PlaceholderProps {
-  trackName: string;
-  currentDay: number;
-  completedCount: number;
-}
-
-function ActiveChallengePlaceholder({ trackName, currentDay, completedCount }: PlaceholderProps) {
-  return (
-    <div className="max-w-5xl mx-auto">
-      <div className="t-micro text-muted-foreground mb-2">Active · {trackName}</div>
-      <h1 className="text-3xl md:text-4xl font-medium tracking-tight text-foreground mb-3">
-        Baseline locked. Day {currentDay} is up.
-      </h1>
-      <p className="t-body text-muted-foreground mb-8 max-w-xl">
-        Phase 3 of the build will put the day grid, current hook, and metrics chart here. For now
-        your challenge is live and tracked.
-      </p>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-px bg-border">
-        <StatCell label="Track" value={trackName} />
-        <StatCell label="Current day" value={`Day ${currentDay}`} />
-        <StatCell label="Days completed" value={`${completedCount} / 30`} />
-      </div>
-    </div>
-  );
-}
-
-function StatCell({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="bg-card p-6">
-      <div className="t-micro text-muted-foreground mb-2">{label}</div>
-      <div className="text-xl font-medium tracking-tight text-foreground">{value}</div>
     </div>
   );
 }
