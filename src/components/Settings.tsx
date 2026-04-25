@@ -1,14 +1,16 @@
 import { useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase, type Profile } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
-import { Save, TrendingUp, DollarSign, AlertCircle, CheckCircle, Instagram, Youtube, Video, Link2, RefreshCw, X, Palette, Sun, Moon } from 'lucide-react';
+import { Save, TrendingUp, DollarSign, AlertCircle, CheckCircle, Instagram, Youtube, Video, Link2, RefreshCw, X, Palette, Sun, Moon, User, ArrowRight } from 'lucide-react';
 import { getPlatformStatus, getInstagramAuthUrl, getTikTokAuthUrl, getYouTubeAuthUrl, disconnectPlatform, syncPlatform, getMetaAuthUrl, getThreadsAuthUrl, type PlatformStatus } from '../lib/platforms';
 
 export function Settings() {
   const { user } = useAuth();
   const { theme, setTheme } = useTheme();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -133,6 +135,21 @@ export function Settings() {
         <h2 className="text-3xl font-black uppercase tracking-tight text-foreground mb-2">Settings</h2>
         <p className="text-muted-foreground text-xs font-mono uppercase tracking-[0.08em]">Configure your pricing defaults and performance averages</p>
       </div>
+
+      {/* Profile link card */}
+      <button
+        onClick={() => navigate('/profile')}
+        className="w-full p-6 bg-card border border-border text-left hover:border-foreground/40 transition-colors group flex items-center gap-4"
+      >
+        <div className="w-10 h-10 border border-border flex items-center justify-center flex-shrink-0">
+          <User className="w-5 h-5" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="text-xs font-mono uppercase tracking-[0.08em] text-foreground mb-1">Profile</div>
+          <div className="text-muted-foreground text-sm">Name, email, niche, and account preferences</div>
+        </div>
+        <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:translate-x-1 transition-transform flex-shrink-0" />
+      </button>
 
       {error && (
         <div className="p-3 border border-destructive text-sm flex items-start gap-2 bg-destructive/10 text-destructive">
