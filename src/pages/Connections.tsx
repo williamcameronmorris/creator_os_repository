@@ -97,7 +97,10 @@ export function Connections() {
     }
   };
 
-  const connectedPlatformIds = new Set(accounts.map((a) => a.platform));
+  // Hide accounts on platforms we don't support in-app
+  const supportedIds = new Set(ZERNIO_PLATFORMS.map(p => p.id));
+  const supportedAccounts = accounts.filter(a => supportedIds.has(a.platform as any));
+  const connectedPlatformIds = new Set(supportedAccounts.map((a) => a.platform));
   const availablePlatforms = ZERNIO_PLATFORMS.filter((p) => !connectedPlatformIds.has(p.id));
 
   return (
@@ -140,7 +143,7 @@ export function Connections() {
       {/* Connected accounts */}
       <div className="mb-12">
         <div className="flex items-center justify-between pb-3 border-b border-border mb-1">
-          <span className="t-micro">CONNECTED · {String(accounts.length).padStart(2, '0')}</span>
+          <span className="t-micro">CONNECTED · {String(supportedAccounts.length).padStart(2, '0')}</span>
           {!loading && (
             <button
               onClick={refresh}
@@ -153,11 +156,11 @@ export function Connections() {
 
         {loading ? (
           <div className="py-10 text-center t-micro">LOADING&hellip;</div>
-        ) : accounts.length === 0 ? (
+        ) : supportedAccounts.length === 0 ? (
           <div className="py-10 text-center t-micro">NOTHING CONNECTED YET</div>
         ) : (
           <div>
-            {accounts.map((account) => (
+            {supportedAccounts.map((account) => (
               <div
                 key={account.id}
                 className="grid gap-3 py-4 border-b border-border"
