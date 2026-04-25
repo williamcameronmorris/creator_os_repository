@@ -1,398 +1,470 @@
-import { useEffect, useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
-import {
-  User, Instagram, Youtube, Video, Edit2, Save, X,
-  Phone, MapPin, Globe, Mail, AtSign, CheckCircle, Clock,
-} from 'lucide-react';
-import { COMMON_TIMEZONES, detectBrowserTimezone } from '../lib/timezone';
-import { ThreadsIcon } from '../components/icons/ThreadsIcon';
+import { ArrowLeft, AlertTriangle, Save } from 'lucide-react';
 
-interface ProfileData {
-  full_name: string;
-  display_name: string;
-  bio: string;
-  phone: string;
-  city: string;
-  state: string;
-  website: string;
-  instagram_handle: string;
-  instagram_followers: number;
-  youtube_handle: string;
-  youtube_followers: number;
-  tiktok_handle: string;
-  tiktok_followers: number;
-  threads_handle: string;
-  threads_followers: number;
-  instagram_connected: boolean;
-  youtube_connected: boolean;
-  tiktok_connected: boolean;
-  threads_connected: boolean;
-  timezone: string;
+interface ProfileForm {
+  first_name: string;
+  last_name: string;
+  email: string;
+  niche_preference: string;
+  posting_frequency: string;
+  primary_platform: string;
+  notes: string;
 }
 
-const PROFILE_COLUMNS = [
-  'full_name', 'display_name', 'bio', 'phone', 'city', 'state', 'website', 'timezone',
-  'instagram_handle', 'instagram_followers', 'instagram_connected',
-  'youtube_handle', 'youtube_followers', 'youtube_connected',
-  'tiktok_handle', 'tiktok_followers', 'tiktok_connected',
-  'threads_handle', 'threads_followers', 'threads_connected',
-].join(', ');
+const PLATFORM_OPTIONS = [
+  { value: 'instagram', label: 'Instagram' },
+  { value: 'youtube', label: 'YouTube' },
+  { value: 'tiktok', label: 'TikTok' },
+  { value: 'facebook', label: 'Facebook' },
+  { value: 'threads', label: 'Threads' },
+];
 
-const emptyProfile: ProfileData = {
-  full_name: '',
-  display_name: '',
-  bio: '',
-  phone: '',
-  city: '',
-  state: '',
-  website: '',
-  instagram_handle: '',
-  instagram_followers: 0,
-  youtube_handle: '',
-  youtube_followers: 0,
-  tiktok_handle: '',
-  tiktok_followers: 0,
-  threads_handle: '',
-  threads_followers: 0,
-  instagram_connected: false,
-  youtube_connected: false,
-  tiktok_connected: false,
-  threads_connected: false,
-  timezone: 'America/New_York',
-};
+const FREQUENCY_OPTIONS = [
+  { value: 'daily', label: 'Daily' },
+  { value: '3-4-week', label: '3–4 / week' },
+  { value: '1-2-week', label: '1–2 / week' },
+  { value: 'monthly', label: 'A few times a month' },
+];
 
 export function Profile() {
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
   const navigate = useNavigate();
-  const [profile, setProfile] = useState<ProfileData>(emptyProfile);
+
+  const [form, setForm] = useState<ProfileForm>({
+    first_name: '',
+    last_name: '',
+    email: user?.email || '',
+    niche_preference: '',
+    posting_frequency: '',
+    primary_platform: '',
+    notes: '',
+  });
   const [loading, setLoading] = useState(true);
-  const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [editForm, setEditForm] = useState<Partial<ProfileData>>({});
-  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [savedAt, setSavedAt] = useState<Date | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [confirmText, setConfirmText] = useState('');
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (user) loadProfile();
-    else setLoading(false);
+    if (!user) return;
+    const load = async () => {
+      try {
+        const { data } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .maybeSingle();
+        if (data) {
+          setForm({
+            first_name: data.first_name || '',
+            last_name: data.last_name || '',
+            email: user.email || data.email || '',
+            niche_preference: data.niche_preference || '',
+            posting_frequency: data.posting_frequency || '',
+            primary_platform: data.primary_platform || '',
+            notes: data.notes || '',
+          });
+        }
+      } catch (e: any) {
+        setError(e.message || 'Failed to load profile.');
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
   }, [user]);
 
-  const loadProfile = async () => {
-    if (!user) return;
-    const safetyTimer = setTimeout(() => setLoading(false), 5000);
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select(PROFILE_COLUMNS)
-        .eq('id', user.id)
-        .maybeSingle();
-      if (!error && data) setProfile({ ...emptyProfile, ...data });
-    } catch (err) {
-      console.error('loadProfile error', err);
-    } finally {
-      clearTimeout(safetyTimer);
-      setLoading(false);
-    }
-  };
-
-  const startEditing = () => {
-    setEditForm({
-      full_name: profile.full_name,
-      display_name: profile.display_name,
-      bio: profile.bio,
-      phone: profile.phone,
-      city: profile.city,
-      state: profile.state,
-      website: profile.website,
-      timezone: profile.timezone || detectBrowserTimezone(),
-    });
-    setEditing(true);
-  };
-
-  const cancelEditing = () => {
-    setEditing(false);
-    setEditForm({});
-  };
-
-  const saveProfile = async () => {
+  const handleSave = async () => {
     if (!user) return;
     setSaving(true);
-    const { error } = await supabase
-      .from('profiles')
-      .update(editForm)
-      .eq('id', user.id);
-    if (!error) {
-      setProfile((prev) => ({ ...prev, ...editForm }));
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 2000);
-      setEditing(false);
+    setError(null);
+    try {
+      const updates = {
+        id: user.id,
+        first_name: form.first_name.trim(),
+        last_name: form.last_name.trim(),
+        niche_preference: form.niche_preference.trim(),
+        posting_frequency: form.posting_frequency,
+        primary_platform: form.primary_platform,
+        notes: form.notes.trim(),
+        updated_at: new Date().toISOString(),
+      };
+
+      const { error: upsertError } = await supabase
+        .from('profiles')
+        .upsert(updates, { onConflict: 'id' });
+
+      if (upsertError) throw upsertError;
+
+      if (form.email && form.email !== user.email) {
+        const { error: emailError } = await supabase.auth.updateUser({
+          email: form.email,
+        });
+        if (emailError) throw emailError;
+      }
+
+      setSavedAt(new Date());
+    } catch (e: any) {
+      setError(e.message || 'Failed to save profile.');
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
   };
 
-  const Field = ({
-    label,
-    icon: Icon,
-    field,
-    placeholder,
-    type = 'text',
-  }: {
-    label: string;
-    icon: React.ElementType;
-    field: keyof ProfileData;
-    placeholder: string;
-    type?: string;
-  }) => (
-    <div>
-      <label className="block text-xs font-semibold text-slate-500 mb-1.5 uppercase tracking-wide">
-        {label}
-      </label>
-      {editing ? (
-        <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-violet-200 bg-violet-50 focus-within:border-violet-400 transition-colors">
-          <Icon className="w-4 h-4 text-violet-400 flex-shrink-0" />
-          <input
-            type={type}
-            value={(editForm[field] as string) ?? ''}
-            onChange={(e) => setEditForm((f) => ({ ...f, [field]: e.target.value }))}
-            placeholder={placeholder}
-            className="flex-1 bg-transparent text-sm text-slate-800 placeholder-slate-400 outline-none"
-          />
-        </div>
-      ) : (
-        <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-slate-100 bg-slate-50">
-          <Icon className="w-4 h-4 text-slate-400 flex-shrink-0" />
-          <span className={`text-sm ${profile[field] ? 'text-slate-800' : 'text-slate-400'}`}>
-            {(profile[field] as string) || placeholder}
-          </span>
-        </div>
-      )}
-    </div>
-  );
+  const handleDeleteAccount = async () => {
+    if (!user) return;
+    if (confirmText.trim() !== 'DELETE MY ACCOUNT') {
+      setDeleteError('Confirmation text does not match.');
+      return;
+    }
+    setDeleting(true);
+    setDeleteError(null);
 
-  const platforms = [
-    {
-      key: 'instagram',
-      label: 'Instagram',
-      Icon: Instagram,
-      iconClass: 'text-pink-500',
-      bg: 'bg-pink-50',
-      handle: profile.instagram_handle,
-      followers: profile.instagram_followers,
-      connected: profile.instagram_connected,
-    },
-    {
-      key: 'youtube',
-      label: 'YouTube',
-      Icon: Youtube,
-      iconClass: 'text-red-500',
-      bg: 'bg-red-50',
-      handle: profile.youtube_handle,
-      followers: profile.youtube_followers,
-      connected: profile.youtube_connected,
-    },
-    {
-      key: 'threads',
-      label: 'Threads',
-      Icon: ThreadsIcon,
-      iconClass: 'text-gray-800',
-      bg: 'bg-gray-100',
-      handle: profile.threads_handle,
-      followers: profile.threads_followers,
-      connected: profile.threads_connected,
-    },
-    {
-      key: 'tiktok',
-      label: 'TikTok',
-      Icon: Video,
-      iconClass: 'text-gray-700',
-      bg: 'bg-gray-100',
-      handle: profile.tiktok_handle,
-      followers: profile.tiktok_followers,
-      connected: profile.tiktok_connected,
-    },
-  ];
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
 
-  const displayName = profile.display_name || profile.full_name || user?.email?.split('@')[0] || 'Your Name';
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-account`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session?.access_token}`,
+          },
+        }
+      );
+
+      if (!res.ok) {
+        const body = await res.text();
+        throw new Error(body || 'Account deletion failed.');
+      }
+
+      await signOut();
+      navigate('/auth', { replace: true });
+    } catch (e: any) {
+      setDeleteError(e.message || 'Account deletion failed.');
+      setDeleting(false);
+    }
+  };
 
   if (loading) {
     return (
-      <div className="max-w-2xl mx-auto">
-        <div className="p-8 rounded-2xl bg-white border border-slate-100 text-center">
-          <p className="text-slate-400 text-sm">Loading...</p>
-        </div>
+      <div className="min-h-[60vh] flex items-center justify-center">
+        <div className="w-1.5 h-1.5 bg-foreground animate-pulse" />
       </div>
     );
   }
 
   return (
-    <div className="max-w-2xl mx-auto space-y-5">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-black text-slate-900">Profile</h1>
-          <p className="text-sm text-slate-500 mt-0.5">Manage your account information</p>
+    <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-14">
+      <div className="t-micro mb-2">
+        <span className="text-foreground">04</span>
+        <span className="mx-2 text-muted-foreground">/</span>
+        <span>PROFILE</span>
+      </div>
+
+      <h1
+        className="text-foreground mb-2"
+        style={{
+          fontSize: 'clamp(2rem, 5vw, 3.5rem)',
+          fontWeight: 500,
+          letterSpacing: '-0.03em',
+          lineHeight: 1.05,
+        }}
+      >
+        Your{' '}
+        <em style={{ fontStyle: 'normal', color: 'var(--accent)' }}>profile.</em>
+      </h1>
+      <p className="t-body mb-10" style={{ maxWidth: '52ch' }}>
+        Tell us a little about you and how you create. We use this to make Clio
+        and Studio recommendations more relevant.
+      </p>
+
+      <section className="mb-10">
+        <div className="t-micro mb-4 pb-2 border-b border-border">IDENTITY</div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+          <Field
+            label="First name"
+            value={form.first_name}
+            onChange={(v) => setForm({ ...form, first_name: v })}
+            placeholder="Cam"
+          />
+          <Field
+            label="Last name"
+            value={form.last_name}
+            onChange={(v) => setForm({ ...form, last_name: v })}
+            placeholder="Morris"
+          />
         </div>
-        {!editing ? (
-          <button
-            onClick={startEditing}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold transition-colors"
-          >
-            <Edit2 className="w-3.5 h-3.5" />
-            Edit Profile
-          </button>
-        ) : (
-          <div className="flex items-center gap-2">
-            <button
-              onClick={cancelEditing}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-600 text-sm font-semibold transition-colors"
-            >
-              <X className="w-3.5 h-3.5" />
-              Cancel
-            </button>
-            <button
-              onClick={saveProfile}
-              disabled={saving}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 disabled:opacity-60 text-white text-sm font-semibold transition-colors"
-            >
-              {saveSuccess ? (
-                <><CheckCircle className="w-3.5 h-3.5" /> Saved!</>
-              ) : (
-                <><Save className="w-3.5 h-3.5" /> {saving ? 'Saving...' : 'Save'}</>
-              )}
-            </button>
-          </div>
+
+        <Field
+          label="Email"
+          value={form.email}
+          onChange={(v) => setForm({ ...form, email: v })}
+          placeholder="you@domain.com"
+          type="email"
+          help="Changing your email will require re-verification."
+        />
+      </section>
+
+      <section className="mb-10">
+        <div className="t-micro mb-4 pb-2 border-b border-border">
+          RECOMMENDATIONS
+        </div>
+
+        <Field
+          label="Niche or focus"
+          value={form.niche_preference}
+          onChange={(v) => setForm({ ...form, niche_preference: v })}
+          placeholder="Guitar gear, vintage amps, recording tips…"
+          help="Describe what you make so Clio can pull more relevant ideas."
+        />
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+          <SelectField
+            label="Primary platform"
+            value={form.primary_platform}
+            onChange={(v) => setForm({ ...form, primary_platform: v })}
+            options={PLATFORM_OPTIONS}
+          />
+          <SelectField
+            label="Posting frequency"
+            value={form.posting_frequency}
+            onChange={(v) => setForm({ ...form, posting_frequency: v })}
+            options={FREQUENCY_OPTIONS}
+          />
+        </div>
+
+        <div className="mt-4">
+          <label className="t-micro block mb-2">NOTES FOR CLIO</label>
+          <textarea
+            className="w-full bg-transparent border border-border px-3 py-2 text-foreground focus:outline-none focus:border-accent transition-colors"
+            style={{ minHeight: 96, fontSize: '14px', borderRadius: 0 }}
+            value={form.notes}
+            onChange={(e) => setForm({ ...form, notes: e.target.value })}
+            placeholder="Anything Clio should always keep in mind: brand voice, no-go topics, audience details, etc."
+          />
+        </div>
+      </section>
+
+      <div className="flex items-center gap-4 mb-16 pb-10 border-b border-border">
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="btn-ie inline-flex items-center gap-2 disabled:opacity-50"
+        >
+          <Save className="w-3.5 h-3.5" />
+          <span className="btn-ie-text">{saving ? 'Saving…' : 'Save changes'}</span>
+        </button>
+        {savedAt && (
+          <span className="t-micro text-muted-foreground">
+            SAVED {savedAt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }).toUpperCase()}
+          </span>
+        )}
+        {error && (
+          <span className="t-micro" style={{ color: 'var(--destructive, #c0392b)' }}>
+            {error}
+          </span>
         )}
       </div>
 
-      {/* Identity card */}
-      <div className="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm">
-        <div className="flex items-center gap-4 mb-6">
-          <div className="w-16 h-16 rounded-2xl bg-violet-100 flex items-center justify-center flex-shrink-0">
-            <User className="w-8 h-8 text-violet-500" />
-          </div>
-          <div>
-            <h2 className="text-xl font-black text-slate-900">{displayName}</h2>
-            <p className="text-sm text-slate-400">{user?.email}</p>
-            {(profile.city || profile.state) && (
-              <p className="text-xs text-slate-400 mt-0.5 flex items-center gap-1">
-                <MapPin className="w-3 h-3" />
-                {[profile.city, profile.state].filter(Boolean).join(', ')}
+      <section>
+        <div
+          className="t-micro mb-4 pb-2 border-b border-border"
+          style={{ color: 'var(--destructive, #c0392b)' }}
+        >
+          DANGER ZONE
+        </div>
+
+        <div
+          className="p-5 border border-border"
+          style={{ borderColor: 'var(--destructive, #c0392b)' }}
+        >
+          <div className="flex items-start gap-3 mb-3">
+            <AlertTriangle
+              className="w-4 h-4 mt-0.5 flex-shrink-0"
+              style={{ color: 'var(--destructive, #c0392b)' }}
+            />
+            <div>
+              <div className="text-foreground font-semibold mb-1" style={{ fontSize: '15px' }}>
+                Delete account
+              </div>
+              <p className="t-body" style={{ maxWidth: '54ch' }}>
+                Permanently removes your profile, posts, scheduled content, saved
+                ideas, social connections, and all associated data. This cannot
+                be undone.
               </p>
-            )}
+            </div>
           </div>
-        </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Field label="Full Name" icon={User} field="full_name" placeholder="Your full name" />
-          <Field label="Display Name" icon={AtSign} field="display_name" placeholder="How you appear in the app" />
-          <Field label="Email" icon={Mail} field="full_name" placeholder={user?.email || ''} />
-          <Field label="Phone" icon={Phone} field="phone" placeholder="+1 (555) 000-0000" type="tel" />
-          <Field label="City" icon={MapPin} field="city" placeholder="City" />
-          <Field label="State" icon={MapPin} field="state" placeholder="State" />
-          <div className="sm:col-span-2">
-            <Field label="Website" icon={Globe} field="website" placeholder="https://yoursite.com" type="url" />
-          </div>
-          <div className="sm:col-span-2">
-            <label className="block text-xs font-semibold text-slate-500 mb-1.5 uppercase tracking-wide">Timezone</label>
-            {editing ? (
-              <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-violet-200 bg-violet-50 focus-within:border-violet-400 transition-colors">
-                <Clock className="w-4 h-4 text-violet-400 flex-shrink-0" />
-                <select
-                  value={(editForm.timezone as string) ?? detectBrowserTimezone()}
-                  onChange={(e) => setEditForm((f) => ({ ...f, timezone: e.target.value }))}
-                  className="flex-1 bg-transparent text-sm text-slate-800 outline-none"
-                >
-                  {COMMON_TIMEZONES.map((tz) => (
-                    <option key={tz.value} value={tz.value}>{tz.label}</option>
-                  ))}
-                </select>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-slate-100 bg-slate-50">
-                <Clock className="w-4 h-4 text-slate-400 flex-shrink-0" />
-                <span className="text-sm text-slate-800">
-                  {COMMON_TIMEZONES.find((tz) => tz.value === profile.timezone)?.label || profile.timezone || 'Not set'}
-                </span>
-              </div>
-            )}
-          </div>
-          <div className="sm:col-span-2">
-            <label className="block text-xs font-semibold text-slate-500 mb-1.5 uppercase tracking-wide">Bio</label>
-            {editing ? (
-              <textarea
-                value={(editForm.bio as string) ?? ''}
-                onChange={(e) => setEditForm((f) => ({ ...f, bio: e.target.value }))}
-                placeholder="A short bio about yourself..."
-                rows={3}
-                className="w-full px-3 py-2.5 rounded-xl border border-violet-200 bg-violet-50 focus:border-violet-400 text-sm text-slate-800 placeholder-slate-400 outline-none resize-none transition-colors"
-              />
-            ) : (
-              <div className="px-3 py-2.5 rounded-xl border border-slate-100 bg-slate-50 min-h-[72px]">
-                <span className={`text-sm ${profile.bio ? 'text-slate-800' : 'text-slate-400'}`}>
-                  {profile.bio || 'Add a short bio...'}
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Connected Accounts */}
-      <div className="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-black text-slate-900">Connected Accounts</h3>
           <button
-            onClick={() => navigate('/settings')}
-            className="text-xs text-violet-600 hover:text-violet-700 font-semibold"
+            onClick={() => setShowDeleteModal(true)}
+            className="t-micro inline-flex items-center gap-2 px-3 py-2 border transition-colors"
+            style={{
+              borderColor: 'var(--destructive, #c0392b)',
+              color: 'var(--destructive, #c0392b)',
+              borderRadius: 0,
+            }}
           >
-            Manage →
+            DELETE MY ACCOUNT
           </button>
         </div>
+      </section>
 
-        <div className="space-y-3">
-          {platforms.map(({ key, label, Icon, iconClass, bg, handle, followers, connected }) => (
-            <div
-              key={key}
-              className={`flex items-center justify-between p-3 rounded-xl border ${
-                connected ? 'border-emerald-100 bg-emerald-50/50' : 'border-slate-100 bg-slate-50'
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <div className={`w-9 h-9 rounded-xl ${bg} flex items-center justify-center`}>
-                  <Icon className={`w-4.5 h-4.5 ${connected ? iconClass : 'text-slate-400'}`} style={{ width: '18px', height: '18px' }} />
-                </div>
-                <div>
-                  <p className={`text-sm font-semibold ${connected ? 'text-slate-900' : 'text-slate-400'}`}>
-                    {connected ? (handle || label) : label}
-                  </p>
-                  {connected && followers > 0 && (
-                    <p className="text-xs text-slate-500">{followers.toLocaleString()} followers</p>
-                  )}
-                  {connected && followers === 0 && (
-                    <p className="text-xs text-slate-400">Connected</p>
-                  )}
-                  {!connected && (
-                    <p className="text-xs text-slate-400">Not connected</p>
-                  )}
-                </div>
-              </div>
-              {connected ? (
-                <span className="text-[10px] font-bold text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-full">
-                  Connected
-                </span>
-              ) : (
-                <button
-                  onClick={() => navigate('/settings')}
-                  className="text-[10px] font-bold text-violet-600 bg-violet-100 hover:bg-violet-200 px-2 py-0.5 rounded-full transition-colors"
-                >
-                  Connect
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
+      <div className="mt-12">
+        <button
+          onClick={() => navigate('/settings')}
+          className="t-micro inline-flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <ArrowLeft className="w-3 h-3" />
+          BACK TO SETTINGS
+        </button>
       </div>
+
+      {showDeleteModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.6)' }}
+          onClick={() => !deleting && setShowDeleteModal(false)}
+        >
+          <div
+            className="w-full max-w-md bg-background border p-6"
+            style={{ borderColor: 'var(--destructive, #c0392b)', borderRadius: 0 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="t-micro mb-3" style={{ color: 'var(--destructive, #c0392b)' }}>
+              CONFIRM DELETION
+            </div>
+            <h2
+              className="text-foreground mb-3"
+              style={{ fontSize: '1.5rem', fontWeight: 500, letterSpacing: '-0.02em' }}
+            >
+              This will permanently erase your account.
+            </h2>
+            <p className="t-body mb-5">
+              All scheduled posts, saved ideas, analytics history, and connected
+              social profiles will be removed. There is no recovery.
+            </p>
+
+            <label className="t-micro block mb-2">
+              TYPE <span className="text-foreground">DELETE MY ACCOUNT</span> TO CONFIRM
+            </label>
+            <input
+              type="text"
+              className="w-full bg-transparent border border-border px-3 py-2 text-foreground mb-4 focus:outline-none"
+              style={{ borderRadius: 0, fontSize: '14px' }}
+              value={confirmText}
+              onChange={(e) => setConfirmText(e.target.value)}
+              disabled={deleting}
+              autoFocus
+            />
+
+            {deleteError && (
+              <div className="t-micro mb-4" style={{ color: 'var(--destructive, #c0392b)' }}>
+                {deleteError}
+              </div>
+            )}
+
+            <div className="flex items-center gap-3 justify-end">
+              <button
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setConfirmText('');
+                  setDeleteError(null);
+                }}
+                disabled={deleting}
+                className="t-micro px-3 py-2 text-muted-foreground hover:text-foreground transition-colors"
+              >
+                CANCEL
+              </button>
+              <button
+                onClick={handleDeleteAccount}
+                disabled={deleting || confirmText.trim() !== 'DELETE MY ACCOUNT'}
+                className="t-micro px-3 py-2 border disabled:opacity-40 transition-colors"
+                style={{
+                  borderColor: 'var(--destructive, #c0392b)',
+                  color: 'var(--destructive, #c0392b)',
+                  borderRadius: 0,
+                }}
+              >
+                {deleting ? 'DELETING…' : 'PERMANENTLY DELETE'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Field({
+  label,
+  value,
+  onChange,
+  placeholder,
+  type = 'text',
+  help,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  type?: string;
+  help?: string;
+}) {
+  return (
+    <div>
+      <label className="t-micro block mb-2">{label.toUpperCase()}</label>
+      <input
+        type={type}
+        className="w-full bg-transparent border border-border px-3 py-2 text-foreground focus:outline-none focus:border-accent transition-colors"
+        style={{ borderRadius: 0, fontSize: '14px' }}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+      />
+      {help && <p className="t-micro text-muted-foreground mt-1.5">{help}</p>}
+    </div>
+  );
+}
+
+function SelectField({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: { value: string; label: string }[];
+}) {
+  return (
+    <div>
+      <label className="t-micro block mb-2">{label.toUpperCase()}</label>
+      <select
+        className="w-full bg-transparent border border-border px-3 py-2 text-foreground focus:outline-none focus:border-accent transition-colors"
+        style={{ borderRadius: 0, fontSize: '14px' }}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      >
+        <option value="">Select…</option>
+        {options.map((opt) => (
+          <option key={opt.value} value={opt.value}>
+            {opt.label}
+          </option>
+        ))}
+      </select>
     </div>
   );
 }
