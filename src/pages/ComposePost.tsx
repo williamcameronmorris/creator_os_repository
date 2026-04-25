@@ -22,7 +22,6 @@ import {
 
 type Mode = 'now' | 'schedule' | 'queue';
 type PublishState = 'idle' | 'uploading' | 'submitting' | 'done' | 'error';
-type YouTubeFormat = 'short' | 'long';
 
 interface MediaItem {
   file: File;
@@ -43,11 +42,10 @@ const PLATFORM_RULES: Record<string, PlatformRule> = {
   linkedin:  { captionLimit: 3000,   mediaRequired: false, mediaMax: 9,  mediaTypes: 'both' },
   instagram: { captionLimit: 2200,   mediaRequired: true,  mediaMax: 10, mediaTypes: 'both' },
   tiktok:    { captionLimit: 4000,   mediaRequired: true,  mediaMax: 1,  mediaTypes: 'video' },
-  youtube:   { captionLimit: 5000,   mediaRequired: true,  mediaMax: 1,  mediaTypes: 'video' },
+  youtube:   { captionLimit: 100,    mediaRequired: true,  mediaMax: 1,  mediaTypes: 'video' },
   facebook:  { captionLimit: 63000,  mediaRequired: false, mediaMax: 10, mediaTypes: 'both' },
 };
 
-const YOUTUBE_SHORT_CAPTION_LIMIT = 100;
 
 export function ComposePost() {
   const { user } = useAuth();
@@ -58,7 +56,6 @@ export function ComposePost() {
   const [accounts, setAccounts] = useState<ZernioAccount[]>([]);
   const [loadingAccounts, setLoadingAccounts] = useState(true);
   const [selectedPlatforms, setSelectedPlatforms] = useState<Set<string>>(new Set());
-  const [youtubeFormat, setYoutubeFormat] = useState<YouTubeFormat>('short');
 
   const [caption, setCaption] = useState('');
   const [media, setMedia] = useState<MediaItem[]>([]);
@@ -102,13 +99,8 @@ export function ComposePost() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const ytSelected = selectedPlatforms.has('youtube');
-  const ytLimit = ytSelected && youtubeFormat === 'short'
-    ? YOUTUBE_SHORT_CAPTION_LIMIT
-    : (PLATFORM_RULES.youtube?.captionLimit ?? 5000);
-
   const captionLimit = [...selectedPlatforms]
-    .map((p) => p === 'youtube' ? ytLimit : (PLATFORM_RULES[p]?.captionLimit ?? 2200))
+    .map((p) => PLATFORM_RULES[p]?.captionLimit ?? 2200)
     .reduce((min, n) => Math.min(min, n), Infinity);
 
   const effectiveLimit = captionLimit === Infinity ? 2200 : captionLimit;
@@ -226,7 +218,7 @@ export function ComposePost() {
         scheduled_for: scheduledFor,
         status: 'scheduled',
         provider: 'zernio',
-        content_type: platform === 'youtube' ? youtubeFormat : 'post',
+        content_type: platform === 'youtube' ? 'short' : 'post',
       }));
 
       const { error: insertErr } = await supabase.from('content_posts').insert(rows);
@@ -333,32 +325,6 @@ export function ComposePost() {
         })}
       </div>
 
-      {/* YouTube format toggle */}
-      {ytSelected && (
-        <div className="mb-6">
-          <span className="t-micro block mb-2">YOUTUBE FORMAT</span>
-          <div className="flex gap-2">
-            {(['short', 'long'] as YouTubeFormat[]).map((f) => {
-              const active = youtubeFormat === f;
-              const label = f === 'short' ? 'SHORTS · 100 CHAR CAP' : 'LONG-FORM · 5000';
-              return (
-                <button
-                  key={f}
-                  onClick={() => setYoutubeFormat(f)}
-                  className="font-mono text-[10px] font-medium uppercase tracking-widest px-3 py-2 border transition-colors"
-                  style={{
-                    borderColor: active ? 'var(--accent)' : 'var(--border)',
-                    color: active ? 'var(--accent)' : 'var(--foreground)',
-                  }}
-                >
-                  {label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
       {/* Caption */}
       <div className="ie-border-t ie-border-b py-6 mb-6">
         <textarea
@@ -372,7 +338,7 @@ export function ComposePost() {
         />
         <div className="flex justify-between mt-3 items-center">
           <span className="t-micro text-muted-foreground" style={{ fontSize: '9px' }}>
-            CAP: {effectiveLimit}{ytSelected && youtubeFormat === 'short' ? ' · YT SHORTS' : ''}
+            CAP: {effectiveLimit}
           </span>
           <span
             className="font-mono text-[11px]"
