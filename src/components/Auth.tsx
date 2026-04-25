@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useSearchParams } from 'react-router-dom';
-import { Briefcase, ArrowLeft } from 'lucide-react';
+import { ArrowLeft, ArrowRight } from 'lucide-react';
 
 type AuthView = 'signin' | 'signup' | 'forgot' | 'reset';
 
 // Map raw Supabase error messages to user-friendly copy
-function friendlyAuthError(message: string, view: AuthView): string {
+function friendlyAuthError(message: string, _view: AuthView): string {
   const m = message.toLowerCase();
   if (m.includes('only request this after') || m.includes('for security purposes')) {
     const seconds = message.match(/after (\d+) second/)?.[1];
@@ -32,7 +32,6 @@ function friendlyAuthError(message: string, view: AuthView): string {
   if (m.includes('signup is disabled')) {
     return 'New sign-ups are temporarily disabled. Please try again later.';
   }
-  // Fallback: return the original message, but strip Supabase boilerplate
   return message.replace(/^\[.*?\]\s*/, '');
 }
 
@@ -59,13 +58,9 @@ export function Auth() {
     setError('');
     setSuccess('');
     setLoading(true);
-
     try {
-      if (view === 'signup') {
-        await signUp(email, password);
-      } else if (view === 'signin') {
-        await signIn(email, password);
-      }
+      if (view === 'signup') await signUp(email, password);
+      else if (view === 'signin') await signIn(email, password);
     } catch (err: any) {
       setError(friendlyAuthError(err.message || 'An error occurred', view));
     } finally {
@@ -78,7 +73,6 @@ export function Auth() {
     setError('');
     setSuccess('');
     setLoading(true);
-
     try {
       await resetPassword(email);
       setSuccess('Password reset instructions sent to your email');
@@ -94,25 +88,19 @@ export function Auth() {
     e.preventDefault();
     setError('');
     setSuccess('');
-
     if (newPassword !== confirmPassword) {
       setError('Passwords do not match');
       return;
     }
-
     if (newPassword.length < 6) {
       setError('Password must be at least 6 characters');
       return;
     }
-
     setLoading(true);
-
     try {
       await updatePassword(newPassword);
-      setSuccess('Password updated successfully! Redirecting...');
-      setTimeout(() => {
-        window.location.href = '/dashboard';
-      }, 2000);
+      setSuccess('Password updated successfully. Redirecting…');
+      setTimeout(() => { window.location.href = '/dashboard'; }, 2000);
     } catch (err: any) {
       setError(friendlyAuthError(err.message || 'An error occurred', 'reset'));
     } finally {
@@ -120,227 +108,208 @@ export function Auth() {
     }
   };
 
+  // Reusable input styling
+  const inputClass =
+    'w-full bg-transparent border border-border px-3 py-3 font-mono text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-accent transition-colors';
+
+  // Force the cream editorial background regardless of theme state
+  const pageStyle: React.CSSProperties = {
+    background: 'var(--background, #F7F4EE)',
+    color: 'var(--foreground, #1a1a1a)',
+    minHeight: '100vh',
+  };
+
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
+    <div style={pageStyle} className="flex items-center justify-center px-4 py-12">
       <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-primary rounded-2xl mb-4 shadow-lg">
-            <Briefcase className="w-8 h-8 text-primary-foreground" />
-          </div>
-          <h1 className="text-4xl font-bold text-foreground mb-2 tracking-tight">Creator Command</h1>
-          <p className="text-muted-foreground text-lg">Your content studio and business office, unified</p>
+
+        {/* Section marker */}
+        <div className="t-micro mb-2">
+          <span className="text-foreground">00</span>
+          <span className="mx-2 text-muted-foreground">/</span>
+          <span>{view === 'reset' ? 'RESET' : view === 'forgot' ? 'RECOVER' : view === 'signup' ? 'SIGN UP' : 'SIGN IN'}</span>
         </div>
 
-        <div className="bg-card backdrop-blur-sm border border-border rounded-2xl p-8 shadow-xl">
-          {view === 'forgot' && (
-            <>
-              <div className="mb-6">
-                <button
-                  onClick={() => {
-                    setView('signin');
-                    setError('');
-                    setSuccess('');
-                  }}
-                  className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  <ArrowLeft className="w-4 h-4" />
-                  Back to Sign In
-                </button>
+        {/* Editorial heading */}
+        <h1
+          className="text-foreground mb-3"
+          style={{ fontSize: 'clamp(2rem, 5vw, 3rem)', fontWeight: 500, letterSpacing: '-0.03em', lineHeight: 1.05 }}
+        >
+          {view === 'signup' ? (
+            <>Start your <em style={{ fontStyle: 'normal', color: 'var(--accent)' }}>command.</em></>
+          ) : view === 'forgot' ? (
+            <>Recover the <em style={{ fontStyle: 'normal', color: 'var(--accent)' }}>keys.</em></>
+          ) : view === 'reset' ? (
+            <>Set a new <em style={{ fontStyle: 'normal', color: 'var(--accent)' }}>password.</em></>
+          ) : (
+            <>Welcome <em style={{ fontStyle: 'normal', color: 'var(--accent)' }}>back.</em></>
+          )}
+        </h1>
+        <p className="t-body mb-10" style={{ maxWidth: '34ch' }}>
+          {view === 'forgot'
+            ? 'Enter your email and we’ll send instructions to reset your password.'
+            : view === 'reset'
+            ? 'Choose a new password to finish resetting your account.'
+            : 'Your content studio and business office, unified.'}
+        </p>
+
+        {/* ── FORGOT VIEW ─────────────────────────────────────────── */}
+        {view === 'forgot' && (
+          <>
+            <button
+              onClick={() => { setView('signin'); setError(''); setSuccess(''); }}
+              className="t-micro mb-6 text-muted-foreground hover:text-foreground transition-colors flex items-center gap-2"
+            >
+              <ArrowLeft className="w-3 h-3" />
+              BACK TO SIGN IN
+            </button>
+
+            <form onSubmit={handleForgotPassword} className="space-y-6">
+              <div>
+                <label htmlFor="reset-email" className="t-micro block mb-2">EMAIL</label>
+                <input
+                  id="reset-email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className={inputClass}
+                  placeholder="you@example.com"
+                  required
+                />
+              </div>
+              {error && <p className="t-micro" style={{ color: 'var(--destructive, #c44)' }}>{error}</p>}
+              {success && <p className="t-micro" style={{ color: 'var(--accent)' }}>✓ {success}</p>}
+              <button
+                type="submit"
+                disabled={loading}
+                className="btn-ie btn-ie-solid w-full disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                <span className="btn-ie-text">{loading ? 'SENDING…' : 'SEND RESET INSTRUCTIONS'}</span>
+                {!loading && <ArrowRight className="w-3 h-3" />}
+              </button>
+            </form>
+          </>
+        )}
+
+        {/* ── RESET VIEW ──────────────────────────────────────────── */}
+        {view === 'reset' && (
+          <form onSubmit={handleUpdatePassword} className="space-y-6">
+            <div>
+              <label htmlFor="new-password" className="t-micro block mb-2">NEW PASSWORD</label>
+              <input
+                id="new-password"
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                className={inputClass}
+                placeholder="••••••••"
+                required
+                minLength={6}
+              />
+            </div>
+            <div>
+              <label htmlFor="confirm-password" className="t-micro block mb-2">CONFIRM PASSWORD</label>
+              <input
+                id="confirm-password"
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className={inputClass}
+                placeholder="••••••••"
+                required
+                minLength={6}
+              />
+            </div>
+            {error && <p className="t-micro" style={{ color: 'var(--destructive, #c44)' }}>{error}</p>}
+            {success && <p className="t-micro" style={{ color: 'var(--accent)' }}>✓ {success}</p>}
+            <button
+              type="submit"
+              disabled={loading}
+              className="btn-ie btn-ie-solid w-full disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              <span className="btn-ie-text">{loading ? 'UPDATING…' : 'UPDATE PASSWORD'}</span>
+              {!loading && <ArrowRight className="w-3 h-3" />}
+            </button>
+          </form>
+        )}
+
+        {/* ── SIGNIN / SIGNUP VIEW ────────────────────────────────── */}
+        {(view === 'signin' || view === 'signup') && (
+          <>
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div>
+                <label htmlFor="email" className="t-micro block mb-2">EMAIL</label>
+                <input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className={inputClass}
+                  placeholder="you@example.com"
+                  required
+                />
               </div>
 
-              <h2 className="text-2xl font-bold text-foreground mb-2">Reset Password</h2>
-              <p className="text-sm text-muted-foreground mb-6">
-                Enter your email address and we'll send you instructions to reset your password.
-              </p>
-
-              <form onSubmit={handleForgotPassword} className="space-y-6">
-                <div>
-                  <label htmlFor="reset-email" className="block text-sm font-medium text-foreground mb-2">
-                    Email
-                  </label>
-                  <input
-                    id="reset-email"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full px-4 py-3 bg-background border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
-                    placeholder="you@example.com"
-                    required
-                  />
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label htmlFor="password" className="t-micro">PASSWORD</label>
+                  {view === 'signin' && (
+                    <button
+                      type="button"
+                      onClick={() => { setView('forgot'); setError(''); setSuccess(''); }}
+                      className="t-micro text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      FORGOT?
+                    </button>
+                  )}
                 </div>
-
-                {error && (
-                  <div className="p-3 bg-red-500/10 border border-red-500/50 rounded-lg text-red-400 text-sm">
-                    {error}
-                  </div>
-                )}
-
-                {success && (
-                  <div className="p-3 bg-emerald-500/10 border border-emerald-500/50 rounded-lg text-emerald-400 text-sm">
-                    {success}
-                  </div>
-                )}
-
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full py-3 px-4 bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-primary-foreground font-medium rounded-lg transition-all duration-200 shadow-md hover:shadow-lg"
-                >
-                  {loading ? 'Sending...' : 'Send Reset Instructions'}
-                </button>
-              </form>
-            </>
-          )}
-
-          {view === 'reset' && (
-            <>
-              <h2 className="text-2xl font-bold text-foreground mb-2">Set New Password</h2>
-              <p className="text-sm text-muted-foreground mb-6">
-                Enter your new password below.
-              </p>
-
-              <form onSubmit={handleUpdatePassword} className="space-y-6">
-                <div>
-                  <label htmlFor="new-password" className="block text-sm font-medium text-foreground mb-2">
-                    New Password
-                  </label>
-                  <input
-                    id="new-password"
-                    type="password"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    className="w-full px-4 py-3 bg-background border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
-                    placeholder="••••••••"
-                    required
-                    minLength={6}
-                  />
-                </div>
-
-                <div>
-                  <label htmlFor="confirm-password" className="block text-sm font-medium text-foreground mb-2">
-                    Confirm New Password
-                  </label>
-                  <input
-                    id="confirm-password"
-                    type="password"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="w-full px-4 py-3 bg-background border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
-                    placeholder="••••••••"
-                    required
-                    minLength={6}
-                  />
-                </div>
-
-                {error && (
-                  <div className="p-3 bg-red-500/10 border border-red-500/50 rounded-lg text-red-400 text-sm">
-                    {error}
-                  </div>
-                )}
-
-                {success && (
-                  <div className="p-3 bg-emerald-500/10 border border-emerald-500/50 rounded-lg text-emerald-400 text-sm">
-                    {success}
-                  </div>
-                )}
-
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full py-3 px-4 bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-primary-foreground font-medium rounded-lg transition-all duration-200 shadow-md hover:shadow-lg"
-                >
-                  {loading ? 'Updating...' : 'Update Password'}
-                </button>
-              </form>
-            </>
-          )}
-
-          {(view === 'signin' || view === 'signup') && (
-            <>
-              <form onSubmit={handleSubmit} className="space-y-6">
-                <div>
-                  <label htmlFor="email" className="block text-sm font-medium text-foreground mb-2">
-                    Email
-                  </label>
-                  <input
-                    id="email"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full px-4 py-3 bg-background border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
-                    placeholder="you@example.com"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label htmlFor="password" className="block text-sm font-medium text-foreground">
-                      Password
-                    </label>
-                    {view === 'signin' && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setView('forgot');
-                          setError('');
-                          setSuccess('');
-                        }}
-                        className="text-xs text-primary hover:underline"
-                      >
-                        Forgot Password?
-                      </button>
-                    )}
-                  </div>
-                  <input
-                    id="password"
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full px-4 py-3 bg-background border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
-                    placeholder="••••••••"
-                    required
-                    minLength={6}
-                  />
-                </div>
-
-                {error && (
-                  <div className="p-3 bg-red-500/10 border border-red-500/50 rounded-lg text-red-400 text-sm">
-                    {error}
-                  </div>
-                )}
-
-                {success && (
-                  <div className="p-3 bg-emerald-500/10 border border-emerald-500/50 rounded-lg text-emerald-400 text-sm">
-                    {success}
-                  </div>
-                )}
-
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full py-3 px-4 bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-primary-foreground font-medium rounded-lg transition-all duration-200 shadow-md hover:shadow-lg"
-                >
-                  {loading ? 'Loading...' : view === 'signup' ? 'Sign Up' : 'Sign In'}
-                </button>
-              </form>
-
-              <div className="mt-6 text-center">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setView(view === 'signin' ? 'signup' : 'signin');
-                    setError('');
-                    setSuccess('');
-                  }}
-                  className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  {view === 'signup' ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
-                </button>
+                <input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className={inputClass}
+                  placeholder="••••••••"
+                  required
+                  minLength={6}
+                />
               </div>
-            </>
-          )}
+
+              {error && <p className="t-micro" style={{ color: 'var(--destructive, #c44)' }}>{error}</p>}
+              {success && <p className="t-micro" style={{ color: 'var(--accent)' }}>✓ {success}</p>}
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="btn-ie btn-ie-solid w-full disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                <span className="btn-ie-text">
+                  {loading ? 'LOADING…' : view === 'signup' ? 'CREATE ACCOUNT' : 'SIGN IN'}
+                </span>
+                {!loading && <ArrowRight className="w-3 h-3" />}
+              </button>
+            </form>
+
+            <div className="mt-8 pt-6 border-t border-border text-center">
+              <button
+                type="button"
+                onClick={() => {
+                  setView(view === 'signin' ? 'signup' : 'signin');
+                  setError(''); setSuccess('');
+                }}
+                className="t-micro text-muted-foreground hover:text-foreground transition-colors"
+              >
+                {view === 'signup' ? 'ALREADY HAVE AN ACCOUNT? SIGN IN' : 'DON’T HAVE AN ACCOUNT? SIGN UP'}
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* Footer brand mark */}
+        <div className="mt-12 t-micro text-muted-foreground">
+          CREATOR COMMAND · v1
         </div>
+
       </div>
     </div>
   );

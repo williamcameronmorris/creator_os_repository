@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatInTz } from '../lib/timezone';
 import { ArrowRight } from 'lucide-react';
+import { OfficeConnectionsCard } from '../components/OfficeConnectionsCard';
 
 interface ScheduledItem {
   id: string;
