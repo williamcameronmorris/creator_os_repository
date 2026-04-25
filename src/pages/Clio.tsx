@@ -282,10 +282,23 @@ export function Clio() {
                   {renderMarkdown(parsed.preamble)}
                 </div>
               )}
+              {(() => {
+                // If the user asked for a specific count and we got fewer ideas, surface a soft warning.
+                const m = query.match(/\b(\d+)\s+(?:content\s+)?(?:ideas?|suggestions?|posts?)\b/i);
+                const requested = m ? parseInt(m[1], 10) : 0;
+                if (requested > 0 && parsed.ideas.length < requested && parsed.ideas.length >= 2) {
+                  return (
+                    <div className="t-micro text-muted-foreground mb-3 inline-flex items-center gap-2 px-2.5 py-1 border border-border">
+                      Showing {parsed.ideas.length} of {requested} · ask again for the full set
+                    </div>
+                  );
+                }
+                return null;
+              })()}
               <div>
-                {parsed.ideas.map((idea) => (
+                {parsed.ideas.map((idea, i) => (
                   <button
-                    key={idea.number}
+                    key={i}
                     onClick={() => {
                       const params = new URLSearchParams({
                         idea: idea.title,
@@ -297,7 +310,7 @@ export function Clio() {
                   >
                     <div className="flex items-baseline gap-4 py-4 border-b border-border hover:bg-transparent transition-colors">
                       <span className="t-micro font-bold text-foreground" style={{ minWidth: '1.5rem' }}>
-                        {String(idea.number).padStart(2, '0')}
+                        {String(i + 1).padStart(2, '0')}
                       </span>
                       <div className="flex-1">
                         <span className="text-sm font-semibold text-foreground block group-hover:text-accent transition-colors">
