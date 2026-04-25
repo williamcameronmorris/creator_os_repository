@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { useTimezone } from '../hooks/useTimezone';
+import { formatInTz } from '../lib/timezone';
 import { ArrowRight } from 'lucide-react';
 import { OfficeConnectionsCard } from '../components/OfficeConnectionsCard';
 
@@ -15,9 +17,10 @@ interface ScheduledItem {
 export function OfficeHub() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { timezone } = useTimezone();
   const [scheduled, setScheduled] = useState<ScheduledItem[]>([]);
   const [queueCount, setQueueCount] = useState(0);
-  const [growthPct, setGrowthPct] = useState<string | null>(null);
+  const [growthPct] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -37,13 +40,31 @@ export function OfficeHub() {
     load();
   }, [user]);
 
+  // Stacked date format: "TUE APR 28" / "05:00 AM" — preserves the user's
+  // configured timezone via formatInTz.
   const formatWhen = (iso: string) => {
-    const d = new Date(iso);
-    return d.toLocaleDateString('en-US', { weekday: 'short', hour: '2-digit', minute: '2-digit' }).toUpperCase();
+    const dayPart = formatInTz(iso, timezone, {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      hour: undefined,
+      minute: undefined,
+      year: undefined,
+    }).toUpperCase();
+    const timePart = formatInTz(iso, timezone, {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+      weekday: undefined,
+      month: undefined,
+      day: undefined,
+      year: undefined,
+    }).toUpperCase();
+    return `${dayPart}\n${timePart}`;
   };
 
   const nextPublish = scheduled[0]
-    ? formatWhen(scheduled[0].scheduled_date)
+    ? formatWhen(scheduled[0].scheduled_date).replace('\n', ' · ')
     : null;
 
   return (
@@ -92,9 +113,9 @@ export function OfficeHub() {
                 >
                   <div
                     className="grid gap-3 py-4 border-b border-border"
-                    style={{ gridTemplateColumns: '80px 1fr auto', alignItems: 'baseline' }}
+                    style={{ gridTemplateColumns: '92px 1fr auto', alignItems: 'baseline' }}
                   >
-                    <span className="t-micro">{formatWhen(item.scheduled_date)}</span>
+                    <span className="t-micro" style={{ whiteSpace: 'pre-line', lineHeight: 1.3 }}>{formatWhen(item.scheduled_date)}</span>
                     <div>
                       <div
                         className="text-foreground font-medium group-hover:text-accent transition-colors"
@@ -169,7 +190,7 @@ export function OfficeHub() {
                   Analytics
                 </div>
                 <div className="t-body" style={{ maxWidth: '26ch' }}>
-                  Cross-platform performance, watch-through, and what’s compounding this month.
+                  Cross-platform performance, watch-through, and what&rsquo;s compounding this month.
                 </div>
               </div>
               <span className="t-micro text-foreground group-hover:text-accent transition-colors flex items-center gap-2">
@@ -177,22 +198,6 @@ export function OfficeHub() {
               </span>
             </button>
 
-          </div>
-
-          {/* Connections — full-width tile under Schedule + Analytics */}
-          <div className="mt-4">
-            <OfficeConnectionsCard />
-          </div>
-
-          {/* Archived note */}
-          <div className="mt-6 flex items-center gap-3">
-            <span
-              className="font-mono text-[10px] tracking-widest uppercase border border-border px-2.5 py-1"
-              style={{ color: 'var(--muted-foreground)' }}
-            >
-              ARCHIVED
-            </span>
-            <span className="t-micro">Revenue · Deal pipeline &#8212; restore when expanding into monetization</span>
           </div>
         </div>
 
