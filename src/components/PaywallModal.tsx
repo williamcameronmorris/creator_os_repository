@@ -28,8 +28,8 @@ export function PaywallModal({ isOpen, onClose, feature, onUpgradeIntent }: Payw
       window.open(url, '_blank', 'noopener,noreferrer');
     } else {
       // Fallback: mailto until payment link is configured
-      const subject = encodeURIComponent('Creator Command — Upgrade to Premium');
-      const body = encodeURIComponent(`Hi, I'd like to upgrade my Creator Command account to Premium.\n\nEmail: ${email}`);
+      const subject = encodeURIComponent('Cliopatra Social — Upgrade to Premium');
+      const body = encodeURIComponent(`Hi, I'd like to upgrade my Cliopatra Social account to Premium.\n\nEmail: ${email}`);
       window.open(`mailto:hello@theamplifiedcreator.com?subject=${subject}&body=${body}`, '_blank');
     }
 

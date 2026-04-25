@@ -116,13 +116,13 @@ export function Layout({ children }: LayoutProps) {
                 className="font-sans font-bold text-lg tracking-tight text-foreground"
                 style={{ letterSpacing: '-0.02em' }}
               >
-                Clio
+                Cliopatra
               </span>
               <span
                 className="font-mono text-[9px] font-medium tracking-widest text-muted-foreground uppercase"
                 style={{ letterSpacing: '0.1em' }}
               >
-                v0.4
+                v0.5
               </span>
             </Link>
 
