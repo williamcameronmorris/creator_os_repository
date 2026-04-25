@@ -154,6 +154,7 @@ export default function App() {
           <AuthProvider>
             <SubscriptionProvider>
               <AppContent />
+            </SubscriptionProvider>
           </AuthProvider>
         </ThemeProvider>
       </BrowserRouter>
