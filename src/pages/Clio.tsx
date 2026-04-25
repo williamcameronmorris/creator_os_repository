@@ -211,18 +211,21 @@ export function Clio() {
       label: 'GENERATE IDEAS',
       description: 'Get AI-powered content ideas based on your niche',
       prompt: 'Generate 5 content ideas for my next week of posts',
+      accent: 'var(--accent)', // gold — primary
     },
     {
       icon: TrendingUp,
       label: 'ANALYZE TRENDS',
       description: 'See what\'s working in your space right now',
       prompt: 'What content trends should I be paying attention to?',
+      accent: '#7A9E89', // muted sage
     },
     {
       icon: Calendar,
       label: 'PLAN MY WEEK',
       description: 'Build a posting schedule that makes sense',
       prompt: 'Help me plan my content for the next 7 days',
+      accent: '#B07050', // muted terracotta
     },
   ];
 
@@ -390,9 +393,13 @@ export function Clio() {
                       key={s.label}
                       onClick={s.prompt ? () => { setQuery(s.prompt); inputRef.current?.focus(); } : s.action}
                       className="card-industrial p-5 text-left group flex items-start gap-4 cursor-pointer"
+                      style={{ borderLeft: `2px solid ${s.accent}` }}
                     >
-                      <div className="w-8 h-8 flex items-center justify-center border border-border flex-shrink-0 group-hover:border-accent transition-colors">
-                        <Icon className="w-4 h-4 text-muted-foreground group-hover:text-accent transition-colors" />
+                      <div
+                        className="w-8 h-8 flex items-center justify-center border flex-shrink-0 transition-colors"
+                        style={{ borderColor: s.accent }}
+                      >
+                        <Icon className="w-4 h-4 transition-colors" style={{ color: s.accent }} />
                       </div>
                       <div>
                         <div className="t-micro text-foreground mb-1">{s.label}</div>
