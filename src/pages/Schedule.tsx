@@ -126,7 +126,7 @@ export function Schedule() {
       alert(`You've reached the limit of ${schedulingLimit} scheduled posts on the free plan. Upgrade to schedule unlimited posts.`);
       return;
     }
-    navigate('/schedule/new');
+    navigate('/compose');
   };
 
   const now = new Date();
