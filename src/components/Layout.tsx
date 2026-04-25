@@ -10,9 +10,9 @@ import {
   Sun,
   Moon,
   MessageCircle,
-  Sparkles,
+  PlayCircle,
   Briefcase,
-  PenLine,
+  SquarePen,
 } from 'lucide-react';
 
 interface LayoutProps {
@@ -182,7 +182,7 @@ export function Layout({ children }: LayoutProps) {
               activeTab === 'studio' ? 'text-foreground' : 'text-muted-foreground'
             }`}
           >
-            <Sparkles className="w-5 h-5" />
+            <PlayCircle className="w-5 h-5" />
             <span className="font-mono text-[8px] font-bold tracking-widest uppercase">Studio</span>
           </Link>
 
@@ -195,7 +195,7 @@ export function Layout({ children }: LayoutProps) {
               className="w-8 h-8 flex items-center justify-center border border-foreground"
               style={{ background: 'var(--foreground)', color: 'var(--background)' }}
             >
-              <PenLine className="w-3.5 h-3.5" />
+              <SquarePen className="w-3.5 h-3.5" />
             </div>
             <span className="font-mono text-[8px] font-bold tracking-widest uppercase opacity-0">+</span>
           </Link>
