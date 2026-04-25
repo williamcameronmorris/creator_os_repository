@@ -2,9 +2,8 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { useTimezone } from '../hooks/useTimezone';
-import { formatInTz } from '../lib/timezone';
 import { ArrowRight } from 'lucide-react';
+import { OfficeConnectionsCard } from '../components/OfficeConnectionsCard';
 
 interface ScheduledItem {
   id: string;
@@ -16,7 +15,6 @@ interface ScheduledItem {
 export function OfficeHub() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { timezone } = useTimezone();
   const [scheduled, setScheduled] = useState<ScheduledItem[]>([]);
   const [queueCount, setQueueCount] = useState(0);
   const [growthPct, setGrowthPct] = useState<string | null>(null);
@@ -39,16 +37,20 @@ export function OfficeHub() {
     load();
   }, [user]);
 
-  const formatWhen = (iso: string) =>
-    formatInTz(iso, timezone, {
+  const formatWhen = (iso: string) => {
+    const d = new Date(iso);
+    const dayPart = d.toLocaleDateString('en-US', {
       weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+    }).toUpperCase();
+    const timePart = d.toLocaleTimeString('en-US', {
       hour: '2-digit',
       minute: '2-digit',
-      hour12: true,
-      month: undefined,
-      day: undefined,
-      year: undefined,
     }).toUpperCase();
+    // Stacked format so it fits the column: "TUE APR 28" / "05:00 AM"
+    return `${dayPart}\n${timePart}`;
+  };
 
   const nextPublish = scheduled[0]
     ? formatWhen(scheduled[0].scheduled_date)
@@ -100,9 +102,9 @@ export function OfficeHub() {
                 >
                   <div
                     className="grid gap-3 py-4 border-b border-border"
-                    style={{ gridTemplateColumns: '80px 1fr auto', alignItems: 'baseline' }}
+                    style={{ gridTemplateColumns: '92px 1fr auto', alignItems: 'baseline' }}
                   >
-                    <span className="t-micro">{formatWhen(item.scheduled_date)}</span>
+                    <span className="t-micro" style={{ whiteSpace: 'pre-line', lineHeight: 1.3 }}>{formatWhen(item.scheduled_date)}</span>
                     <div>
                       <div
                         className="text-foreground font-medium group-hover:text-accent transition-colors"
@@ -187,15 +189,9 @@ export function OfficeHub() {
 
           </div>
 
-          {/* Archived note */}
-          <div className="mt-6 flex items-center gap-3">
-            <span
-              className="font-mono text-[10px] tracking-widest uppercase border border-border px-2.5 py-1"
-              style={{ color: 'var(--muted-foreground)' }}
-            >
-              ARCHIVED
-            </span>
-            <span className="t-micro">Revenue · Deal pipeline &#8212; restore when expanding into monetization</span>
+          {/* Connections — full-width tile under Schedule + Analytics */}
+          <div className="mt-4">
+            <OfficeConnectionsCard />
           </div>
         </div>
 
