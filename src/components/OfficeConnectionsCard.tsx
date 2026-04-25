@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { listZernioAccounts, type ZernioAccount } from '../lib/zernio';
+import { listZernioAccounts, ZERNIO_PLATFORMS, type ZernioAccount } from '../lib/zernio';
 
 /**
  * Office Connections card — third tile on the OfficeHub right rail.
@@ -25,11 +25,15 @@ export function OfficeConnectionsCard() {
       .finally(() => setLoading(false));
   }, [user]);
 
+  // Only count accounts on platforms we support in-app
+  const supportedIds = new Set(ZERNIO_PLATFORMS.map(p => p.id));
+  const supportedAccounts = accounts.filter(a => supportedIds.has(a.platform as any));
+
   // 7 supported platforms in the v1 spec
   const totalSlots = 7;
-  const connectedCount = accounts.length;
+  const connectedCount = supportedAccounts.length;
   const connectedDisplay = `${String(connectedCount).padStart(2, '0')}/${String(totalSlots).padStart(2, '0')}`;
-  const platformsConnected = [...new Set(accounts.map((a) => a.platform))];
+  const platformsConnected = [...new Set(supportedAccounts.map((a) => a.platform))];
 
   return (
     <button
