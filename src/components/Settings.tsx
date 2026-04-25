@@ -130,7 +130,7 @@ export function Settings() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8">
+    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-14 space-y-8">
       <div>
         <h2 className="text-3xl font-black uppercase tracking-tight text-foreground mb-2">Settings</h2>
         <p className="text-muted-foreground text-xs font-mono uppercase tracking-[0.08em]">Configure your pricing defaults and performance averages</p>
