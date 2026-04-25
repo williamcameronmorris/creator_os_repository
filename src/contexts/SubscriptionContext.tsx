@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { useAuth } from './AuthContext';
 import { supabase } from '../lib/supabase';
+import { PRICING_ENABLED } from '../lib/featureFlags';
 
 type SubscriptionTier = 'free' | 'paid';
 
@@ -14,10 +15,16 @@ const SubscriptionContext = createContext<SubscriptionContextType | undefined>(u
 
 export function SubscriptionProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
-  const [tier, setTier] = useState<SubscriptionTier>('free');
-  const [isLoading, setIsLoading] = useState(true);
+  // When PRICING_ENABLED is false, every user is treated as paid so paywalls don't trigger.
+  const [tier, setTier] = useState<SubscriptionTier>(PRICING_ENABLED ? 'free' : 'paid');
+  const [isLoading, setIsLoading] = useState(PRICING_ENABLED);
 
   useEffect(() => {
+    if (!PRICING_ENABLED) {
+      setTier('paid');
+      setIsLoading(false);
+      return;
+    }
     if (user) {
       loadSubscription();
     } else {

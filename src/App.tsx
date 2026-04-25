@@ -24,6 +24,7 @@ import { ThreadsCallback } from './components/ThreadsCallback';
 import { YoutubeCallback } from './components/YoutubeCallback';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { supabase, type Profile as ProfileType } from './lib/supabase';
+import { PRICING_ENABLED } from './lib/featureFlags';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -93,7 +94,9 @@ function AppContent() {
     );
   }
 
-  if (profile && !profile.onboarding_completed) {
+  // Pricing-focused Onboarding is skipped when PRICING_ENABLED is false.
+  // When the new (Zernio-era) onboarding flow ships it should replace this guard.
+  if (PRICING_ENABLED && profile && !profile.onboarding_completed) {
     return (
       <Routes>
         <Route path="/onboarding" element={<Onboarding onComplete={loadProfile} />} />
