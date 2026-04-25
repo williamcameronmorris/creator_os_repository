@@ -2,8 +2,9 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { useTimezone } from '../hooks/useTimezone';
+import { formatInTz } from '../lib/timezone';
 import { ArrowRight } from 'lucide-react';
-import { OfficeConnectionsCard } from '../components/OfficeConnectionsCard';
 
 interface ScheduledItem {
   id: string;
@@ -15,9 +16,10 @@ interface ScheduledItem {
 export function OfficeHub() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { timezone } = useTimezone();
   const [scheduled, setScheduled] = useState<ScheduledItem[]>([]);
   const [queueCount, setQueueCount] = useState(0);
-  const [growthPct, setGrowthPct] = useState<string | null>(null);
+  const [growthPct] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -37,23 +39,31 @@ export function OfficeHub() {
     load();
   }, [user]);
 
+  // Stacked date format: "TUE APR 28" / "05:00 AM" — preserves the user's
+  // configured timezone via formatInTz.
   const formatWhen = (iso: string) => {
-    const d = new Date(iso);
-    const dayPart = d.toLocaleDateString('en-US', {
+    const dayPart = formatInTz(iso, timezone, {
       weekday: 'short',
       month: 'short',
       day: 'numeric',
+      hour: undefined,
+      minute: undefined,
+      year: undefined,
     }).toUpperCase();
-    const timePart = d.toLocaleTimeString('en-US', {
+    const timePart = formatInTz(iso, timezone, {
       hour: '2-digit',
       minute: '2-digit',
+      hour12: true,
+      weekday: undefined,
+      month: undefined,
+      day: undefined,
+      year: undefined,
     }).toUpperCase();
-    // Stacked format so it fits the column: "TUE APR 28" / "05:00 AM"
     return `${dayPart}\n${timePart}`;
   };
 
   const nextPublish = scheduled[0]
-    ? formatWhen(scheduled[0].scheduled_date)
+    ? formatWhen(scheduled[0].scheduled_date).replace('\n', ' · ')
     : null;
 
   return (
@@ -179,7 +189,7 @@ export function OfficeHub() {
                   Analytics
                 </div>
                 <div className="t-body" style={{ maxWidth: '26ch' }}>
-                  Cross-platform performance, watch-through, and what’s compounding this month.
+                  Cross-platform performance, watch-through, and what&rsquo;s compounding this month.
                 </div>
               </div>
               <span className="t-micro text-foreground group-hover:text-accent transition-colors flex items-center gap-2">
@@ -187,11 +197,6 @@ export function OfficeHub() {
               </span>
             </button>
 
-          </div>
-
-          {/* Connections — full-width tile under Schedule + Analytics */}
-          <div className="mt-4">
-            <OfficeConnectionsCard />
           </div>
         </div>
 
