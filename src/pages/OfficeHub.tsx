@@ -2,9 +2,8 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { useTimezone } from '../hooks/useTimezone';
-import { formatInTz } from '../lib/timezone';
 import { ArrowRight } from 'lucide-react';
+import { OfficeConnectionsCard } from '../components/OfficeConnectionsCard';
 
 interface ScheduledItem {
   id: string;
@@ -16,7 +15,6 @@ interface ScheduledItem {
 export function OfficeHub() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { timezone } = useTimezone();
   const [scheduled, setScheduled] = useState<ScheduledItem[]>([]);
   const [queueCount, setQueueCount] = useState(0);
   const [growthPct, setGrowthPct] = useState<string | null>(null);
@@ -39,16 +37,10 @@ export function OfficeHub() {
     load();
   }, [user]);
 
-  const formatWhen = (iso: string) =>
-    formatInTz(iso, timezone, {
-      weekday: 'short',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: true,
-      month: undefined,
-      day: undefined,
-      year: undefined,
-    }).toUpperCase();
+  const formatWhen = (iso: string) => {
+    const d = new Date(iso);
+    return d.toLocaleDateString('en-US', { weekday: 'short', hour: '2-digit', minute: '2-digit' }).toUpperCase();
+  };
 
   const nextPublish = scheduled[0]
     ? formatWhen(scheduled[0].scheduled_date)
@@ -185,6 +177,11 @@ export function OfficeHub() {
               </span>
             </button>
 
+          </div>
+
+          {/* Connections — full-width tile under Schedule + Analytics */}
+          <div className="mt-4">
+            <OfficeConnectionsCard />
           </div>
 
           {/* Archived note */}
