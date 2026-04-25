@@ -4,14 +4,16 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatInTz } from '../lib/timezone';
-import { ArrowRight } from 'lucide-react';
-import { OfficeConnectionsCard } from '../components/OfficeConnectionsCard';
+import { ArrowRight, Image as ImageIcon } from 'lucide-react';
 
 interface ScheduledItem {
   id: string;
   caption: string;
   platform: string;
   scheduled_date: string;
+  media_urls: string[] | null;
+  thumbnail_url: string | null;
+  media_type: string | null;
 }
 
 export function OfficeHub() {
@@ -28,7 +30,7 @@ export function OfficeHub() {
     const load = async () => {
       const { data } = await supabase
         .from('content_posts_unified')
-        .select('id, caption, platform, scheduled_date, status')
+        .select('id, caption, platform, scheduled_date, status, media_urls, thumbnail_url, media_type')
         .eq('user_id', user.id)
         .eq('status', 'scheduled').gte('scheduled_date', new Date().toISOString())
         .order('scheduled_date', { ascending: true })
@@ -40,8 +42,7 @@ export function OfficeHub() {
     load();
   }, [user]);
 
-  // Stacked date format: "TUE APR 28" / "05:00 AM" — preserves the user's
-  // configured timezone via formatInTz.
+  // Stacked date format: "TUE APR 28" / "05:00 AM" — preserves the user's timezone.
   const formatWhen = (iso: string) => {
     const dayPart = formatInTz(iso, timezone, {
       weekday: 'short',
@@ -67,6 +68,9 @@ export function OfficeHub() {
     ? formatWhen(scheduled[0].scheduled_date).replace('\n', ' · ')
     : null;
 
+  const getThumb = (item: ScheduledItem) =>
+    item.thumbnail_url || (item.media_urls && item.media_urls[0]) || null;
+
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-14">
 
@@ -84,11 +88,14 @@ export function OfficeHub() {
         <em style={{ fontStyle: 'normal', color: 'var(--accent)' }}>analytics.</em>
       </h1>
 
-      {/* Asymmetric layout */}
+      {/*
+        Asymmetric layout. Desktop = sidebar (Upcoming) on left, tiles on right.
+        Mobile = tiles surface FIRST, then the upcoming list below as preview cards.
+      */}
       <div className="grid gap-10 items-start" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))' }}>
 
-        {/* Left: Upcoming */}
-        <aside>
+        {/* Upcoming — order-2 on mobile (below tiles), order-1 on sm+ */}
+        <aside className="order-2 sm:order-1">
           <div className="flex items-center justify-between pb-3 border-b border-border mb-1">
             <span className="t-micro">UPCOMING · 14 DAYS</span>
             <span className="t-micro text-foreground">{String(queueCount).padStart(2,'0')}</span>
@@ -105,36 +112,67 @@ export function OfficeHub() {
             </div>
           ) : (
             <div>
-              {scheduled.map((item) => (
-                <button
-                  key={item.id}
-                  onClick={() => navigate('/schedule')}
-                  className="w-full text-left group"
-                >
-                  <div
-                    className="grid gap-3 py-4 border-b border-border"
-                    style={{ gridTemplateColumns: '92px 1fr auto', alignItems: 'baseline' }}
+              {scheduled.map((item) => {
+                const thumb = getThumb(item);
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => navigate('/schedule')}
+                    className="w-full text-left group"
                   >
-                    <span className="t-micro" style={{ whiteSpace: 'pre-line', lineHeight: 1.3 }}>{formatWhen(item.scheduled_date)}</span>
-                    <div>
+                    <div className="flex items-center gap-3 py-3 border-b border-border">
+                      {/* Thumbnail (or platform-letter fallback) */}
                       <div
-                        className="text-foreground font-medium group-hover:text-accent transition-colors"
-                        style={{ fontSize: '14.5px', lineHeight: 1.35 }}
+                        className="flex-shrink-0 border border-border bg-muted/20 overflow-hidden flex items-center justify-center"
+                        style={{ width: 56, height: 56 }}
                       >
-                        {item.caption ? item.caption.slice(0, 60) + (item.caption.length > 60 ? "…" : "") : "Untitled"}
+                        {thumb ? (
+                          <img
+                            src={thumb}
+                            alt=""
+                            loading="lazy"
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display = 'none';
+                            }}
+                          />
+                        ) : (
+                          <ImageIcon className="w-4 h-4 text-muted-foreground" />
+                        )}
                       </div>
-                      <div className="t-micro mt-0.5">{item.platform.toUpperCase()}</div>
+
+                      {/* Date stack */}
+                      <div
+                        className="flex-shrink-0"
+                        style={{ width: 80 }}
+                      >
+                        <span className="t-micro" style={{ whiteSpace: 'pre-line', lineHeight: 1.3 }}>
+                          {formatWhen(item.scheduled_date)}
+                        </span>
+                      </div>
+
+                      {/* Caption + platform */}
+                      <div className="flex-1 min-w-0">
+                        <div
+                          className="text-foreground font-medium group-hover:text-accent transition-colors truncate"
+                          style={{ fontSize: '14px', lineHeight: 1.35 }}
+                        >
+                          {item.caption ? item.caption.slice(0, 80) + (item.caption.length > 80 ? '…' : '') : 'Untitled'}
+                        </div>
+                        <div className="t-micro mt-0.5">{item.platform.toUpperCase()}</div>
+                      </div>
+
+                      <ArrowRight className="w-3.5 h-3.5 text-muted-foreground group-hover:text-accent transition-colors opacity-0 group-hover:opacity-100 flex-shrink-0" />
                     </div>
-                    <ArrowRight className="w-3.5 h-3.5 text-muted-foreground group-hover:text-accent transition-colors opacity-0 group-hover:opacity-100" />
-                  </div>
-                </button>
-              ))}
+                  </button>
+                );
+              })}
             </div>
           )}
         </aside>
 
-        {/* Right: Tiles */}
-        <div>
+        {/* Schedule + Analytics tiles — order-1 on mobile (top), order-2 on sm+ */}
+        <div className="order-1 sm:order-2">
           <div className="grid grid-cols-2 gap-4">
 
             {/* Schedule tile */}
