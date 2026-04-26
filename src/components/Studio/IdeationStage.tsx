@@ -110,22 +110,26 @@ export function IdeationStage({ onIdeaSelected, prefilledIdea }: IdeationStagePr
           <h2 className="text-2xl font-bold text-foreground">Ideation</h2>
           <p className="text-muted-foreground text-sm">Choose a concept to start your production line.</p>
         </div>
-        <div className="flex bg-accent p-1 rounded-xl">
+        <div className="flex gap-2">
           <button
             onClick={() => setMode('ai')}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
-              mode === 'ai' ? 'bg-background shadow text-primary' : 'text-muted-foreground hover:text-foreground'
-            }`}
+            className="font-mono text-[10px] font-medium uppercase tracking-widest px-3 py-2 border transition-colors flex items-center gap-2"
+            style={{
+              borderColor: mode === 'ai' ? 'var(--accent)' : 'var(--border)',
+              color: mode === 'ai' ? 'var(--accent)' : 'var(--foreground)',
+            }}
           >
-            <Sparkles className="w-4 h-4" /> AI Suggestions
+            <Sparkles className="w-3.5 h-3.5" /> AI SUGGESTIONS
           </button>
           <button
             onClick={() => setMode('manual')}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
-              mode === 'manual' ? 'bg-background shadow text-primary' : 'text-muted-foreground hover:text-foreground'
-            }`}
+            className="font-mono text-[10px] font-medium uppercase tracking-widest px-3 py-2 border transition-colors flex items-center gap-2"
+            style={{
+              borderColor: mode === 'manual' ? 'var(--accent)' : 'var(--border)',
+              color: mode === 'manual' ? 'var(--accent)' : 'var(--foreground)',
+            }}
           >
-            <PenTool className="w-4 h-4" /> Manual Entry
+            <PenTool className="w-3.5 h-3.5" /> MANUAL ENTRY
           </button>
         </div>
       </div>
