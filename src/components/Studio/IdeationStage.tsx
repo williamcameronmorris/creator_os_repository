@@ -273,7 +273,7 @@ export function IdeationStage({ onIdeaSelected, prefilledIdea }: IdeationStagePr
                       <button
                         onClick={() => handleSelectIdea(idea)}
                         disabled={selectingId === idea.id}
-                        className="p-2 sm:p-3 bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-colors shadow-sm group-hover:scale-105 transform disabled:opacity-70 disabled:cursor-not-allowed"
+                        className="p-2 sm:p-3 bg-accent text-accent-foreground rounded-xl hover:bg-accent/90 transition-colors shadow-sm group-hover:scale-105 transform disabled:opacity-70 disabled:cursor-not-allowed"
                         title="Start Project"
                       >
                         {selectingId === idea.id ? (
@@ -285,7 +285,7 @@ export function IdeationStage({ onIdeaSelected, prefilledIdea }: IdeationStagePr
                       <button
                         onClick={() => handleAction(idea.id, 'rejected')}
                         disabled={!!selectingId}
-                        className="p-2 sm:p-3 bg-accent text-muted-foreground rounded-xl hover:bg-accent/80 hover:text-foreground transition-colors disabled:opacity-50"
+                        className="p-2 sm:p-3 bg-background border border-border text-muted-foreground rounded-xl hover:bg-card hover:text-foreground transition-colors disabled:opacity-50"
                         title="Dismiss"
                       >
                         <ThumbsDown className="w-4 h-4 sm:w-5 sm:h-5" />
