@@ -18,6 +18,8 @@ import { Profile } from './pages/Profile';
 import { SettingsPage } from './pages/SettingsPage';
 import { PostComposerPage } from './pages/PostComposerPage';
 import { ComposePost } from './pages/ComposePost';
+import { StudioChallenge } from './pages/StudioChallenge';
+import { Templates } from './pages/Templates';
 import { MetaCallback } from './components/MetaCallback';
 import { ThreadsCallback } from './components/ThreadsCallback';
 import { YoutubeCallback } from './components/YoutubeCallback';
@@ -119,6 +121,10 @@ function AppContent() {
       {/* Ã¢ÂÂÃ¢ÂÂ Studio Ã¢ÂÂÃ¢ÂÂ */}
       <Route path="/studio" element={<ProtectedRoute><Layout><StudioHub /></Layout></ProtectedRoute>} />
       <Route path="/studio/workflow" element={<ProtectedRoute><Layout><Studio /></Layout></ProtectedRoute>} />
+      <Route path="/studio/script" element={<ProtectedRoute><Layout><Studio /></Layout></ProtectedRoute>} />
+      <Route path="/studio/script/:id" element={<ProtectedRoute><Layout><Studio /></Layout></ProtectedRoute>} />
+      <Route path="/studio/templates" element={<ProtectedRoute><Layout><Templates /></Layout></ProtectedRoute>} />
+      <Route path="/studio/challenge" element={<ProtectedRoute><Layout><StudioChallenge /></Layout></ProtectedRoute>} />
       <Route path="/media" element={<ProtectedRoute><Layout><Media /></Layout></ProtectedRoute>} />
       <Route path="/saved-ideas" element={<ProtectedRoute><Layout><SavedIdeasPage /></Layout></ProtectedRoute>} />
 
