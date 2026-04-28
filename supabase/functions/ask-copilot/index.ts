@@ -4,6 +4,110 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const POSTFORME_API_KEY = Deno.env.get("Post_For_Me_API");
+const PFM_BASE = "https://api.postforme.dev";
+
+const PFM_PLATFORM_LABELS: Record<string, string> = {
+  instagram: "Instagram",
+  tiktok: "TikTok",
+  youtube: "YouTube",
+  facebook: "Facebook",
+  threads: "Threads",
+  linkedin: "LinkedIn",
+  x: "X / Twitter",
+  twitter: "X / Twitter",
+  pinterest: "Pinterest",
+  bluesky: "Bluesky",
+};
+
+interface PfmAccount {
+  id: string;
+  platform: string;
+  username?: string | null;
+  status?: string;
+}
+
+interface PfmContext {
+  accounts: PfmAccount[];
+  followersByPlatform: Record<string, number>;
+}
+
+/**
+ * Pull connected accounts + follower counts from Post for Me.
+ * Used to ground Clio's answers — without this, ask-copilot only sees the
+ * legacy direct-integration token fields and reports PFM-connected users as
+ * "None connected yet", which causes Haiku to fabricate numbers.
+ *
+ * Hard 3s timeout so a slow PFM doesn't block the chat response.
+ */
+async function fetchPostForMeContext(): Promise<PfmContext> {
+  const empty: PfmContext = { accounts: [], followersByPlatform: {} };
+  if (!POSTFORME_API_KEY) return empty;
+
+  const ctrl = new AbortController();
+  const timeout = setTimeout(() => ctrl.abort(), 3000);
+
+  try {
+    const accountsRes = await fetch(`${PFM_BASE}/v1/social-accounts`, {
+      headers: { Authorization: `Bearer ${POSTFORME_API_KEY}` },
+      signal: ctrl.signal,
+    });
+    if (!accountsRes.ok) {
+      clearTimeout(timeout);
+      return empty;
+    }
+    const accountsBody = await accountsRes.json();
+    const accountList: PfmAccount[] = Array.isArray(accountsBody)
+      ? accountsBody
+      : (accountsBody?.data || []);
+
+    const connected = accountList.filter((a) => a.status !== "disconnected");
+    const followersByPlatform: Record<string, number> = {};
+
+    // Fetch feed (follower count + recent posts) for each connected account in parallel.
+    // Each feed call is also bounded by the same abort signal.
+    const feedResults = await Promise.allSettled(
+      connected.map(async (account) => {
+        const feedRes = await fetch(
+          `${PFM_BASE}/v1/social-account-feeds/${encodeURIComponent(account.id)}`,
+          {
+            headers: { Authorization: `Bearer ${POSTFORME_API_KEY}` },
+            signal: ctrl.signal,
+          },
+        );
+        if (!feedRes.ok) return null;
+        const body = await feedRes.json();
+        // The feed response shape varies by platform — we look for any
+        // common follower-count field. Anything we don't recognize is dropped.
+        const followers = Number(
+          body?.followers
+            ?? body?.follower_count
+            ?? body?.metadata?.followers
+            ?? body?.account?.followers
+            ?? 0,
+        );
+        return { platform: account.platform, followers };
+      }),
+    );
+
+    for (const r of feedResults) {
+      if (r.status === "fulfilled" && r.value && r.value.followers > 0) {
+        const key = r.value.platform;
+        followersByPlatform[key] = Math.max(
+          followersByPlatform[key] || 0,
+          r.value.followers,
+        );
+      }
+    }
+
+    clearTimeout(timeout);
+    return { accounts: connected, followersByPlatform };
+  } catch (err) {
+    clearTimeout(timeout);
+    console.warn("PFM context fetch failed:", (err as Error).message);
+    return empty;
+  }
+}
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -66,7 +170,7 @@ Deno.serve(async (req: Request) => {
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
     const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
 
-    const [profileResult, metricsResult, prevMetricsResult, postsResult, recentPostsResult, dealsResult] = await Promise.all([
+    const [profileResult, metricsResult, prevMetricsResult, postsResult, recentPostsResult, dealsResult, pfmContext] = await Promise.all([
       supabase
         .from("profiles")
         .select("full_name, display_name, instagram_avg_views, tiktok_avg_views, youtube_avg_views, instagram_access_token, instagram_business_account_id, tiktok_access_token, youtube_access_token")
@@ -114,16 +218,26 @@ Deno.serve(async (req: Request) => {
         .in("status", ["negotiating", "contract_sent", "in_production", "pending_payment"])
         .order("created_at", { ascending: false })
         .limit(10),
+
+      // Post for Me context — connected accounts + follower counts
+      fetchPostForMeContext(),
     ]);
 
     const profile = profileResult.data;
     const creatorName = profile?.display_name || profile?.full_name?.split(" ")[0] || "Creator";
 
-    // Build connected platforms list
-    const connectedPlatforms: string[] = [];
-    if (profile?.instagram_access_token || profile?.instagram_business_account_id) connectedPlatforms.push("Instagram");
-    if (profile?.tiktok_access_token) connectedPlatforms.push("TikTok");
-    if (profile?.youtube_access_token) connectedPlatforms.push("YouTube");
+    // Build connected platforms list — both legacy direct integrations AND
+    // Post for Me-connected accounts. Without the PFM merge, every PFM-only
+    // user looks "disconnected" to Clio and Haiku invents follower counts.
+    const connectedSet = new Set<string>();
+    if (profile?.instagram_access_token || profile?.instagram_business_account_id) connectedSet.add("Instagram");
+    if (profile?.tiktok_access_token) connectedSet.add("TikTok");
+    if (profile?.youtube_access_token) connectedSet.add("YouTube");
+    for (const account of pfmContext.accounts) {
+      const label = PFM_PLATFORM_LABELS[account.platform.toLowerCase()] || account.platform;
+      connectedSet.add(label);
+    }
+    const connectedPlatforms = [...connectedSet];
 
     // Process recent metrics (last 7 days)
     const recentMetrics = metricsResult.data || [];
@@ -159,16 +273,36 @@ Deno.serve(async (req: Request) => {
 
     const totalRecentEng = recentMetrics.reduce((s, m) => s + (m.likes || 0) + (m.comments || 0), 0);
 
-    // Format platform breakdown section
-    const platformLines = Object.entries(recentByPlatform).map(([p, d]) => {
-      const prev = prevByPlatform[p];
-      const prevViews = prev?.views || 0;
-      const changeStr = prevViews > 0
-        ? ` (${d.views > prevViews ? "+" : ""}${Math.round(((d.views - prevViews) / prevViews) * 100)}% vs prior 7d)`
-        : "";
-      const followersStr = d.followers > 0 ? `, ${d.followers.toLocaleString()} followers` : "";
-      return `  - ${p}: ${d.views.toLocaleString()} views${changeStr}, ${d.avgEng.toFixed(2)}% avg engagement${followersStr}`;
-    }).join("\n");
+    // Format platform breakdown section.
+    // Each row uses synced follower counts when available; falls back to the
+    // PFM-feed follower counts so connected-but-unsynced accounts still
+    // surface real numbers instead of forcing Haiku to guess.
+    const platformsWithMetrics = new Set(Object.keys(recentByPlatform));
+    const platformLines = [
+      ...Object.entries(recentByPlatform).map(([p, d]) => {
+        const prev = prevByPlatform[p];
+        const prevViews = prev?.views || 0;
+        const changeStr = prevViews > 0
+          ? ` (${d.views > prevViews ? "+" : ""}${Math.round(((d.views - prevViews) / prevViews) * 100)}% vs prior 7d)`
+          : "";
+        const followers = d.followers > 0
+          ? d.followers
+          : (pfmContext.followersByPlatform[p] || 0);
+        const followersStr = followers > 0 ? `, ${followers.toLocaleString()} followers` : "";
+        return `  - ${p}: ${d.views.toLocaleString()} views${changeStr}, ${d.avgEng.toFixed(2)}% avg engagement${followersStr}`;
+      }),
+      // PFM-connected accounts that have no metrics yet — surface them so
+      // Haiku knows they're connected and reports "no metrics yet" instead
+      // of "platform not connected".
+      ...pfmContext.accounts
+        .filter((a) => !platformsWithMetrics.has(a.platform))
+        .map((a) => {
+          const followers = pfmContext.followersByPlatform[a.platform] || 0;
+          const followersStr = followers > 0 ? `${followers.toLocaleString()} followers` : "no follower data yet";
+          const label = PFM_PLATFORM_LABELS[a.platform.toLowerCase()] || a.platform;
+          return `  - ${label}: connected${a.username ? ` (@${a.username})` : ""}, ${followersStr}, no published-post metrics yet`;
+        }),
+    ].join("\n");
 
     // Format top posts (by engagement)
     const posts = postsResult.data || [];
@@ -204,7 +338,9 @@ Deno.serve(async (req: Request) => {
       ? `${totalRecentViews.toLocaleString()} views last 7 days${viewsChange !== null ? ` (${viewsChange > 0 ? "+" : ""}${viewsChange}% vs prior 7d)` : ""}, ${totalRecentEng.toLocaleString()} total engagements`
       : "No recent metrics data (connect a platform to get real stats)";
 
-    const context = `CREATOR PROFILE:
+    const context = `DATA BLOCK — every number below is real and grounded. Anything not listed here, you don't have.
+
+CREATOR PROFILE:
 Name: ${creatorName}
 Connected platforms: ${connectedPlatforms.length > 0 ? connectedPlatforms.join(", ") : "None connected yet"}
 AI quota remaining today: ${quota.requests_remaining - 1} (after this request)
@@ -238,7 +374,16 @@ ${profile?.youtube_avg_views ? `  YouTube: ${Number(profile.youtube_avg_views).t
       body: JSON.stringify({
         model: "claude-haiku-4-5-20251001",
         max_tokens: 512,
-        system: `You are the creator's personal analytics copilot inside Creator Command. You have access to their real performance data shown below. Answer their question concisely, specifically, and using their actual numbers where possible. Be direct and actionable — no filler. If data is missing or a platform isn't connected, say so clearly rather than guessing. Keep responses under 200 words.
+        system: `You are Clio, the creator's personal analytics copilot inside Cliopatra Social. You have access to their real performance data shown below in the DATA block.
+
+GROUNDING RULES — these are non-negotiable:
+1. NEVER invent, estimate, or assume metrics. If a number is not present in the DATA block below, say "I don't have that data yet" and tell the user how to get it (e.g. "connect a platform from /office/connections" or "give it 24 hours after posting for metrics to sync").
+2. NEVER say generic ranges like "around 1,000 followers" or "typical for this niche." If you don't have the exact number, you don't have it.
+3. NEVER assume a platform is connected unless it appears in "Connected platforms" below.
+4. If "Connected platforms" is "None connected yet", your job is to direct the user to /office/connections — do not pretend to analyze imaginary stats.
+5. When you DO have data, quote the exact numbers from the DATA block. Do not round dramatically or paraphrase.
+
+Style: direct, actionable, under 200 words. Match the user's energy. No filler, no preamble, no "great question" type openers.
 
 ${context}`,
         messages: [
