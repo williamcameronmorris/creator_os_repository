@@ -3,7 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { ArrowLeft, ArrowRight, Check, Upload, X as XIcon } from 'lucide-react';
-import { listZernioAccounts, type ZernioAccount, ZERNIO_PLATFORMS } from '../lib/zernio';
+import {
+  listPostForMeAccounts,
+  createPostForMePost,
+  type PostForMeAccount,
+  POSTFORME_PLATFORMS,
+} from '../lib/postforme';
 import {
   getSuggestedTimes,
   suggestedTimeToDate,
@@ -12,12 +17,15 @@ import {
 } from '../lib/suggestedTimes';
 
 /**
- * ComposePost — Zernio-modern quick publisher.
+ * ComposePost — Post for Me-backed quick publisher.
  *
- * Multi-select across all Zernio-connected platforms, with three modes:
- *   - NOW       : insert as scheduled@now and immediately invoke the orchestrator
+ * Multi-select across all connected platforms, with three modes:
+ *   - NOW       : scheduled_at omitted so PFM publishes immediately
  *   - SCHEDULE  : datetime picker, optionally autofilled by Suggested Times chips
- *   - QUEUE     : let Zernio assign the next free slot
+ *   - QUEUE     : +24h fallback (PFM has no native "next free slot" yet)
+ *
+ * Posts are created via PFM's /v1/social-posts and mirrored into
+ * content_posts (one row per platform) so OfficeHub can render them.
  */
 
 type Mode = 'now' | 'schedule' | 'queue';
@@ -53,7 +61,7 @@ export function ComposePost() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [accounts, setAccounts] = useState<ZernioAccount[]>([]);
+  const [accounts, setAccounts] = useState<PostForMeAccount[]>([]);
   const [loadingAccounts, setLoadingAccounts] = useState(true);
   const [selectedPlatforms, setSelectedPlatforms] = useState<Set<string>>(new Set());
 
@@ -69,7 +77,7 @@ export function ComposePost() {
 
   useEffect(() => {
     if (!user) return;
-    listZernioAccounts(user.id, false)
+    listPostForMeAccounts(user.id, false)
       .then((s) => {
         setAccounts(s.accounts);
         if (s.accounts.length > 0) {
@@ -197,37 +205,53 @@ export function ComposePost() {
     try {
       const mediaUrls = await uploadMedia();
 
-      let scheduledFor: string;
+      let scheduledAt: string | undefined;
+      let scheduledForRow: string;
       if (mode === 'now') {
-        scheduledFor = new Date().toISOString();
+        scheduledAt = undefined;
+        scheduledForRow = new Date().toISOString();
       } else if (mode === 'schedule') {
         if (!scheduleAt) throw new Error('Pick a date/time to schedule');
-        scheduledFor = new Date(scheduleAt).toISOString();
+        scheduledAt = new Date(scheduleAt).toISOString();
+        scheduledForRow = scheduledAt;
       } else {
-        scheduledFor = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+        scheduledAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+        scheduledForRow = scheduledAt;
       }
 
       setPublishState('submitting');
 
-      const rows = [...selectedPlatforms].map((platform) => ({
+      const platforms = [...selectedPlatforms];
+      const accountIds = platforms
+        .map((p) => accounts.find((a) => a.platform === p && a.status !== 'disconnected')?.id)
+        .filter((id): id is string => Boolean(id));
+
+      if (accountIds.length === 0) {
+        throw new Error('No connected accounts found for the selected platforms.');
+      }
+
+      const post = await createPostForMePost({
+        caption: caption.trim(),
+        mediaUrls,
+        socialAccountIds: accountIds,
+        scheduledAt,
+      });
+
+      const rows = platforms.map((platform) => ({
         user_id: user.id,
         platform,
         caption: caption.trim(),
         media_urls: mediaUrls,
-        scheduled_date: scheduledFor,
-        scheduled_for: scheduledFor,
-        status: 'scheduled',
-        provider: 'zernio',
+        scheduled_date: scheduledForRow,
+        scheduled_for: scheduledForRow,
+        status: mode === 'now' ? 'publishing' : 'scheduled',
+        provider: 'postforme',
+        postforme_post_id: post.id,
         content_type: platform === 'youtube' ? 'short' : 'post',
       }));
 
       const { error: insertErr } = await supabase.from('content_posts').insert(rows);
-      if (insertErr) throw new Error(insertErr.message);
-
-      if (mode === 'now') {
-        const { error: invokeErr } = await supabase.functions.invoke('publish-scheduled-posts');
-        if (invokeErr) console.warn('Dispatch invoke warning:', invokeErr.message);
-      }
+      if (insertErr) console.warn('Mirror insert warning:', insertErr.message);
 
       setPublishState('done');
       setTimeout(() => navigate('/office'), 1200);
@@ -304,7 +328,7 @@ export function ComposePost() {
         <span className="t-micro">PLATFORMS · {String(selectedPlatforms.size).padStart(2,'0')}</span>
       </div>
       <div className="flex gap-2 mb-6 flex-wrap">
-        {ZERNIO_PLATFORMS.map((p) => {
+        {POSTFORME_PLATFORMS.map((p) => {
           const connected = connectedPlatformIds.has(p.id);
           const selected = selectedPlatforms.has(p.id);
           return (
@@ -482,7 +506,7 @@ export function ComposePost() {
 
       {mode === 'queue' && (
         <div className="mb-6 border border-border px-4 py-3 t-micro text-muted-foreground">
-          NEXT FREE SLOT — Zernio will assign automatically
+          QUEUED FOR +24H — PFM will publish then
         </div>
       )}
 

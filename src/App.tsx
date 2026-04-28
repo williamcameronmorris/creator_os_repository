@@ -23,7 +23,7 @@ import { Templates } from './pages/Templates';
 import { MetaCallback } from './components/MetaCallback';
 import { ThreadsCallback } from './components/ThreadsCallback';
 import { YoutubeCallback } from './components/YoutubeCallback';
-import { ZernioCallback } from './components/ZernioCallback';
+import { PostForMeCallback } from './components/PostForMeCallback';
 import { Connections } from './pages/Connections';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { supabase, type Profile as ProfileType } from './lib/supabase';
@@ -98,7 +98,7 @@ function AppContent() {
   }
 
   // Pricing-focused Onboarding is skipped when PRICING_ENABLED is false.
-  // When the new (Zernio-era) onboarding flow ships it should replace this guard.
+  // When the Post for Me-era onboarding flow ships it should replace this guard.
   if (PRICING_ENABLED && profile && !profile.onboarding_completed) {
     return (
       <Routes>
@@ -147,7 +147,7 @@ function AppContent() {
       <Route path="/auth/meta/callback" element={<ProtectedRoute><MetaCallback /></ProtectedRoute>} />
       <Route path="/auth/threads/callback" element={<ProtectedRoute><ThreadsCallback /></ProtectedRoute>} />
       <Route path="/auth/youtube/callback" element={<ProtectedRoute><YoutubeCallback /></ProtectedRoute>} />
-      <Route path="/auth/zernio/callback" element={<ProtectedRoute><ZernioCallback /></ProtectedRoute>} />
+      <Route path="/auth/postforme/callback" element={<ProtectedRoute><PostForMeCallback /></ProtectedRoute>} />
 
       {/* Fallback */}
       <Route path="*" element={<Navigate to="/" replace />} />

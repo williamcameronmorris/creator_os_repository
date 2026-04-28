@@ -3,20 +3,19 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import {
-  ZERNIO_PLATFORMS,
-  initZernioConnect,
-  listZernioAccounts,
-  disconnectZernioAccount,
-  type ZernioAccount,
-  type ZernioPlatformId,
-} from '../lib/zernio';
+  POSTFORME_PLATFORMS,
+  initPostForMeConnect,
+  listPostForMeAccounts,
+  disconnectPostForMeAccount,
+  type PostForMeAccount,
+  type PostForMePlatformId,
+} from '../lib/postforme';
 
 /**
  * /office/connections — page for managing social account connections.
  *
- * V1 wires up Zernio-only. Future: surfaces existing direct integrations
- * (Meta, Threads, YouTube) here too with a "Migrate to Zernio" affordance
- * once a direct integration breaks (Phase 9).
+ * V1 wires up Post for Me-only. Future: surfaces existing direct integrations
+ * (Meta, Threads, YouTube) here too once they're decommissioned.
  *
  * Layout matches the editorial industrial aesthetic:
  *   - Section marker "04 / CONNECTIONS"
@@ -29,7 +28,7 @@ export function Connections() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
-  const [accounts, setAccounts] = useState<ZernioAccount[]>([]);
+  const [accounts, setAccounts] = useState<PostForMeAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyPlatform, setBusyPlatform] = useState<string | null>(null);
   const [busyAccountId, setBusyAccountId] = useState<string | null>(null);
@@ -55,7 +54,7 @@ export function Connections() {
     if (!user) return;
     setLoading(true);
     try {
-      const state = await listZernioAccounts(user.id, true);
+      const state = await listPostForMeAccounts(user.id, true);
       setAccounts(state.accounts);
       setError(null);
     } catch (err) {
@@ -65,13 +64,13 @@ export function Connections() {
     }
   };
 
-  const handleConnect = async (platform: ZernioPlatformId) => {
+  const handleConnect = async (platform: PostForMePlatformId) => {
     if (!user) return;
     setBusyPlatform(platform);
     setError(null);
     try {
-      const { authUrl } = await initZernioConnect(user.id, platform);
-      // Full-page redirect to Zernio's hosted OAuth flow
+      const { authUrl } = await initPostForMeConnect(user.id, platform);
+      // Full-page redirect to Post for Me's hosted OAuth flow
       window.location.href = authUrl;
     } catch (err) {
       setError((err as Error).message);
@@ -79,7 +78,7 @@ export function Connections() {
     }
   };
 
-  const handleDisconnect = async (account: ZernioAccount) => {
+  const handleDisconnect = async (account: PostForMeAccount) => {
     if (!user) return;
     const confirmed = window.confirm(
       `Disconnect ${account.platform.toUpperCase()} (${account.username || account.id})?\n\nYou can reconnect anytime, but scheduled posts to this account will fail until you do.`
@@ -88,7 +87,7 @@ export function Connections() {
     setBusyAccountId(account.id);
     setError(null);
     try {
-      const result = await disconnectZernioAccount(user.id, account.id);
+      const result = await disconnectPostForMeAccount(user.id, account.id);
       setAccounts(result.accounts);
     } catch (err) {
       setError((err as Error).message);
@@ -98,10 +97,10 @@ export function Connections() {
   };
 
   // Hide accounts on platforms we don't support in-app
-  const supportedIds = new Set(ZERNIO_PLATFORMS.map(p => p.id));
+  const supportedIds = new Set(POSTFORME_PLATFORMS.map(p => p.id));
   const supportedAccounts = accounts.filter(a => supportedIds.has(a.platform as any));
   const connectedPlatformIds = new Set(supportedAccounts.map((a) => a.platform));
-  const availablePlatforms = ZERNIO_PLATFORMS.filter((p) => !connectedPlatformIds.has(p.id));
+  const availablePlatforms = POSTFORME_PLATFORMS.filter((p) => !connectedPlatformIds.has(p.id));
 
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-14">
@@ -175,7 +174,7 @@ export function Connections() {
                     {account.username ? `@${account.username}` : account.displayName || account.id}
                   </div>
                   <div className="t-micro mt-0.5">
-                    {account.isActive === false ? 'INACTIVE' : 'ACTIVE'} · VIA ZERNIO
+                    {account.isActive === false ? 'INACTIVE' : 'ACTIVE'} · VIA POST FOR ME
                   </div>
                 </div>
                 <button
@@ -208,7 +207,7 @@ export function Connections() {
                 style={{ gridTemplateColumns: '120px 1fr auto', alignItems: 'baseline' }}
               >
                 <span className="t-micro">{platform.name.toUpperCase()}</span>
-                <div className="t-micro text-muted-foreground">VIA ZERNIO</div>
+                <div className="t-micro text-muted-foreground">VIA POST FOR ME</div>
                 <button
                   onClick={() => handleConnect(platform.id)}
                   disabled={busyPlatform === platform.id}

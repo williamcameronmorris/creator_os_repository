@@ -2,11 +2,11 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { listZernioAccounts, ZERNIO_PLATFORMS, type ZernioAccount } from '../lib/zernio';
+import { listPostForMeAccounts, POSTFORME_PLATFORMS, type PostForMeAccount } from '../lib/postforme';
 
 /**
  * Office Connections card — third tile on the OfficeHub right rail.
- * Shows count of connected accounts (Zernio + legacy direct integrations)
+ * Shows count of connected accounts (Post for Me + legacy direct integrations)
  * and links to /office/connections for management.
  *
  * Sized to match Schedule/Analytics on web; full-width below them on mobile.
@@ -14,19 +14,19 @@ import { listZernioAccounts, ZERNIO_PLATFORMS, type ZernioAccount } from '../lib
 export function OfficeConnectionsCard() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [accounts, setAccounts] = useState<ZernioAccount[]>([]);
+  const [accounts, setAccounts] = useState<PostForMeAccount[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!user) return;
-    listZernioAccounts(user.id, false)
+    listPostForMeAccounts(user.id, false)
       .then((s) => setAccounts(s.accounts))
       .catch(() => setAccounts([]))
       .finally(() => setLoading(false));
   }, [user]);
 
   // Only count accounts on platforms we support in-app
-  const supportedIds = new Set(ZERNIO_PLATFORMS.map(p => p.id));
+  const supportedIds = new Set(POSTFORME_PLATFORMS.map(p => p.id));
   const supportedAccounts = accounts.filter(a => supportedIds.has(a.platform as any));
 
   // 7 supported platforms in the v1 spec
