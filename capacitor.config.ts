@@ -1,8 +1,8 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.creatorcommand.app',
-  appName: 'Creator Command',
+  appId: 'com.cliopatra.app',
+  appName: 'Cliopatra Social',
   webDir: 'dist'
 };
 
