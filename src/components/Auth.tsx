@@ -307,7 +307,7 @@ export function Auth() {
 
         {/* Footer brand mark */}
         <div className="mt-12 t-micro text-muted-foreground">
-          CREATOR COMMAND · v1
+          CLIOPATRA SOCIAL · v1
         </div>
 
       </div>
