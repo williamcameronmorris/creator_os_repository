@@ -179,7 +179,7 @@ Deno.serve(async (req: Request) => {
 
       supabase
         .from("platform_metrics")
-        .select("platform, date, views, likes, comments, saves, followers, avg_engagement_rate")
+        .select("platform, date, views, likes, comments, saves, followers_count, avg_engagement_rate")
         .eq("user_id", userId)
         .gte("date", sevenDaysAgo)
         .order("date", { ascending: false }),
@@ -252,7 +252,7 @@ Deno.serve(async (req: Request) => {
         map[m.platform].comments += m.comments || 0;
         map[m.platform].saves += (m.saves || 0);
         map[m.platform].avgEng += (m.avg_engagement_rate || 0);
-        map[m.platform].followers = Math.max(map[m.platform].followers, m.followers || 0);
+        map[m.platform].followers = Math.max(map[m.platform].followers, m.followers_count || 0);
         map[m.platform].days++;
       }
       // Average the engagement rate
