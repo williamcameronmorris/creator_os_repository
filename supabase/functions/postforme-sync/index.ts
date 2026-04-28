@@ -107,19 +107,6 @@ function normalizeMetrics(platform: string, raw: unknown): NormalizedMetrics {
   return { views, likes, comments, saves, shares, engagement_rate };
 }
 
-function extractFollowers(body: unknown): number {
-  const b = (body && typeof body === "object" ? body : {}) as Record<string, unknown>;
-  const candidate = b.followers
-    ?? b.follower_count
-    ?? (b.metadata as Record<string, unknown> | undefined)?.followers
-    ?? (b.metadata as Record<string, unknown> | undefined)?.follower_count
-    ?? (b.account as Record<string, unknown> | undefined)?.followers
-    ?? (b.account as Record<string, unknown> | undefined)?.follower_count
-    ?? 0;
-  const n = Number(candidate);
-  return Number.isFinite(n) && n > 0 ? n : 0;
-}
-
 async function pfmFetch(path: string, init?: RequestInit): Promise<Response> {
   return fetch(`${PFM_BASE}${path}`, {
     ...(init || {}),
@@ -139,11 +126,43 @@ async function listAccounts(): Promise<PfmAccount[]> {
   return arr.filter((a: PfmAccount) => a && a.status !== "disconnected");
 }
 
-async function getAccountFeed(accountId: string): Promise<{ followers: number; raw: unknown } | null> {
+interface FeedPost {
+  platform: string;
+  platform_post_id: string | null;
+  platform_url: string | null;
+  caption: string | null;
+  posted_at: string | null;
+  media_urls: string[];
+  thumbnail_url: string | null;
+}
+
+interface FeedResult {
+  followers: number; // PFM doesn't expose follower counts in public API; always 0 today
+  posts: FeedPost[];
+  raw: unknown;
+}
+
+async function getAccountFeed(accountId: string): Promise<FeedResult | null> {
   const res = await pfmFetch(`/v1/social-account-feeds/${encodeURIComponent(accountId)}`);
   if (!res.ok) return null;
   const body = await res.json();
-  return { followers: extractFollowers(body), raw: body };
+  // PFM's feed endpoint returns { data: [posts], meta: {...} }. Each post has
+  // platform, platform_post_id, platform_url, caption, posted_at, media[].
+  // No follower count anywhere in the response — PFM doesn't expose that today.
+  const arr: Record<string, unknown>[] = Array.isArray(body?.data) ? body.data : [];
+  const posts: FeedPost[] = arr.map((p) => {
+    const media: { url?: string; thumbnail_url?: string }[] = Array.isArray(p.media) ? p.media : [];
+    return {
+      platform: String(p.platform || "").toLowerCase(),
+      platform_post_id: (p.platform_post_id as string) || null,
+      platform_url: (p.platform_url as string) || null,
+      caption: (p.caption as string) || null,
+      posted_at: (p.posted_at as string) || null,
+      media_urls: media.map((m) => m.url).filter((u): u is string => Boolean(u)),
+      thumbnail_url: media[0]?.thumbnail_url || null,
+    };
+  }).filter((p) => p.platform_post_id);
+  return { followers: 0, posts, raw: body };
 }
 
 interface PostResult {
@@ -198,6 +217,7 @@ interface SyncSummary {
   userId: string;
   accountsSynced: number;
   snapshotsAdded: number;
+  feedPostsImported: number;
   postsSynced: number;
   postsMatched: number;
   metricsUpserted: number;
@@ -209,6 +229,7 @@ async function syncForUser(userId: string): Promise<SyncSummary> {
     userId,
     accountsSynced: 0,
     snapshotsAdded: 0,
+    feedPostsImported: 0,
     postsSynced: 0,
     postsMatched: 0,
     metricsUpserted: 0,
@@ -227,28 +248,24 @@ async function syncForUser(userId: string): Promise<SyncSummary> {
   summary.accountsSynced = accounts.length;
 
   const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
-  const platformFollowers: Record<string, number> = {};
   const snapshotRows: Record<string, unknown>[] = [];
+  const feedPostsByPlatform: Record<string, FeedPost[]> = {};
 
   await Promise.all(
     accounts.map(async (account) => {
       try {
         const feed = await getAccountFeed(account.id);
         if (!feed) return;
-        if (feed.followers > 0) {
-          platformFollowers[account.platform] = Math.max(
-            platformFollowers[account.platform] || 0,
-            feed.followers,
-          );
-        }
         snapshotRows.push({
           user_id: userId,
           pfm_account_id: account.id,
           platform: account.platform,
           username: account.username || null,
-          followers: feed.followers || null,
+          followers: null, // PFM doesn't expose follower counts in their public API
           raw: feed.raw,
         });
+        if (!feedPostsByPlatform[account.platform]) feedPostsByPlatform[account.platform] = [];
+        feedPostsByPlatform[account.platform].push(...feed.posts);
       } catch (err) {
         summary.errors.push(`feed ${account.platform}/${account.id}: ${(err as Error).message}`);
       }
@@ -259,6 +276,50 @@ async function syncForUser(userId: string): Promise<SyncSummary> {
     const { error } = await supabase.from("pfm_account_snapshots").insert(snapshotRows);
     if (error) summary.errors.push(`snapshots insert: ${error.message}`);
     else summary.snapshotsAdded = snapshotRows.length;
+  }
+
+  // Import feed posts into content_posts (deduped by platform_post_id).
+  // Each platform's feed gives us recent posts that may have been published
+  // outside Cliopatra. We mirror them so OfficeHub + Clio see the user's full
+  // recent activity rather than only posts created via Compose.
+  for (const [platform, posts] of Object.entries(feedPostsByPlatform)) {
+    if (posts.length === 0) continue;
+    const platformPostIds = posts.map((p) => p.platform_post_id).filter((id): id is string => Boolean(id));
+    if (platformPostIds.length === 0) continue;
+
+    const { data: existing, error: existingErr } = await supabase
+      .from("content_posts")
+      .select("platform_post_id")
+      .eq("user_id", userId)
+      .eq("platform", platform)
+      .in("platform_post_id", platformPostIds);
+    if (existingErr) {
+      summary.errors.push(`feed lookup ${platform}: ${existingErr.message}`);
+      continue;
+    }
+    const existingIds = new Set((existing || []).map((r) => r.platform_post_id));
+
+    const newRows = posts
+      .filter((p) => p.platform_post_id && !existingIds.has(p.platform_post_id))
+      .map((p) => ({
+        user_id: userId,
+        platform: p.platform,
+        platform_post_id: p.platform_post_id,
+        caption: p.caption || "",
+        media_urls: p.media_urls,
+        thumbnail_url: p.thumbnail_url,
+        published_at: p.posted_at,
+        scheduled_for: p.posted_at,
+        scheduled_date: p.posted_at,
+        status: "published",
+        provider: "postforme",
+        content_type: "post",
+      }));
+
+    if (newRows.length === 0) continue;
+    const { error: insertErr } = await supabase.from("content_posts").insert(newRows);
+    if (insertErr) summary.errors.push(`feed insert ${platform}: ${insertErr.message}`);
+    else summary.feedPostsImported += newRows.length;
   }
 
   // 2. Pull post results, normalize, write to platform_metrics + content_posts
@@ -345,28 +406,10 @@ async function syncForUser(userId: string): Promise<SyncSummary> {
     if (a.total_posts > 0) a.avg_engagement_rate = a.avg_engagement_rate / a.total_posts;
   }
 
-  // Today's row gets the follower counts (even for platforms with no posts today).
-  for (const platform of Object.keys(platformFollowers)) {
-    const k = `${platform}:${today}`;
-    if (!dailyAgg[k]) {
-      dailyAgg[k] = {
-        user_id: userId,
-        platform,
-        date: today,
-        total_posts: 0,
-        total_views: 0,
-        total_likes: 0,
-        total_comments: 0,
-        total_shares: 0,
-        total_saves: 0,
-        avg_engagement_rate: 0,
-      };
-    }
-  }
-
-  // Upsert platform_metrics rows. We replace today's row outright; historical
-  // rows (from post results dated in the past) are also replaced so a re-run
-  // converges to PFM's latest numbers rather than double-counting.
+  // Upsert platform_metrics rows. We replace each (user, platform, date) row
+  // outright so re-running converges to PFM's latest numbers rather than
+  // double-counting. PFM doesn't expose follower counts via the public API
+  // today, so followers_count stays null until we wire a different source.
   const metricRows = Object.values(dailyAgg).map((a) => ({
     user_id: a.user_id,
     platform: a.platform,
@@ -383,7 +426,7 @@ async function syncForUser(userId: string): Promise<SyncSummary> {
     shares: a.total_shares,
     saves: a.total_saves,
     avg_engagement_rate: a.avg_engagement_rate,
-    followers_count: platformFollowers[a.platform] || null,
+    followers_count: null,
   }));
 
   if (metricRows.length > 0) {
