@@ -8,98 +8,48 @@ const POSTFORME_API_KEY = Deno.env.get("Post_For_Me_API");
 const PFM_BASE = "https://api.postforme.dev";
 
 const PFM_PLATFORM_LABELS: Record<string, string> = {
-  instagram: "Instagram",
-  tiktok: "TikTok",
-  youtube: "YouTube",
-  facebook: "Facebook",
-  threads: "Threads",
-  linkedin: "LinkedIn",
-  x: "X / Twitter",
-  twitter: "X / Twitter",
-  pinterest: "Pinterest",
-  bluesky: "Bluesky",
+  instagram: "Instagram", tiktok: "TikTok", youtube: "YouTube",
+  facebook: "Facebook", threads: "Threads", linkedin: "LinkedIn",
+  x: "X / Twitter", twitter: "X / Twitter",
+  pinterest: "Pinterest", bluesky: "Bluesky",
 };
 
-interface PfmAccount {
-  id: string;
-  platform: string;
-  username?: string | null;
-  status?: string;
-}
-
-interface PfmContext {
-  accounts: PfmAccount[];
-  followersByPlatform: Record<string, number>;
-}
+interface PfmAccount { id: string; platform: string; username?: string | null; status?: string; }
+interface PfmContext { accounts: PfmAccount[]; followersByPlatform: Record<string, number>; }
 
 /**
- * Pull connected accounts + follower counts from Post for Me.
- * Used to ground Clio's answers — without this, ask-copilot only sees the
- * legacy direct-integration token fields and reports PFM-connected users as
- * "None connected yet", which causes Haiku to fabricate numbers.
- *
- * Hard 3s timeout so a slow PFM doesn't block the chat response.
+ * Pull connected accounts + follower counts from Post for Me, with a hard
+ * 3s timeout so a slow PFM doesn't block Clio. Falls back to empty on error.
  */
 async function fetchPostForMeContext(): Promise<PfmContext> {
   const empty: PfmContext = { accounts: [], followersByPlatform: {} };
   if (!POSTFORME_API_KEY) return empty;
-
   const ctrl = new AbortController();
   const timeout = setTimeout(() => ctrl.abort(), 3000);
-
   try {
     const accountsRes = await fetch(`${PFM_BASE}/v1/social-accounts`, {
-      headers: { Authorization: `Bearer ${POSTFORME_API_KEY}` },
-      signal: ctrl.signal,
+      headers: { Authorization: `Bearer ${POSTFORME_API_KEY}` }, signal: ctrl.signal,
     });
-    if (!accountsRes.ok) {
-      clearTimeout(timeout);
-      return empty;
-    }
+    if (!accountsRes.ok) { clearTimeout(timeout); return empty; }
     const accountsBody = await accountsRes.json();
-    const accountList: PfmAccount[] = Array.isArray(accountsBody)
-      ? accountsBody
-      : (accountsBody?.data || []);
-
+    const accountList: PfmAccount[] = Array.isArray(accountsBody) ? accountsBody : (accountsBody?.data || []);
     const connected = accountList.filter((a) => a.status !== "disconnected");
     const followersByPlatform: Record<string, number> = {};
-
-    // Fetch feed (follower count + recent posts) for each connected account in parallel.
-    // Each feed call is also bounded by the same abort signal.
-    const feedResults = await Promise.allSettled(
-      connected.map(async (account) => {
-        const feedRes = await fetch(
-          `${PFM_BASE}/v1/social-account-feeds/${encodeURIComponent(account.id)}`,
-          {
-            headers: { Authorization: `Bearer ${POSTFORME_API_KEY}` },
-            signal: ctrl.signal,
-          },
-        );
-        if (!feedRes.ok) return null;
-        const body = await feedRes.json();
-        // The feed response shape varies by platform — we look for any
-        // common follower-count field. Anything we don't recognize is dropped.
-        const followers = Number(
-          body?.followers
-            ?? body?.follower_count
-            ?? body?.metadata?.followers
-            ?? body?.account?.followers
-            ?? 0,
-        );
-        return { platform: account.platform, followers };
-      }),
-    );
-
+    const feedResults = await Promise.allSettled(connected.map(async (account) => {
+      const feedRes = await fetch(`${PFM_BASE}/v1/social-account-feeds/${encodeURIComponent(account.id)}`, {
+        headers: { Authorization: `Bearer ${POSTFORME_API_KEY}` }, signal: ctrl.signal,
+      });
+      if (!feedRes.ok) return null;
+      const body = await feedRes.json();
+      const followers = Number(body?.followers ?? body?.follower_count ?? body?.metadata?.followers ?? body?.account?.followers ?? 0);
+      return { platform: account.platform, followers };
+    }));
     for (const r of feedResults) {
       if (r.status === "fulfilled" && r.value && r.value.followers > 0) {
         const key = r.value.platform;
-        followersByPlatform[key] = Math.max(
-          followersByPlatform[key] || 0,
-          r.value.followers,
-        );
+        followersByPlatform[key] = Math.max(followersByPlatform[key] || 0, r.value.followers);
       }
     }
-
     clearTimeout(timeout);
     return { accounts: connected, followersByPlatform };
   } catch (err) {
@@ -111,142 +61,51 @@ async function fetchPostForMeContext(): Promise<PfmContext> {
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
-    return new Response("ok", {
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-      },
-    });
+    return new Response("ok", { headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type" } });
   }
-
   try {
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
-      });
-    }
-
+    if (!authHeader) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
     const { userId, question } = await req.json();
-
-    if (!userId || !question?.trim()) {
-      return new Response(JSON.stringify({ error: "userId and question are required" }), {
-        status: 400,
-        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
-      });
-    }
-
-    if (!ANTHROPIC_API_KEY) {
-      return new Response(
-        JSON.stringify({ error: "AI service not configured. Set ANTHROPIC_API_KEY in Supabase secrets." }),
-        { status: 503, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } }
-      );
-    }
+    if (!userId || !question?.trim()) return new Response(JSON.stringify({ error: "userId and question are required" }), { status: 400, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
+    if (!ANTHROPIC_API_KEY) return new Response(JSON.stringify({ error: "AI service not configured." }), { status: 503, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-
-    // Check AI quota
-    const { data: quotaData, error: quotaError } = await supabase
-      .rpc("check_and_reset_ai_quota", { p_user_id: userId });
-
-    if (quotaError || !quotaData || quotaData.length === 0) {
-      return new Response(JSON.stringify({ error: "Could not check AI quota." }), {
-        status: 500,
-        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
-      });
-    }
-
+    const { data: quotaData, error: quotaError } = await supabase.rpc("check_and_reset_ai_quota", { p_user_id: userId });
+    if (quotaError || !quotaData || quotaData.length === 0) return new Response(JSON.stringify({ error: "Could not check AI quota." }), { status: 500, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
     const quota = quotaData[0];
-    if (quota.requests_remaining <= 0) {
-      return new Response(
-        JSON.stringify({ error: "Daily AI quota exceeded. Resets at midnight UTC." }),
-        { status: 429, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } }
-      );
+    if (quota.requests_remaining <= 0) return new Response(JSON.stringify({ error: "Daily AI quota exceeded." }), { status: 429, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
+
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString().split("T")[0];
+    const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString().split("T")[0];
+
+    // Deals query is non-fatal — schema/columns may drift across users; if it
+    // errors, return empty rather than killing the whole Clio response.
+    async function fetchDeals() {
+      try {
+        const r = await supabase.from("deals")
+          .select("brand_name, brand, stage, final_amount, quote_standard")
+          .eq("user_id", userId)
+          .order("created_at", { ascending: false })
+          .limit(10);
+        return r.error ? [] : (r.data || []);
+      } catch { return []; }
     }
 
-    // Pull creator context in parallel
-    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-    const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-
-    const [profileResult, metricsResult, prevMetricsResult, postsResult, recentPostsResult, dealsResult, pfmContext, inspirationResult, inspirationCountsResult] = await Promise.all([
-      supabase
-        .from("profiles")
-        .select("full_name, display_name, instagram_avg_views, tiktok_avg_views, youtube_avg_views, instagram_access_token, instagram_business_account_id, tiktok_access_token, youtube_access_token")
-        .eq("id", userId)
-        .maybeSingle(),
-
-      supabase
-        .from("platform_metrics")
-        .select("platform, date, views, likes, comments, saves, followers_count, avg_engagement_rate")
-        .eq("user_id", userId)
-        .gte("date", sevenDaysAgo)
-        .order("date", { ascending: false }),
-
-      supabase
-        .from("platform_metrics")
-        .select("platform, date, views, likes, comments, avg_engagement_rate")
-        .eq("user_id", userId)
-        .gte("date", fourteenDaysAgo)
-        .lt("date", sevenDaysAgo)
-        .order("date", { ascending: false }),
-
-      supabase
-        .from("content_posts")
-        .select("title, platform, media_type, views, likes, comments, engagement_rate, published_at")
-        .eq("user_id", userId)
-        .eq("status", "published")
-        .gte("published_at", thirtyDaysAgo)
-        .order("engagement_rate", { ascending: false })
-        .limit(10),
-
-      // Recent posts sorted by date (so Clio can answer "how did yesterday's post do")
-      supabase
-        .from("content_posts")
-        .select("title, platform, media_type, views, likes, comments, saves, shares, engagement_rate, published_at")
-        .eq("user_id", userId)
-        .eq("status", "published")
-        .gte("published_at", sevenDaysAgo)
-        .order("published_at", { ascending: false })
-        .limit(15),
-
-      supabase
-        .from("deals")
-        .select("brand_name, status, total_value, deliverables_count")
-        .eq("user_id", userId)
-        .in("status", ["negotiating", "contract_sent", "in_production", "pending_payment"])
-        .order("created_at", { ascending: false })
-        .limit(10),
-
-      // Post for Me context — connected accounts + follower counts
+    const [profileResult, metricsResult, postsResult, recentPostsResult, deals, pfmContext, inspirationResult, inspirationCountsResult] = await Promise.all([
+      supabase.from("profiles").select("full_name, display_name, instagram_avg_views, tiktok_avg_views, youtube_avg_views, instagram_access_token, instagram_business_account_id, tiktok_access_token, youtube_access_token").eq("id", userId).maybeSingle(),
+      supabase.from("platform_metrics").select("platform, date, followers_count, avg_engagement_rate").eq("user_id", userId).gte("date", sevenDaysAgo).order("date", { ascending: false }),
+      supabase.from("content_posts").select("title, platform, media_type, views, likes, comments, engagement_rate, published_at").eq("user_id", userId).eq("status", "published").gte("published_at", thirtyDaysAgo).order("engagement_rate", { ascending: false }).limit(10),
+      supabase.from("content_posts").select("title, platform, media_type, views, likes, comments, saves, shares, engagement_rate, published_at").eq("user_id", userId).eq("status", "published").gte("published_at", sevenDaysAgo).order("published_at", { ascending: false }).limit(15),
+      fetchDeals(),
       fetchPostForMeContext(),
-
-      // Inspiration library — Cam's curated Notion swipe file of high-performing
-      // posts. We pull the top Outliers (highest tier) so Clio can recommend
-      // hooks/frameworks grounded in REAL examples Cam already vetted, not
-      // generic advice. Limited to ~15 to keep the prompt tight.
-      supabase
-        .from("inspiration_entries")
-        .select("post_title, platform, content_format, hook_framework, hook_text, topic_tags, tactical_notes, creator, likes, views")
-        .eq("performance_tier", "Outlier")
-        .order("likes", { ascending: false, nullsFirst: false })
-        .limit(15),
-
-      // Aggregate counts so Clio can reference the library at a high level
-      // ("you have 144 Outliers tagged, with How-To being your most-saved
-      // framework") without needing to enumerate them all.
-      supabase
-        .from("inspiration_entries")
-        .select("performance_tier, hook_framework"),
+      supabase.from("inspiration_entries").select("post_title, platform, content_format, hook_framework, hook_text, topic_tags, tactical_notes, creator, likes, views").eq("performance_tier", "Outlier").order("likes", { ascending: false, nullsFirst: false }).limit(15),
+      supabase.from("inspiration_entries").select("performance_tier, hook_framework"),
     ]);
 
     const profile = profileResult.data;
     const creatorName = profile?.display_name || profile?.full_name?.split(" ")[0] || "Creator";
 
-    // Build connected platforms list — both legacy direct integrations AND
-    // Post for Me-connected accounts. Without the PFM merge, every PFM-only
-    // user looks "disconnected" to Clio and Haiku invents follower counts.
     const connectedSet = new Set<string>();
     if (profile?.instagram_access_token || profile?.instagram_business_account_id) connectedSet.add("Instagram");
     if (profile?.tiktok_access_token) connectedSet.add("TikTok");
@@ -257,72 +116,63 @@ Deno.serve(async (req: Request) => {
     }
     const connectedPlatforms = [...connectedSet];
 
-    // Process recent metrics (last 7 days)
+    // platform_metrics rows are LATEST-50-POSTS-CUMULATIVE snapshots, not
+    // daily deltas. Use them only for current-state signals (followers,
+    // typical engagement rate). Compute true 7-day stats from content_posts.
     const recentMetrics = metricsResult.data || [];
-    const prevMetrics = prevMetricsResult.data || [];
-
-    const byPlatform = (metrics: typeof recentMetrics) => {
-      const map: Record<string, { views: number; likes: number; comments: number; saves: number; avgEng: number; followers: number; days: number }> = {};
-      for (const m of metrics) {
-        if (!map[m.platform]) map[m.platform] = { views: 0, likes: 0, comments: 0, saves: 0, avgEng: 0, followers: 0, days: 0 };
-        map[m.platform].views += m.views || 0;
-        map[m.platform].likes += m.likes || 0;
-        map[m.platform].comments += m.comments || 0;
-        map[m.platform].saves += (m.saves || 0);
-        map[m.platform].avgEng += (m.avg_engagement_rate || 0);
-        map[m.platform].followers = Math.max(map[m.platform].followers, m.followers_count || 0);
-        map[m.platform].days++;
+    const latestSnapshotByPlatform: Record<string, { followers: number; avgEng: number; date: string }> = {};
+    for (const m of recentMetrics) {
+      const cur = latestSnapshotByPlatform[m.platform];
+      if (!cur || (m.date && m.date > cur.date)) {
+        latestSnapshotByPlatform[m.platform] = {
+          followers: m.followers_count || 0,
+          avgEng: Number(m.avg_engagement_rate) || 0,
+          date: m.date || "",
+        };
       }
-      // Average the engagement rate
-      for (const p of Object.keys(map)) {
-        if (map[p].days > 0) map[p].avgEng = map[p].avgEng / map[p].days;
-      }
-      return map;
-    };
+    }
 
-    const recentByPlatform = byPlatform(recentMetrics);
-    const prevByPlatform = byPlatform(prevMetrics);
+    const recentPostsForRollup = recentPostsResult.data || [];
+    const sevenDayByPlatform: Record<string, { posts: number; views: number; likes: number; comments: number; saves: number; shares: number }> = {};
+    for (const p of recentPostsForRollup) {
+      if (!sevenDayByPlatform[p.platform]) sevenDayByPlatform[p.platform] = { posts: 0, views: 0, likes: 0, comments: 0, saves: 0, shares: 0 };
+      const a = sevenDayByPlatform[p.platform];
+      a.posts++;
+      a.views += Number(p.views) || 0;
+      a.likes += Number(p.likes) || 0;
+      a.comments += Number(p.comments) || 0;
+      a.saves += Number((p as { saves?: number }).saves) || 0;
+      a.shares += Number((p as { shares?: number }).shares) || 0;
+    }
+    const totalRecentViews = Object.values(sevenDayByPlatform).reduce((s, a) => s + a.views, 0);
+    const totalRecentEng = Object.values(sevenDayByPlatform).reduce((s, a) => s + a.likes + a.comments, 0);
+    const totalRecentPosts = Object.values(sevenDayByPlatform).reduce((s, a) => s + a.posts, 0);
 
-    const totalRecentViews = recentMetrics.reduce((s, m) => s + (m.views || 0), 0);
-    const totalPrevViews = prevMetrics.reduce((s, m) => s + (m.views || 0), 0);
-    const viewsChange = totalPrevViews > 0
-      ? Math.round(((totalRecentViews - totalPrevViews) / totalPrevViews) * 100)
-      : null;
-
-    const totalRecentEng = recentMetrics.reduce((s, m) => s + (m.likes || 0) + (m.comments || 0), 0);
-
-    // Format platform breakdown section.
-    // Each row uses synced follower counts when available; falls back to the
-    // PFM-feed follower counts so connected-but-unsynced accounts still
-    // surface real numbers instead of forcing Haiku to guess.
-    const platformsWithMetrics = new Set(Object.keys(recentByPlatform));
+    const platformsTouched = new Set<string>([
+      ...Object.keys(sevenDayByPlatform),
+      ...Object.keys(latestSnapshotByPlatform),
+    ]);
     const platformLines = [
-      ...Object.entries(recentByPlatform).map(([p, d]) => {
-        const prev = prevByPlatform[p];
-        const prevViews = prev?.views || 0;
-        const changeStr = prevViews > 0
-          ? ` (${d.views > prevViews ? "+" : ""}${Math.round(((d.views - prevViews) / prevViews) * 100)}% vs prior 7d)`
-          : "";
-        const followers = d.followers > 0
-          ? d.followers
-          : (pfmContext.followersByPlatform[p] || 0);
+      ...[...platformsTouched].sort().map((p) => {
+        const w = sevenDayByPlatform[p];
+        const snap = latestSnapshotByPlatform[p];
+        const followers = (snap?.followers ?? 0) > 0 ? snap.followers : (pfmContext.followersByPlatform[p] || 0);
         const followersStr = followers > 0 ? `, ${followers.toLocaleString()} followers` : "";
-        return `  - ${p}: ${d.views.toLocaleString()} views${changeStr}, ${d.avgEng.toFixed(2)}% avg engagement${followersStr}`;
+        const avgEngStr = (snap?.avgEng ?? 0) > 0 ? `, ${snap.avgEng.toFixed(2)}% typical post engagement` : "";
+        if (w && w.posts > 0) {
+          const eng = w.likes + w.comments + w.saves + w.shares;
+          return `  - ${p}: ${w.posts} post${w.posts === 1 ? "" : "s"} in last 7d (${w.views.toLocaleString()} views, ${w.likes.toLocaleString()} likes, ${w.comments.toLocaleString()} comments, ${eng.toLocaleString()} total engagements)${followersStr}${avgEngStr}`;
+        }
+        return `  - ${p}: 0 posts in last 7d${followersStr}${avgEngStr}`;
       }),
-      // PFM-connected accounts that have no metrics yet — surface them so
-      // Haiku knows they're connected and reports "no metrics yet" instead
-      // of "platform not connected".
-      ...pfmContext.accounts
-        .filter((a) => !platformsWithMetrics.has(a.platform))
-        .map((a) => {
-          const followers = pfmContext.followersByPlatform[a.platform] || 0;
-          const followersStr = followers > 0 ? `${followers.toLocaleString()} followers` : "no follower data yet";
-          const label = PFM_PLATFORM_LABELS[a.platform.toLowerCase()] || a.platform;
-          return `  - ${label}: connected${a.username ? ` (@${a.username})` : ""}, ${followersStr}, no published-post metrics yet`;
-        }),
+      ...pfmContext.accounts.filter((a) => !platformsTouched.has(a.platform)).map((a) => {
+        const followers = pfmContext.followersByPlatform[a.platform] || 0;
+        const followersStr = followers > 0 ? `${followers.toLocaleString()} followers` : "no follower data yet";
+        const label = PFM_PLATFORM_LABELS[a.platform.toLowerCase()] || a.platform;
+        return `  - ${label}: connected${a.username ? ` (@${a.username})` : ""}, ${followersStr}, no published-post metrics yet`;
+      }),
     ].join("\n");
 
-    // Format top posts (by engagement)
     const posts = postsResult.data || [];
     const topPostLines = posts.slice(0, 5).map((p, i) => {
       const engStr = p.engagement_rate ? ` (${Number(p.engagement_rate).toFixed(1)}% eng)` : "";
@@ -331,7 +181,6 @@ Deno.serve(async (req: Request) => {
       return `  ${i + 1}. [${p.platform}]${dateStr} "${p.title || "Untitled"}"${viewStr}${engStr}`;
     }).join("\n");
 
-    // Format recent posts chronologically (for "how did yesterday's post do" type questions)
     const recentPosts = recentPostsResult.data || [];
     const recentPostLines = recentPosts.slice(0, 10).map((p) => {
       const dateStr = p.published_at ? new Date(p.published_at).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }) : "unknown date";
@@ -343,29 +192,15 @@ Deno.serve(async (req: Request) => {
       return `  - ${dateStr} [${p.platform}] "${p.title || "Untitled"}" — ${viewStr}${likeStr}${commentStr}${saveStr}${engStr}`;
     }).join("\n");
 
-    // ── Format inspiration library context ──────────────────────────────
-    // Grounds Clio's "what should I make next" answers in Cam's curated
-    // Notion library, not generic LLM intuition.
     const inspirationOutliers = inspirationResult.data || [];
     const inspirationAll = inspirationCountsResult.data || [];
-
     const tierCounts = inspirationAll.reduce((acc: Record<string, number>, e: { performance_tier?: string }) => {
-      const t = e.performance_tier || "Untested";
-      acc[t] = (acc[t] || 0) + 1;
-      return acc;
+      const t = e.performance_tier || "Untested"; acc[t] = (acc[t] || 0) + 1; return acc;
     }, {});
     const frameworkCounts = inspirationAll.reduce((acc: Record<string, number>, e: { hook_framework?: string }) => {
-      const f = e.hook_framework || "Unknown";
-      if (f && f !== "Unknown") acc[f] = (acc[f] || 0) + 1;
-      return acc;
+      const f = e.hook_framework || ""; if (f) acc[f] = (acc[f] || 0) + 1; return acc;
     }, {});
-
-    const topFrameworks = Object.entries(frameworkCounts)
-      .sort((a, b) => (b[1] as number) - (a[1] as number))
-      .slice(0, 5)
-      .map(([fw, count]) => `${fw} (${count})`)
-      .join(", ");
-
+    const topFrameworks = Object.entries(frameworkCounts).sort((a, b) => (b[1] as number) - (a[1] as number)).slice(0, 5).map(([fw, count]) => `${fw} (${count})`).join(", ");
     const inspirationLines = inspirationOutliers.slice(0, 12).map((e: any) => {
       const platform = e.platform ? `[${e.platform}]` : "";
       const framework = e.hook_framework ? ` ${e.hook_framework}` : "";
@@ -379,18 +214,19 @@ Deno.serve(async (req: Request) => {
       return `  - ${platform}${framework}${creator} — ${stats || "no stats"}${hook}${notes}`;
     }).join("\n");
 
-    // Format deals
-    const deals = dealsResult.data || [];
     const dealLines = deals.length > 0
-      ? deals.map(d => `  - ${d.brand_name} (${d.status.replace(/_/g, " ")}): $${Number(d.total_value || 0).toLocaleString()}`).join("\n")
+      ? deals.map((d: any) => {
+          const name = d.brand_name || d.brand || "Unknown brand";
+          const stage = (d.stage || "").replace(/_/g, " ");
+          const value = Number(d.final_amount ?? d.quote_standard ?? 0);
+          return `  - ${name}${stage ? ` (${stage})` : ""}${value > 0 ? `: $${value.toLocaleString()}` : ""}`;
+        }).join("\n")
       : "  No active deals";
+    const totalDealValue = deals.reduce((s: number, d: any) => s + Number(d.final_amount ?? d.quote_standard ?? 0), 0);
 
-    const totalDealValue = deals.reduce((s, d) => s + Number(d.total_value || 0), 0);
-
-    // Build context string
-    const viewsSummary = totalRecentViews > 0
-      ? `${totalRecentViews.toLocaleString()} views last 7 days${viewsChange !== null ? ` (${viewsChange > 0 ? "+" : ""}${viewsChange}% vs prior 7d)` : ""}, ${totalRecentEng.toLocaleString()} total engagements`
-      : "No recent metrics data (connect a platform to get real stats)";
+    const viewsSummary = totalRecentPosts > 0
+      ? `${totalRecentPosts} post${totalRecentPosts === 1 ? "" : "s"} published in last 7 days, ${totalRecentEng.toLocaleString()} total engagements${totalRecentViews > 0 ? `, ${totalRecentViews.toLocaleString()} total views` : " (view counts not exposed for IG image/carousel posts)"}`
+      : "No posts in the last 7 days";
 
     const context = `DATA BLOCK — every number below is real and grounded. Anything not listed here, you don't have.
 
@@ -406,7 +242,7 @@ ${platformLines || "  No platform data available"}
 TOP POSTS (last 30 days, ranked by engagement):
 ${topPostLines || "  No published posts yet"}
 
-RECENT POSTS (last 7 days, chronological — use this to answer questions about specific days):
+RECENT POSTS (last 7 days, chronological):
 ${recentPostLines || "  No posts in the last 7 days"}
 
 ACTIVE DEAL PIPELINE:
@@ -417,15 +253,9 @@ Total entries analyzed: ${inspirationAll.length}
 By tier: ${Object.entries(tierCounts).map(([t, c]) => `${t}: ${c}`).join(", ") || "none"}
 Top hook frameworks (most-saved): ${topFrameworks || "none"}
 
-Top Outlier examples (best-performing posts they've studied):
-${inspirationLines || "  No Outliers in library yet"}
+Top Outlier examples:
+${inspirationLines || "  No Outliers in library yet"}`.trim();
 
-ONBOARDED VIEW AVERAGES (from profile setup):
-${profile?.instagram_avg_views ? `  Instagram: ${Number(profile.instagram_avg_views).toLocaleString()} avg views` : ""}
-${profile?.tiktok_avg_views ? `  TikTok: ${Number(profile.tiktok_avg_views).toLocaleString()} avg views` : ""}
-${profile?.youtube_avg_views ? `  YouTube: ${Number(profile.youtube_avg_views).toLocaleString()} avg views` : ""}`.trim();
-
-    // Call Claude Haiku
     const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -434,38 +264,26 @@ ${profile?.youtube_avg_views ? `  YouTube: ${Number(profile.youtube_avg_views).t
         "content-type": "application/json",
         // Deno's default User-Agent ("Deno/x.x.x") triggers Anthropic's
         // Cloudflare bot challenge on /v1/messages. Pinning a friendly UA
-        // bypasses the challenge. Verified empirically — Cloudflare 403s
-        // any POST without an explicit UA on this endpoint as of Apr 2026.
+        // bypasses the challenge.
         "User-Agent": "cliopatra-ask-copilot/1.0",
       },
       body: JSON.stringify({
         model: "claude-haiku-4-5-20251001",
-        max_tokens: 512,
-        system: `You are Clio, the creator's personal analytics + inspiration copilot inside Cliopatra Social. You have access to two grounded sources in the DATA block below:
-  (a) Their real performance data — followers, engagement, recent posts.
-  (b) Their personal Inspiration Library — Outlier posts they've studied and tagged with hook frameworks, performance tier, and tactical notes.
-
-Your job: turn those two sources into specific, actionable answers — especially for "what should I make next" type questions, where you should pattern-match the user's recent performance against the hook frameworks and Outlier examples in their library.
+        max_tokens: 700,
+        system: `You are Clio, the creator's personal analytics + inspiration copilot inside Cliopatra Social. You have access to two grounded sources in the DATA block below: (a) their real performance data, (b) their curated Inspiration Library of Outlier posts.
 
 GROUNDING RULES — non-negotiable:
-1. NEVER invent, estimate, or assume metrics. If a number isn't in the DATA block, say "I don't have that data yet" and tell the user how to get it (e.g. "connect a platform from /office/connections" or "give it 24 hours after posting for metrics to sync").
-2. NEVER say generic ranges like "around 1,000 followers" or "typical for this niche." If you don't have the exact number, you don't have it.
-3. NEVER assume a platform is connected unless it appears in "Connected platforms".
-4. If "Connected platforms" is "None connected yet", direct the user to /office/connections — don't pretend to analyze imaginary stats.
-5. When you DO have data, quote exact numbers from the DATA block. Don't round dramatically or paraphrase.
+1. NEVER invent metrics. If a number isn't in the DATA block, say "I don't have that data yet".
+2. NEVER assume a platform is connected unless it's in "Connected platforms".
+3. "Typical post engagement" is a rolling average across recent posts — NOT a 7-day delta. Frame it accurately.
+4. When the user asks for ideas/hooks, reference SPECIFIC examples from their Inspiration Library by hook framework. Quote their saved Hook text directly.
+5. Pair recommendations with their own performance signal where possible.
+6. Never recommend a hook framework absent from "Top hook frameworks".
 
-INSPIRATION GROUNDING — when the user asks for ideas, hooks, or "what should I post":
-6. Reference SPECIFIC examples from their Inspiration Library by hook framework and tactical note. Quote their own saved Hook text directly when it pattern-matches the recommendation.
-7. Pair the recommendation with their own performance signal — "Your Reels with Curiosity Gap hooks averaged Xk views (per platform_metrics)" + "Library shows N Outliers using that framework, e.g. <hook>".
-8. If the library has zero Outliers in a relevant framework, say so — don't make up examples.
-9. Never recommend a hook framework that isn't represented in the "Top hook frameworks" list. Stick to what they've already vetted.
-
-Style: direct, actionable, under 250 words. Match the user's energy. No filler, no preamble, no "great question" openers.
+Style: direct, actionable, under 250 words. No filler, no preamble.
 
 ${context}`,
-        messages: [
-          { role: "user", content: question.trim() },
-        ],
+        messages: [{ role: "user", content: question.trim() }],
       }),
     });
 
@@ -478,7 +296,6 @@ ${context}`,
     const anthropicData = await anthropicRes.json();
     const answer = anthropicData.content?.[0]?.text || "Sorry, I couldn't generate a response.";
 
-    // Decrement quota
     await supabase.rpc("increment_ai_request", { p_user_id: userId });
 
     return new Response(JSON.stringify({ answer, success: true }), {
@@ -488,8 +305,7 @@ ${context}`,
     const message = err instanceof Error ? err.message : String(err);
     console.error("ask-copilot error:", message);
     return new Response(JSON.stringify({ error: "Something went wrong. Please try again." }), {
-      status: 500,
-      headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+      status: 500, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
     });
   }
 });
