@@ -70,8 +70,47 @@ export function Connections() {
     setError(null);
     try {
       const { authUrl } = await initPostForMeConnect(user.id, platform);
-      // Full-page redirect to Post for Me's hosted OAuth flow
-      window.location.href = authUrl;
+      // PFM's hosted OAuth flow ends on their own success page when they're
+      // using their own platform credentials (the `redirect_url_override`
+      // option only fires when the integration uses our own platform creds).
+      // To avoid stranding the user on PFM, open the flow in a new tab and
+      // poll our own listing for the new account. As soon as it appears we
+      // refresh the UI and surface a "connected" flash.
+      const popup = window.open(authUrl, '_blank');
+      if (!popup) {
+        // Popup blocked — fall back to full-page redirect
+        window.location.href = authUrl;
+        return;
+      }
+
+      const before = new Set(accounts.map((a) => a.platform));
+      const startedAt = Date.now();
+      const TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+      const POLL_MS = 3000;
+
+      const poll = async () => {
+        if (Date.now() - startedAt > TIMEOUT_MS) {
+          setBusyPlatform(null);
+          return;
+        }
+        try {
+          const state = await listPostForMeAccounts(user.id, true);
+          const newAccount = state.accounts.find(
+            (a) => a.platform === platform && !before.has(platform) && a.status !== 'disconnected'
+          );
+          if (newAccount) {
+            setAccounts(state.accounts);
+            setBusyPlatform(null);
+            setFlash(`Connected ${platform.toUpperCase()}.`);
+            setTimeout(() => setFlash(null), 4000);
+            return;
+          }
+        } catch {
+          // Network blip — keep polling
+        }
+        setTimeout(poll, POLL_MS);
+      };
+      setTimeout(poll, POLL_MS);
     } catch (err) {
       setError((err as Error).message);
       setBusyPlatform(null);
