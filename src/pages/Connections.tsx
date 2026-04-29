@@ -135,9 +135,13 @@ export function Connections() {
     }
   };
 
-  // Hide accounts on platforms we don't support in-app
+  // Hide accounts on platforms we don't support in-app, AND hide disconnected
+  // accounts entirely from the "connected" list (PFM keeps disconnected rows
+  // around with status='disconnected' rather than deleting them).
   const supportedIds = new Set(POSTFORME_PLATFORMS.map(p => p.id));
-  const supportedAccounts = accounts.filter(a => supportedIds.has(a.platform as any));
+  const supportedAccounts = accounts.filter(
+    a => supportedIds.has(a.platform as any) && a.status !== 'disconnected'
+  );
   const connectedPlatformIds = new Set(supportedAccounts.map((a) => a.platform));
   const availablePlatforms = POSTFORME_PLATFORMS.filter((p) => !connectedPlatformIds.has(p.id));
 

@@ -25,9 +25,12 @@ export function OfficeConnectionsCard() {
       .finally(() => setLoading(false));
   }, [user]);
 
-  // Only count accounts on platforms we support in-app
+  // Only count accounts on platforms we support in-app, and exclude any
+  // disconnected entries (PFM retains them with status='disconnected').
   const supportedIds = new Set(POSTFORME_PLATFORMS.map(p => p.id));
-  const supportedAccounts = accounts.filter(a => supportedIds.has(a.platform as any));
+  const supportedAccounts = accounts.filter(
+    a => supportedIds.has(a.platform as any) && a.status !== 'disconnected'
+  );
 
   // 7 supported platforms in the v1 spec
   const totalSlots = 7;
