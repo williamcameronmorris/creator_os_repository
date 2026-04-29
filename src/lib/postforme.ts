@@ -72,6 +72,26 @@ export async function listPostForMeAccounts(_userId: string, _refresh = false): 
   return { accounts: arr.map(normalizeAccount) };
 }
 
+/**
+ * Per-platform extra data PFM requires when initiating OAuth.
+ *
+ *   instagram → connection_type: 'instagram' (default) means "Log in with
+ *               Instagram" (direct, recommended for personal IG creators).
+ *               Use 'facebook' if the IG is linked to a Facebook Page and the
+ *               creator wants the Page-based flow.
+ *
+ * Other platforms don't currently require `platform_data` — added cases as we
+ * encounter them.
+ */
+function buildPlatformData(platform: PostForMePlatformId): Record<string, unknown> | undefined {
+  switch (platform) {
+    case 'instagram':
+      return { instagram: { connection_type: 'instagram' } };
+    default:
+      return undefined;
+  }
+}
+
 export async function initPostForMeConnect(
   userId: string,
   platform: PostForMePlatformId,
@@ -85,6 +105,8 @@ export async function initPostForMeConnect(
     permissions: ['posts', 'feeds'],
     external_id: userId,
   };
+  const platformData = buildPlatformData(platform);
+  if (platformData) body.platform_data = platformData;
   if (redirectUrl) body.redirect_url_override = redirectUrl;
   const data = await proxy<{ url: string }>('POST', '/v1/social-accounts/auth-url', body);
   if (!data?.url) throw new Error('No url returned from auth-url');
