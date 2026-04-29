@@ -31,9 +31,15 @@ Deno.serve(async (req: Request) => {
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-    // ── Verify caller's session JWT; derive userId from the token, not the body.
-    // The edge runtime's verify_jwt gate accepts anon/service keys as "valid JWTs",
-    // so we must explicitly resolve the caller to a real user here.
+    // ── Verify caller and resolve userId.
+    //
+    // Two valid call paths:
+    //   1. User-triggered (browser session JWT): we resolve the user from the
+    //      JWT and ignore body.userId.
+    //   2. Cron / service-role-triggered: caller presents the service-role
+    //      key as bearer and supplies userId in the body. (auth.getUser does
+    //      not recognize service-role tokens as user tokens, so we have to
+    //      take this path explicitly.)
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       return new Response(
@@ -42,15 +48,50 @@ Deno.serve(async (req: Request) => {
       );
     }
     const jwt = authHeader.replace(/^Bearer\s+/i, "");
-    const anon = createClient(supabaseUrl, supabaseAnonKey);
-    const { data: { user }, error: userError } = await anon.auth.getUser(jwt);
-    if (userError || !user) {
-      return new Response(
-        JSON.stringify({ error: "Unauthorized" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+
+    // Read body once (used by both auth paths)
+    let body: { userId?: string } = {};
+    try { body = await req.json(); } catch { /* empty body is fine for user mode */ }
+
+    // Detect service-role JWTs by decoding the payload and checking the role
+    // claim. Comparing against SUPABASE_SERVICE_ROLE_KEY directly is brittle
+    // because callers may pass a separately-stored copy of the key (e.g. the
+    // value stored in vault for cron use), which can differ by whitespace.
+    function isServiceRoleJwt(tok: string): boolean {
+      try {
+        const parts = tok.split(".");
+        if (parts.length !== 3) return false;
+        const payload = JSON.parse(
+          atob(parts[1].replace(/-/g, "+").replace(/_/g, "/"))
+        );
+        return payload?.role === "service_role";
+      } catch {
+        return false;
+      }
     }
-    const userId = user.id;
+
+    let userId: string;
+    if (isServiceRoleJwt(jwt)) {
+      // Service-role / cron path
+      if (!body.userId) {
+        return new Response(
+          JSON.stringify({ error: "userId is required in body for service-role calls" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      userId = body.userId;
+    } else {
+      // User session path
+      const anon = createClient(supabaseUrl, supabaseAnonKey);
+      const { data: { user }, error: userError } = await anon.auth.getUser(jwt);
+      if (userError || !user) {
+        return new Response(
+          JSON.stringify({ error: "Unauthorized" }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      userId = user.id;
+    }
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 

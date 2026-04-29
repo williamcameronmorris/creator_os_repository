@@ -40,18 +40,45 @@ Deno.serve(async (req: Request) => {
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-    // ── Verify caller's session JWT; derive userId from the token, not the body.
+    // ── Resolve userId. Two paths:
+    //   1. User-triggered: derive from session JWT
+    //   2. Cron / service-role: take userId from body
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       return new Response(JSON.stringify({ error: "Missing Authorization header" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
     const jwt = authHeader.replace(/^Bearer\s+/i, "");
-    const anon = createClient(supabaseUrl, supabaseAnonKey);
-    const { data: { user }, error: userError } = await anon.auth.getUser(jwt);
-    if (userError || !user) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+
+    let body: { userId?: string } = {};
+    try { body = await req.json(); } catch { /* empty body ok for user mode */ }
+
+    function isServiceRoleJwt(tok: string): boolean {
+      try {
+        const parts = tok.split(".");
+        if (parts.length !== 3) return false;
+        const payload = JSON.parse(
+          atob(parts[1].replace(/-/g, "+").replace(/_/g, "/"))
+        );
+        return payload?.role === "service_role";
+      } catch {
+        return false;
+      }
     }
-    const userId = user.id;
+
+    let userId: string;
+    if (isServiceRoleJwt(jwt)) {
+      if (!body.userId) {
+        return new Response(JSON.stringify({ error: "userId required in body for service-role calls" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      userId = body.userId;
+    } else {
+      const anon = createClient(supabaseUrl, supabaseAnonKey);
+      const { data: { user }, error: userError } = await anon.auth.getUser(jwt);
+      if (userError || !user) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      userId = user.id;
+    }
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
