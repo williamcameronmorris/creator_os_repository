@@ -170,7 +170,7 @@ Deno.serve(async (req: Request) => {
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
     const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
 
-    const [profileResult, metricsResult, prevMetricsResult, postsResult, recentPostsResult, dealsResult, pfmContext] = await Promise.all([
+    const [profileResult, metricsResult, prevMetricsResult, postsResult, recentPostsResult, dealsResult, pfmContext, inspirationResult, inspirationCountsResult] = await Promise.all([
       supabase
         .from("profiles")
         .select("full_name, display_name, instagram_avg_views, tiktok_avg_views, youtube_avg_views, instagram_access_token, instagram_business_account_id, tiktok_access_token, youtube_access_token")
@@ -221,6 +221,24 @@ Deno.serve(async (req: Request) => {
 
       // Post for Me context — connected accounts + follower counts
       fetchPostForMeContext(),
+
+      // Inspiration library — Cam's curated Notion swipe file of high-performing
+      // posts. We pull the top Outliers (highest tier) so Clio can recommend
+      // hooks/frameworks grounded in REAL examples Cam already vetted, not
+      // generic advice. Limited to ~15 to keep the prompt tight.
+      supabase
+        .from("inspiration_entries")
+        .select("post_title, platform, content_format, hook_framework, hook_text, topic_tags, tactical_notes, creator, likes, views")
+        .eq("performance_tier", "Outlier")
+        .order("likes", { ascending: false, nullsFirst: false })
+        .limit(15),
+
+      // Aggregate counts so Clio can reference the library at a high level
+      // ("you have 144 Outliers tagged, with How-To being your most-saved
+      // framework") without needing to enumerate them all.
+      supabase
+        .from("inspiration_entries")
+        .select("performance_tier, hook_framework"),
     ]);
 
     const profile = profileResult.data;
@@ -325,6 +343,42 @@ Deno.serve(async (req: Request) => {
       return `  - ${dateStr} [${p.platform}] "${p.title || "Untitled"}" — ${viewStr}${likeStr}${commentStr}${saveStr}${engStr}`;
     }).join("\n");
 
+    // ── Format inspiration library context ──────────────────────────────
+    // Grounds Clio's "what should I make next" answers in Cam's curated
+    // Notion library, not generic LLM intuition.
+    const inspirationOutliers = inspirationResult.data || [];
+    const inspirationAll = inspirationCountsResult.data || [];
+
+    const tierCounts = inspirationAll.reduce((acc: Record<string, number>, e: { performance_tier?: string }) => {
+      const t = e.performance_tier || "Untested";
+      acc[t] = (acc[t] || 0) + 1;
+      return acc;
+    }, {});
+    const frameworkCounts = inspirationAll.reduce((acc: Record<string, number>, e: { hook_framework?: string }) => {
+      const f = e.hook_framework || "Unknown";
+      if (f && f !== "Unknown") acc[f] = (acc[f] || 0) + 1;
+      return acc;
+    }, {});
+
+    const topFrameworks = Object.entries(frameworkCounts)
+      .sort((a, b) => (b[1] as number) - (a[1] as number))
+      .slice(0, 5)
+      .map(([fw, count]) => `${fw} (${count})`)
+      .join(", ");
+
+    const inspirationLines = inspirationOutliers.slice(0, 12).map((e: any) => {
+      const platform = e.platform ? `[${e.platform}]` : "";
+      const framework = e.hook_framework ? ` ${e.hook_framework}` : "";
+      const stats = [
+        e.views ? `${Number(e.views).toLocaleString()} views` : "",
+        e.likes ? `${Number(e.likes).toLocaleString()} likes` : "",
+      ].filter(Boolean).join(", ");
+      const hook = e.hook_text ? `\n      Hook: "${String(e.hook_text).slice(0, 150)}"` : "";
+      const notes = e.tactical_notes ? `\n      Notes: ${String(e.tactical_notes).slice(0, 200)}` : "";
+      const creator = e.creator ? ` by ${e.creator}` : "";
+      return `  - ${platform}${framework}${creator} — ${stats || "no stats"}${hook}${notes}`;
+    }).join("\n");
+
     // Format deals
     const deals = dealsResult.data || [];
     const dealLines = deals.length > 0
@@ -358,6 +412,14 @@ ${recentPostLines || "  No posts in the last 7 days"}
 ACTIVE DEAL PIPELINE:
 ${dealLines}${deals.length > 0 ? `\nTotal pipeline value: $${totalDealValue.toLocaleString()}` : ""}
 
+INSPIRATION LIBRARY (creator's curated Notion swipe file of high-performing posts):
+Total entries analyzed: ${inspirationAll.length}
+By tier: ${Object.entries(tierCounts).map(([t, c]) => `${t}: ${c}`).join(", ") || "none"}
+Top hook frameworks (most-saved): ${topFrameworks || "none"}
+
+Top Outlier examples (best-performing posts they've studied):
+${inspirationLines || "  No Outliers in library yet"}
+
 ONBOARDED VIEW AVERAGES (from profile setup):
 ${profile?.instagram_avg_views ? `  Instagram: ${Number(profile.instagram_avg_views).toLocaleString()} avg views` : ""}
 ${profile?.tiktok_avg_views ? `  TikTok: ${Number(profile.tiktok_avg_views).toLocaleString()} avg views` : ""}
@@ -374,16 +436,26 @@ ${profile?.youtube_avg_views ? `  YouTube: ${Number(profile.youtube_avg_views).t
       body: JSON.stringify({
         model: "claude-haiku-4-5-20251001",
         max_tokens: 512,
-        system: `You are Clio, the creator's personal analytics copilot inside Cliopatra Social. You have access to their real performance data shown below in the DATA block.
+        system: `You are Clio, the creator's personal analytics + inspiration copilot inside Cliopatra Social. You have access to two grounded sources in the DATA block below:
+  (a) Their real performance data — followers, engagement, recent posts.
+  (b) Their personal Inspiration Library — Outlier posts they've studied and tagged with hook frameworks, performance tier, and tactical notes.
 
-GROUNDING RULES — these are non-negotiable:
-1. NEVER invent, estimate, or assume metrics. If a number is not present in the DATA block below, say "I don't have that data yet" and tell the user how to get it (e.g. "connect a platform from /office/connections" or "give it 24 hours after posting for metrics to sync").
+Your job: turn those two sources into specific, actionable answers — especially for "what should I make next" type questions, where you should pattern-match the user's recent performance against the hook frameworks and Outlier examples in their library.
+
+GROUNDING RULES — non-negotiable:
+1. NEVER invent, estimate, or assume metrics. If a number isn't in the DATA block, say "I don't have that data yet" and tell the user how to get it (e.g. "connect a platform from /office/connections" or "give it 24 hours after posting for metrics to sync").
 2. NEVER say generic ranges like "around 1,000 followers" or "typical for this niche." If you don't have the exact number, you don't have it.
-3. NEVER assume a platform is connected unless it appears in "Connected platforms" below.
-4. If "Connected platforms" is "None connected yet", your job is to direct the user to /office/connections — do not pretend to analyze imaginary stats.
-5. When you DO have data, quote the exact numbers from the DATA block. Do not round dramatically or paraphrase.
+3. NEVER assume a platform is connected unless it appears in "Connected platforms".
+4. If "Connected platforms" is "None connected yet", direct the user to /office/connections — don't pretend to analyze imaginary stats.
+5. When you DO have data, quote exact numbers from the DATA block. Don't round dramatically or paraphrase.
 
-Style: direct, actionable, under 200 words. Match the user's energy. No filler, no preamble, no "great question" type openers.
+INSPIRATION GROUNDING — when the user asks for ideas, hooks, or "what should I post":
+6. Reference SPECIFIC examples from their Inspiration Library by hook framework and tactical note. Quote their own saved Hook text directly when it pattern-matches the recommendation.
+7. Pair the recommendation with their own performance signal — "Your Reels with Curiosity Gap hooks averaged Xk views (per platform_metrics)" + "Library shows N Outliers using that framework, e.g. <hook>".
+8. If the library has zero Outliers in a relevant framework, say so — don't make up examples.
+9. Never recommend a hook framework that isn't represented in the "Top hook frameworks" list. Stick to what they've already vetted.
+
+Style: direct, actionable, under 250 words. Match the user's energy. No filler, no preamble, no "great question" openers.
 
 ${context}`,
         messages: [
