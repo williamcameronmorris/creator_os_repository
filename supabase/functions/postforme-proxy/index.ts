@@ -24,6 +24,38 @@ function pathAllowed(path: string): boolean {
   return ALLOWED_PREFIXES.some((p) => path === p || path.startsWith(p + "/") || path.startsWith(p));
 }
 
+/**
+ * Multi-tenancy: PFM accounts and posts are tagged with `external_id` =
+ * Cliopatra user.id. The proxy enforces this server-side rather than trusting
+ * the client:
+ *
+ *   GET /v1/social-accounts*       → auto-append ?external_id={user.id}
+ *   GET /v1/social-posts*          → auto-append ?external_id={user.id}
+ *   POST /v1/social-accounts/auth-url → force body.external_id = user.id
+ *   POST /v1/social-posts          → force body.external_id = user.id
+ *
+ * Per-account operations (disconnect, get-by-id) and feed reads still rely on
+ * the caller knowing the right account id. We could add a server-side check
+ * (look up the account, verify external_id matches) but for v1 single-tenant
+ * usage that's overkill — flagged for follow-up when there are multiple users.
+ */
+function shouldFilterListByExternalId(method: string, path: string): boolean {
+  if (method !== "GET") return false;
+  // Filter only the top-level list endpoints. Path with an ID after the prefix
+  // is a single-resource read where the filter would be meaningless.
+  const isAccountsList = path === "/v1/social-accounts" || path.startsWith("/v1/social-accounts?");
+  const isPostsList = path === "/v1/social-posts" || path.startsWith("/v1/social-posts?");
+  const isPostResultsList = path === "/v1/social-post-results" || path.startsWith("/v1/social-post-results?");
+  return isAccountsList || isPostsList || isPostResultsList;
+}
+
+function shouldStampBodyExternalId(method: string, path: string): boolean {
+  if (method !== "POST") return false;
+  if (path === "/v1/social-accounts/auth-url") return true;
+  if (path === "/v1/social-posts") return true;
+  return false;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: corsHeaders });
@@ -56,6 +88,7 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
+  const userId = userData.user.id;
 
   let payload: { method?: string; path?: string; body?: unknown; query?: Record<string, string | string[]> };
   try {
@@ -91,15 +124,30 @@ Deno.serve(async (req) => {
     });
   }
 
+  // Build URL with auto-injected external_id filter where applicable
   let url = `${PFM_BASE}${path}`;
+  const sp = new URLSearchParams();
   if (payload.query) {
-    const sp = new URLSearchParams();
     for (const [k, v] of Object.entries(payload.query)) {
       if (Array.isArray(v)) v.forEach((x) => sp.append(k, x));
       else sp.append(k, v);
     }
-    const qs = sp.toString();
-    if (qs) url += (url.includes("?") ? "&" : "?") + qs;
+  }
+  if (shouldFilterListByExternalId(method, path)) {
+    // Always set, never trust client-supplied value
+    sp.set("external_id", userId);
+  }
+  const qs = sp.toString();
+  if (qs) url += (url.includes("?") ? "&" : "?") + qs;
+
+  // Stamp external_id into POST bodies for create operations
+  let bodyToSend = payload.body;
+  if (shouldStampBodyExternalId(method, path)) {
+    if (bodyToSend && typeof bodyToSend === "object" && !Array.isArray(bodyToSend)) {
+      bodyToSend = { ...(bodyToSend as Record<string, unknown>), external_id: userId };
+    } else {
+      bodyToSend = { external_id: userId };
+    }
   }
 
   const init: RequestInit = {
@@ -109,8 +157,8 @@ Deno.serve(async (req) => {
       Authorization: `Bearer ${apiKey}`,
     },
   };
-  if (method !== "GET" && method !== "DELETE" && payload.body !== undefined) {
-    init.body = JSON.stringify(payload.body);
+  if (method !== "GET" && method !== "DELETE" && bodyToSend !== undefined) {
+    init.body = JSON.stringify(bodyToSend);
   }
 
   try {

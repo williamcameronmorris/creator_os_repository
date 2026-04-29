@@ -118,8 +118,13 @@ async function pfmFetch(path: string, init?: RequestInit): Promise<Response> {
   });
 }
 
-async function listAccounts(): Promise<PfmAccount[]> {
-  const res = await pfmFetch("/v1/social-accounts");
+async function listAccounts(externalId?: string): Promise<PfmAccount[]> {
+  // Filter by external_id when known so each Cliopatra user only syncs their
+  // own PFM accounts, not the whole shared workspace.
+  const path = externalId
+    ? `/v1/social-accounts?external_id=${encodeURIComponent(externalId)}`
+    : "/v1/social-accounts";
+  const res = await pfmFetch(path);
   if (!res.ok) return [];
   const body = await res.json();
   const arr = Array.isArray(body) ? body : (body?.data || []);
@@ -175,11 +180,10 @@ interface PostResult {
   raw: unknown;
 }
 
-async function listPostResults(limit = 200): Promise<PostResult[]> {
-  // PFM pagination shape isn't pinned down in the public spec — we try a
-  // generous page size and a couple of likely query keys. If PFM only returns
-  // up to N results regardless, we'll see that in logs and tune later.
-  const res = await pfmFetch(`/v1/social-post-results?limit=${limit}&page_size=${limit}`);
+async function listPostResults(externalId?: string, limit = 200): Promise<PostResult[]> {
+  const params = new URLSearchParams({ limit: String(limit), page_size: String(limit) });
+  if (externalId) params.set("external_id", externalId);
+  const res = await pfmFetch(`/v1/social-post-results?${params.toString()}`);
   if (!res.ok) return [];
   const body = await res.json();
   const arr = Array.isArray(body) ? body : (body?.data || []);
@@ -244,7 +248,9 @@ async function syncForUser(userId: string): Promise<SyncSummary> {
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
   // 1. Pull connected accounts + feeds in parallel
-  const accounts = await listAccounts();
+  // Filter PFM accounts by this user's external_id so each Cliopatra user
+  // only sees their own connected accounts in the shared PFM workspace.
+  const accounts = await listAccounts(userId);
   summary.accountsSynced = accounts.length;
 
   const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
@@ -325,7 +331,7 @@ async function syncForUser(userId: string): Promise<SyncSummary> {
   // 2. Pull post results, normalize, write to platform_metrics + content_posts
   let postResults: PostResult[] = [];
   try {
-    postResults = await listPostResults();
+    postResults = await listPostResults(userId);
     summary.postsSynced = postResults.length;
   } catch (err) {
     summary.errors.push(`post results: ${(err as Error).message}`);

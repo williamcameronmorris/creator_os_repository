@@ -30,6 +30,15 @@ interface ProxyEnvelope<T> {
   data: T;
 }
 
+/**
+ * Multi-tenancy note:
+ * The postforme-proxy edge function auto-injects `external_id={user.id}` into
+ * the query for GET requests and into the body for create-account / create-post
+ * requests. So this client only has to pass `external_id` for the operations
+ * where it materially matters (creating an account, creating a post) — list
+ * filtering happens server-side from the JWT and isn't trusted from this code.
+ */
+
 async function proxy<T>(method: string, path: string, body?: unknown, query?: Record<string, string | string[]>): Promise<T> {
   const { data, error } = await supabase.functions.invoke<ProxyEnvelope<T>>('postforme-proxy', {
     body: { method, path, body, query },
@@ -57,17 +66,25 @@ function normalizeAccount(raw: any): PostForMeAccount {
 }
 
 export async function listPostForMeAccounts(_userId: string, _refresh = false): Promise<PostForMeState> {
+  // Proxy auto-filters by the authenticated user's external_id.
   const data = await proxy<{ data?: any[] } | any[]>('GET', '/v1/social-accounts');
   const arr = Array.isArray(data) ? data : (data?.data || []);
   return { accounts: arr.map(normalizeAccount) };
 }
 
 export async function initPostForMeConnect(
-  _userId: string,
+  userId: string,
   platform: PostForMePlatformId,
   redirectUrl?: string,
 ): Promise<{ authUrl: string }> {
-  const body: Record<string, unknown> = { platform, permissions: ['posts', 'feeds'] };
+  // Tag the new account with this user's id so it scopes correctly in
+  // multi-tenant listings + sync. Proxy will enforce/override this from JWT
+  // server-side but we also send it explicitly for clarity.
+  const body: Record<string, unknown> = {
+    platform,
+    permissions: ['posts', 'feeds'],
+    external_id: userId,
+  };
   if (redirectUrl) body.redirect_url_override = redirectUrl;
   const data = await proxy<{ url: string }>('POST', '/v1/social-accounts/auth-url', body);
   if (!data?.url) throw new Error('No url returned from auth-url');
@@ -75,15 +92,16 @@ export async function initPostForMeConnect(
 }
 
 export async function disconnectPostForMeAccount(
-  _userId: string,
+  userId: string,
   accountId: string,
 ): Promise<{ accounts: PostForMeAccount[] }> {
   await proxy('POST', `/v1/social-accounts/${accountId}/disconnect`);
-  const state = await listPostForMeAccounts(_userId, true);
+  const state = await listPostForMeAccounts(userId, true);
   return { accounts: state.accounts };
 }
 
 export interface CreatePostInput {
+  userId: string;
   caption: string;
   mediaUrls: string[];
   socialAccountIds: string[];
@@ -97,9 +115,11 @@ export interface PostForMePost {
 }
 
 export async function createPostForMePost(input: CreatePostInput): Promise<PostForMePost> {
+  // Tag the post with this user's id for multi-tenant scoping.
   const body: Record<string, unknown> = {
     caption: input.caption,
     social_accounts: input.socialAccountIds,
+    external_id: input.userId,
   };
   if (input.mediaUrls.length > 0) {
     body.media = input.mediaUrls.map((url) => ({ url }));

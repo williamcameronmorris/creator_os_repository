@@ -125,6 +125,12 @@ Deno.serve(async (req) => {
   const platform = (data.platform as string) || ((data.account as { platform?: string })?.platform);
   const platformPostId = (data.platform_post_id as string)
     || ((data.result as { platform_post_id?: string })?.platform_post_id);
+  // external_id should equal the Cliopatra user.id we stamped on the post.
+  // Used to scope the update so a malformed event can't ever cross tenants.
+  const externalId = (data.external_id as string)
+    || ((data.post as { external_id?: string })?.external_id)
+    || ((data.social_post as { external_id?: string })?.external_id)
+    || null;
 
   if (!postId) {
     console.warn("postforme-webhook: no post id found in payload, ignoring", { eventType });
@@ -159,6 +165,11 @@ Deno.serve(async (req) => {
   // If the event is platform-scoped (e.g. one platform succeeded while another
   // is still pending), narrow the update to that platform's mirror row.
   if (platform) query = query.eq("platform", platform.toLowerCase());
+
+  // Defense-in-depth: scope the update to the tenant the event belongs to.
+  // Even though postforme_post_id is unique, this prevents a malformed or
+  // spoofed event from ever updating another user's row.
+  if (externalId) query = query.eq("user_id", externalId);
 
   const { error, count } = await query.select("id", { count: "exact" });
   if (error) {

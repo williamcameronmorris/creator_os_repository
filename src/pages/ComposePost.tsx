@@ -231,6 +231,7 @@ export function ComposePost() {
       }
 
       const post = await createPostForMePost({
+        userId: user.id,
         caption: caption.trim(),
         mediaUrls,
         socialAccountIds: accountIds,
