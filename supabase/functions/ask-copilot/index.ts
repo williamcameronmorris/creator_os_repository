@@ -432,6 +432,11 @@ ${profile?.youtube_avg_views ? `  YouTube: ${Number(profile.youtube_avg_views).t
         "x-api-key": ANTHROPIC_API_KEY,
         "anthropic-version": "2023-06-01",
         "content-type": "application/json",
+        // Deno's default User-Agent ("Deno/x.x.x") triggers Anthropic's
+        // Cloudflare bot challenge on /v1/messages. Pinning a friendly UA
+        // bypasses the challenge. Verified empirically — Cloudflare 403s
+        // any POST without an explicit UA on this endpoint as of Apr 2026.
+        "User-Agent": "cliopatra-ask-copilot/1.0",
       },
       body: JSON.stringify({
         model: "claude-haiku-4-5-20251001",
@@ -466,7 +471,7 @@ ${context}`,
 
     if (!anthropicRes.ok) {
       const errText = await anthropicRes.text();
-      console.error("Anthropic error:", errText);
+      console.error("Anthropic error:", anthropicRes.status, errText);
       throw new Error("AI service error");
     }
 
