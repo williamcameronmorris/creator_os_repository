@@ -62,25 +62,38 @@ export function Schedule() {
     if (!user) return;
     const selectCols = 'id, platform, caption, media_urls, scheduled_date, scheduled_for, status, deal_id, is_sponsored, publish_status, publish_error, platform_post_id, published_at, thumbnail_url, media_type';
 
-    // Scheduled + draft posts are few; always load all of them so they
-    // are never pushed out by the published-posts pagination window.
-    const { data: activePosts } = await supabase
-      .from('content_posts_unified')
-      .select(selectCols)
-      .eq('user_id', user.id)
-      .in('status', ['scheduled', 'draft'])
-      .order('scheduled_for', { ascending: true, nullsFirst: false });
+    // Posts written via the new Compose flow land in `content_posts`; legacy
+    // posts (and anything written before the PostForMe migration) live in
+    // `content_posts_unified`. Query both and dedupe by id so neither set
+    // gets dropped — without this, all 19 IG posts written through Compose
+    // are invisible to the Schedule page.
+    const fetchFrom = (table: string) => ({
+      active: supabase.from(table).select(selectCols)
+        .eq('user_id', user.id)
+        .in('status', ['scheduled', 'draft'])
+        .order('scheduled_for', { ascending: true, nullsFirst: false }),
+      published: supabase.from(table).select(selectCols)
+        .eq('user_id', user.id)
+        .eq('status', 'published')
+        .order('published_at', { ascending: false })
+        .range(0, 199),
+    });
 
-    // Published posts: most recent 200.
-    const { data: publishedPosts } = await supabase
-      .from('content_posts_unified')
-      .select(selectCols)
-      .eq('user_id', user.id)
-      .eq('status', 'published')
-      .order('published_at', { ascending: false })
-      .range(0, 199);
+    const unified = fetchFrom('content_posts_unified');
+    const modern = fetchFrom('content_posts');
 
-    setPosts([...(activePosts || []), ...(publishedPosts || [])]);
+    const [
+      { data: activeUnified },
+      { data: activeModern },
+      { data: publishedUnified },
+      { data: publishedModern },
+    ] = await Promise.all([unified.active, modern.active, unified.published, modern.published]);
+
+    const byId = new Map<string, Post>();
+    for (const p of [...(activeUnified || []), ...(activeModern || []), ...(publishedUnified || []), ...(publishedModern || [])]) {
+      byId.set(p.id, p as Post);
+    }
+    setPosts(Array.from(byId.values()));
     setLoading(false);
   };
 

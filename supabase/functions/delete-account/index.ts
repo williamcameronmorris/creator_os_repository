@@ -58,6 +58,8 @@ serve(async (req) => {
 
     const tablesToClear = [
       'content_posts_unified',
+      'content_posts',
+      'pfm_account_snapshots',
       'saved_ideas',
       'social_connections',
       'scheduled_tasks',

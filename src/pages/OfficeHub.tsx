@@ -28,15 +28,31 @@ export function OfficeHub() {
   useEffect(() => {
     if (!user) return;
     const load = async () => {
-      const { data } = await supabase
-        .from('content_posts_unified')
-        .select('id, caption, platform, scheduled_date, status, media_urls, thumbnail_url, media_type')
-        .eq('user_id', user.id)
-        .eq('status', 'scheduled').gte('scheduled_date', new Date().toISOString())
-        .order('scheduled_date', { ascending: true })
-        .limit(7);
-      setScheduled(data || []);
-      setQueueCount((data || []).length);
+      // Posts written via the new Compose flow land in `content_posts`; legacy
+      // posts live in `content_posts_unified`. Query both, dedupe by id, then
+      // sort + truncate to 7 — otherwise PostForMe-published IG posts never
+      // surface in the Upcoming list.
+      const cols = 'id, caption, platform, scheduled_date, status, media_urls, thumbnail_url, media_type';
+      const cutoff = new Date().toISOString();
+      const [unified, modern] = await Promise.all([
+        supabase.from('content_posts_unified').select(cols)
+          .eq('user_id', user.id).eq('status', 'scheduled').gte('scheduled_date', cutoff)
+          .order('scheduled_date', { ascending: true }).limit(7),
+        supabase.from('content_posts').select(cols)
+          .eq('user_id', user.id).eq('status', 'scheduled').gte('scheduled_date', cutoff)
+          .order('scheduled_date', { ascending: true }).limit(7),
+      ]);
+
+      const byId = new Map<string, ScheduledItem>();
+      for (const p of [...(unified.data || []), ...(modern.data || [])]) {
+        byId.set(p.id, p as ScheduledItem);
+      }
+      const merged = Array.from(byId.values())
+        .sort((a, b) => a.scheduled_date.localeCompare(b.scheduled_date))
+        .slice(0, 7);
+
+      setScheduled(merged);
+      setQueueCount(merged.length);
       setLoading(false);
     };
     load();
