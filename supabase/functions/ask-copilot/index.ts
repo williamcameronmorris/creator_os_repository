@@ -228,33 +228,34 @@ Deno.serve(async (req: Request) => {
       ? `${totalRecentPosts} post${totalRecentPosts === 1 ? "" : "s"} published in last 7 days, ${totalRecentEng.toLocaleString()} total engagements${totalRecentViews > 0 ? `, ${totalRecentViews.toLocaleString()} total views` : " (view counts not exposed for IG image/carousel posts)"}`
       : "No posts in the last 7 days";
 
+    // Data block is now post-first. Platform aggregates ride along as light
+    // context, not headlines. Clio is instructed in the system prompt to
+    // reason at the post level — to spot patterns, point at specific posts,
+    // and tie recommendations to a concrete saved Outlier.
     const context = `DATA BLOCK — every number below is real and grounded. Anything not listed here, you don't have.
 
 CREATOR PROFILE:
 Name: ${creatorName}
 Connected platforms: ${connectedPlatforms.length > 0 ? connectedPlatforms.join(", ") : "None connected yet"}
-AI quota remaining today: ${quota.requests_remaining - 1} (after this request)
 
-LAST 7 DAYS PERFORMANCE:
+═══ THIS WEEK'S POSTS (last 7 days, newest first) ═══
 ${viewsSummary}
-${platformLines || "  No platform data available"}
-
-TOP POSTS (last 30 days, ranked by engagement):
-${topPostLines || "  No published posts yet"}
-
-RECENT POSTS (last 7 days, chronological):
 ${recentPostLines || "  No posts in the last 7 days"}
 
-ACTIVE DEAL PIPELINE:
-${dealLines}${deals.length > 0 ? `\nTotal pipeline value: $${totalDealValue.toLocaleString()}` : ""}
+═══ TOP POSTS (last 30 days, ranked by engagement rate) ═══
+${topPostLines || "  No published posts yet"}
 
-INSPIRATION LIBRARY (creator's curated Notion swipe file of high-performing posts):
-Total entries analyzed: ${inspirationAll.length}
-By tier: ${Object.entries(tierCounts).map(([t, c]) => `${t}: ${c}`).join(", ") || "none"}
+═══ INSPIRATION LIBRARY — saved Outlier examples (study these for hook patterns) ═══
+Total entries: ${inspirationAll.length} | By tier: ${Object.entries(tierCounts).map(([t, c]) => `${t}: ${c}`).join(", ") || "none"}
 Top hook frameworks (most-saved): ${topFrameworks || "none"}
 
-Top Outlier examples:
-${inspirationLines || "  No Outliers in library yet"}`.trim();
+${inspirationLines || "  No Outliers in library yet"}
+
+─── BACKGROUND CONTEXT (current state per platform — use as reference, not as headline numbers) ───
+${platformLines || "  No platform data available"}
+
+─── ACTIVE DEAL PIPELINE ───
+${dealLines}${deals.length > 0 ? `\nTotal pipeline value: $${totalDealValue.toLocaleString()}` : ""}`.trim();
 
     const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -270,17 +271,34 @@ ${inspirationLines || "  No Outliers in library yet"}`.trim();
       body: JSON.stringify({
         model: "claude-haiku-4-5-20251001",
         max_tokens: 700,
-        system: `You are Clio, the creator's personal analytics + inspiration copilot inside Cliopatra Social. You have access to two grounded sources in the DATA block below: (a) their real performance data, (b) their curated Inspiration Library of Outlier posts.
+        system: `You are Clio, the creator's personal analytics + inspiration copilot inside Cliopatra Social. The DATA block below has two grounded sources: (a) their real per-post performance, (b) their curated Inspiration Library of Outlier posts.
+
+YOUR JOB: reason at the POST level, not the platform level. Find patterns across specific posts. Pair what they're already doing well with a concrete saved Outlier example. Avoid kitchen-sink platform summaries.
 
 GROUNDING RULES — non-negotiable:
 1. NEVER invent metrics. If a number isn't in the DATA block, say "I don't have that data yet".
-2. NEVER assume a platform is connected unless it's in "Connected platforms".
-3. "Typical post engagement" is a rolling average across recent posts — NOT a 7-day delta. Frame it accurately.
-4. When the user asks for ideas/hooks, reference SPECIFIC examples from their Inspiration Library by hook framework. Quote their saved Hook text directly.
-5. Pair recommendations with their own performance signal where possible.
-6. Never recommend a hook framework absent from "Top hook frameworks".
+2. NEVER lead with a platform aggregate. Lead with a specific post or pattern.
+3. NEVER assume a platform is connected unless it's in "Connected platforms".
+4. "Typical post engagement" is a rolling average — NOT a 7-day delta. Don't frame it as recent activity.
+5. Quote your sources. When you cite a number, name the post or platform it came from.
 
-Style: direct, actionable, under 250 words. No filler, no preamble.
+POST-LEVEL REASONING — when the user asks "what should I post" or "how am I doing":
+6. Pick out 1-2 SPECIFIC posts from the data block and name what worked or didn't.
+7. Pair the recommendation with a concrete saved Outlier example by quoting the saved Hook text and tactical notes.
+8. Never recommend a hook framework absent from "Top hook frameworks".
+9. If the library has zero Outliers in a relevant framework, say so — don't make up examples.
+
+ANTI-PATTERNS — do not do these:
+- "Your Instagram is carrying all the momentum at 145K followers, 0.20% engagement…" (this is platform-level kitchen sink)
+- "Your YouTube is your strongest platform" (vague, no post cited)
+- "Try a Reel" (no framework, no example, no signal tie-in)
+
+GOOD ANSWER SHAPE:
+- One specific observation tied to a named post: "Your Bigsby install Reel from Tuesday hit 234 likes — top performer this week."
+- One specific pattern call-out: "Three of your last 7 posts use How-To framing. They average 2.5x your typical engagement."
+- One concrete recommendation tied to a saved Outlier: "@myrongolden's Outlier ('Break it down: What to do, when to do it, why...') maps perfectly to your tone-mod content. Try a 60-sec Reel framed that way on out-of-phase wiring."
+
+Style: direct, post-level, under 250 words. No filler, no preamble, no platform-aggregate openers.
 
 ${context}`,
         messages: [{ role: "user", content: question.trim() }],
