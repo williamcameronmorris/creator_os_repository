@@ -7,12 +7,19 @@ import { createClient } from "npm:@supabase/supabase-js@2";
  * Analyzes recent platform_metrics and content_posts to generate
  * actionable social_insights for the Daily Pulse.
  *
- * Intended to be called after each platform sync, or on-demand.
- * Writes to social_insights table — Daily Pulse reads from this.
+ * Two callers:
+ *   1. User-triggered  — bearer token in `Authorization`. We verify the JWT
+ *      with admin.getUser and use that user's id.
+ *   2. Cron-triggered  — body contains `cronSecret` matching the Cron_Secret
+ *      Supabase secret. Pass `userId` in the body to target a specific user,
+ *      or omit it to default to Default_PFM_User_Id (single-tenant ops).
+ *
+ * Deploy with `--no-verify-jwt`. Auth is enforced internally by this handler.
  *
  * Request body:
- *   userId   - Supabase user ID
- *   platform - optional, filter to specific platform
+ *   userId      - Supabase user ID (required for user mode, optional for cron)
+ *   platform    - optional, filter to specific platform
+ *   cronSecret  - cron mode only
  */
 
 const corsHeaders = {
@@ -20,6 +27,9 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
+
+const CRON_SECRET = Deno.env.get("Cron_Secret");
+const DEFAULT_USER_ID = Deno.env.get("Default_PFM_User_Id");
 
 interface InsightRow {
   user_id: string;
@@ -49,7 +59,46 @@ Deno.serve(async (req: Request) => {
     const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
 
     const supabase = createClient(supabaseUrl, supabaseKey);
-    const { userId, platform: filterPlatform } = await req.json();
+
+    let body: { userId?: string; platform?: string; cronSecret?: string } = {};
+    try {
+      const raw = await req.text();
+      if (raw) body = JSON.parse(raw);
+    } catch {
+      // empty / invalid body is fine
+    }
+    const { platform: filterPlatform } = body;
+    let userId = body.userId;
+
+    // Authenticate. Cron path takes precedence so scheduled jobs don't need a user JWT.
+    const isCron = body.cronSecret && CRON_SECRET && body.cronSecret === CRON_SECRET;
+    if (isCron) {
+      if (!userId) userId = DEFAULT_USER_ID;
+      if (!userId) {
+        return new Response(
+          JSON.stringify({ error: "Cron mode requires userId in body or Default_PFM_User_Id secret" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+    } else {
+      const authHeader = req.headers.get("Authorization");
+      if (!authHeader?.startsWith("Bearer ")) {
+        return new Response(JSON.stringify({ error: "Missing bearer token" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const token = authHeader.slice(7);
+      const { data: userData, error: authErr } = await supabase.auth.getUser(token);
+      if (authErr || !userData?.user) {
+        return new Response(JSON.stringify({ error: "Invalid session" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      // Bearer-token caller can only generate insights for themselves; ignore body.userId.
+      userId = userData.user.id;
+    }
 
     if (!userId) throw new Error("Missing required field: userId");
 
