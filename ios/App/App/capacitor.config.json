@@ -2,11 +2,52 @@
 	"appId": "com.cliopatra.app",
 	"appName": "Cliopatra Social",
 	"webDir": "dist",
+	"ios": {
+		"contentInset": "automatic",
+		"scrollEnabled": true
+	},
+	"android": {
+		"allowMixedContent": false
+	},
+	"server": {
+		"allowNavigation": [
+			"cliopatra.app",
+			"*.cliopatra.app",
+			"creatorcommand.app",
+			"*.creatorcommand.app",
+			"mlionhgievukulyufnnr.supabase.co",
+			"accounts.google.com",
+			"*.facebook.com",
+			"www.tiktok.com",
+			"open-api.tiktok.com"
+		]
+	},
+	"plugins": {
+		"SplashScreen": {
+			"launchShowDuration": 1500,
+			"backgroundColor": "#F7F4EE",
+			"androidScaleType": "CENTER_CROP",
+			"showSpinner": false,
+			"splashFullScreen": true,
+			"splashImmersive": false
+		},
+		"StatusBar": {
+			"style": "DARK",
+			"backgroundColor": "#F7F4EE",
+			"overlaysWebView": false
+		},
+		"Keyboard": {
+			"resize": "body",
+			"style": "LIGHT",
+			"resizeOnFullScreen": true
+		}
+	},
 	"packageClassList": [
 		"AppPlugin",
 		"HapticsPlugin",
 		"KeyboardPlugin",
 		"PreferencesPlugin",
+		"SplashScreenPlugin",
 		"StatusBarPlugin"
 	]
 }
