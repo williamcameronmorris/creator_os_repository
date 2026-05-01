@@ -48,6 +48,7 @@ export type Profile = {
   extra_revision_fee: number;
   payment_terms: string;
   onboarding_completed: boolean;
+  onboarding_step: 'name_niche' | 'connect' | 'walkthrough' | 'done';
   created_at: string;
   updated_at: string;
 
