@@ -1,11 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
-};
+import { requireUser, corsHeaders } from "../_shared/auth.ts";
 
 const PLATFORM_GUIDELINES: Record<string, {
   captionMaxChars: number;
@@ -52,9 +47,12 @@ Deno.serve(async (req: Request) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
     const supabase = createClient(supabaseUrl, supabaseKey);
+    const auth = await requireUser(req, supabase);
+    if (!auth.ok) return auth.response;
+    const userId = auth.userId;
 
-    const { userId, postId, sourcePlatform, targetPlatforms, originalCaption, mediaType } = await req.json();
-    if (!userId || !originalCaption) throw new Error("Missing required fields");
+    const { postId, sourcePlatform, targetPlatforms, originalCaption, mediaType } = await req.json();
+    if (!originalCaption) throw new Error("Missing required field: originalCaption");
 
     const targets: string[] = targetPlatforms || ["instagram", "tiktok", "youtube", "threads"];
     const results: Record<string, { caption: string; hashtags: string[]; tips: string[] }> = {};

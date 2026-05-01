@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { requireUser, corsHeaders } from "../_shared/auth.ts";
 
 /**
  * generate-recommendations Edge Function
@@ -21,12 +22,6 @@ import { createClient } from "npm:@supabase/supabase-js@2";
  *   userId  - Supabase user ID
  *   force   - (optional) bypass 6-hour freshness check
  */
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
-};
 
 // How many Outlier examples to pull per matching framework
 const OUTLIERS_PER_FRAMEWORK = 3;
@@ -50,8 +45,10 @@ Deno.serve(async (req: Request) => {
     if (!anthropicKey) throw new Error("ANTHROPIC_API_KEY secret not set.");
 
     const supabase = createClient(supabaseUrl, supabaseKey);
-    const { userId, force = false } = await req.json();
-    if (!userId) throw new Error("Missing required field: userId");
+    const auth = await requireUser(req, supabase);
+    if (!auth.ok) return auth.response;
+    const userId = auth.userId;
+    const { force = false } = await req.json().catch(() => ({}));
 
     // ── Freshness check ───────────────────────────────────────────────────────
     if (!force) {

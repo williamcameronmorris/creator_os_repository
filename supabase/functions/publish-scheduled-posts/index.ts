@@ -184,6 +184,27 @@ Deno.serve(async (req: Request) => {
   const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const supabase = createClient(supabaseUrl, supabaseKey);
 
+  // Cron-only: require Cron_Secret in body OR a valid service-role bearer.
+  // Without this, anyone with the anon key could force-publish any user's
+  // scheduled posts immediately (or repeatedly trigger expensive PFM calls).
+  const expectedCron = Deno.env.get("Cron_Secret");
+  let body: { cronSecret?: string } = {};
+  try {
+    const raw = await req.text();
+    if (raw) body = JSON.parse(raw);
+  } catch {
+    // ignore
+  }
+  const authHeader = req.headers.get("Authorization");
+  const isService = authHeader?.startsWith("Bearer ") && authHeader.slice(7) === supabaseKey;
+  const isCron = body.cronSecret && expectedCron && body.cronSecret === expectedCron;
+  if (!isService && !isCron) {
+    return new Response(JSON.stringify({ error: "Unauthorized — cron-only function" }), {
+      status: 401,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
   try {
     // ── Atomically claim due posts ────────────────────────────────────────────
     // Only pick up posts that are:

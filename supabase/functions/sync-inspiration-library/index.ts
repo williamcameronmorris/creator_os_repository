@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { requireUserOrCron, corsHeaders } from "../_shared/auth.ts";
 
 /**
  * sync-inspiration-library Edge Function
@@ -25,12 +26,6 @@ import { createClient } from "npm:@supabase/supabase-js@2";
  *
  * Request body: (empty) — no params needed
  */
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
-};
 
 const NOTION_DB_ID = "e3c17222-2fdb-42f5-baab-0e0992eb396b";
 const NOTION_API_VERSION = "2022-06-28";
@@ -77,6 +72,15 @@ Deno.serve(async (req: Request) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const notionKey = Deno.env.get("NOTION_API_KEY");
+
+    // Inspiration library is a shared resource, not user-scoped, so any
+    // authenticated user (or the cron runner) can trigger a refresh. We still
+    // verify auth so this isn't trivially DoS-able from anyone with the
+    // anon key.
+    const supabaseAuth = createClient(supabaseUrl, supabaseKey);
+    const body = await req.json().catch(() => ({}));
+    const auth = await requireUserOrCron(req, supabaseAuth, body);
+    if (!auth.ok) return auth.response;
 
     if (!notionKey) {
       throw new Error(

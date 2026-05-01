@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { requireUser, corsHeaders } from "../_shared/auth.ts";
 
 /**
  * generate-analysis Edge Function
@@ -17,12 +18,6 @@ import { createClient } from "npm:@supabase/supabase-js@2";
  *   metrics     - { views, likes, comments, engagementRate, avgViews, avgEngagement }
  */
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
-};
-
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
@@ -38,9 +33,10 @@ Deno.serve(async (req: Request) => {
     }
 
     const supabase = createClient(supabaseUrl, supabaseKey);
-    const { userId, workflowId, postId, platform, contentType, metrics } = await req.json();
-
-    if (!userId) throw new Error("Missing required field: userId");
+    const auth = await requireUser(req, supabase);
+    if (!auth.ok) return auth.response;
+    const userId = auth.userId;
+    const { workflowId, postId, platform, contentType, metrics } = await req.json();
 
     // ── Check quota ──────────────────────────────────────────────────────────
     const { data: quotaData, error: quotaError } = await supabase

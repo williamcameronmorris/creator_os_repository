@@ -1,11 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
-};
+import { requireUser, corsHeaders } from "../_shared/auth.ts";
 
 const GRAPH = "https://graph.facebook.com/v25.0";
 const THREADS = "https://graph.threads.net/v1.0";
@@ -247,9 +242,11 @@ Deno.serve(async (req: Request) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
+    const auth = await requireUser(req, supabase);
+    if (!auth.ok) return auth.response;
+    const userId = auth.userId;
 
-    const { userId, platforms } = await req.json();
-    if (!userId) throw new Error("Missing userId");
+    const { platforms } = await req.json().catch(() => ({}));
 
     const { data: profile } = await supabase
       .from("profiles")

@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { requireUser, corsHeaders } from "../_shared/auth.ts";
 
 /**
  * analyze-captions Edge Function
@@ -19,12 +20,6 @@ import { createClient } from "npm:@supabase/supabase-js@2";
  * Called automatically at the end of instagram-sync (and future platform syncs).
  * Can also be triggered manually from the settings page.
  */
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
-};
 
 // How many top posts to feed into the analysis
 const POSTS_TO_ANALYZE = 25;
@@ -50,8 +45,11 @@ Deno.serve(async (req: Request) => {
     }
 
     const supabase = createClient(supabaseUrl, supabaseKey);
-    const body = await req.json();
-    const { userId, force = false } = body;
+    const auth = await requireUser(req, supabase);
+    if (!auth.ok) return auth.response;
+    const userId = auth.userId;
+    const body = await req.json().catch(() => ({}));
+    const { force = false } = body;
 
     if (!userId) throw new Error("Missing required field: userId");
 

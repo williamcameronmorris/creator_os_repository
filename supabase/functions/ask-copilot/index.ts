@@ -64,13 +64,26 @@ Deno.serve(async (req: Request) => {
     return new Response("ok", { headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type" } });
   }
   try {
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
-    const { userId, question } = await req.json();
-    if (!userId || !question?.trim()) return new Response(JSON.stringify({ error: "userId and question are required" }), { status: 400, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
     if (!ANTHROPIC_API_KEY) return new Response(JSON.stringify({ error: "AI service not configured." }), { status: 503, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    // Verify caller's JWT — userId previously came from request body, which
+    // let any caller with the anon key fetch any user's profile + posts +
+    // deals data block. Token-bound id is the only safe source.
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
+    }
+    const { data: userData, error: authErr } = await supabase.auth.getUser(authHeader.slice(7));
+    if (authErr || !userData?.user) {
+      return new Response(JSON.stringify({ error: "Invalid session" }), { status: 401, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
+    }
+    const userId = userData.user.id;
+
+    const { question } = await req.json();
+    if (!question?.trim()) return new Response(JSON.stringify({ error: "question is required" }), { status: 400, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
+
     const { data: quotaData, error: quotaError } = await supabase.rpc("check_and_reset_ai_quota", { p_user_id: userId });
     if (quotaError || !quotaData || quotaData.length === 0) return new Response(JSON.stringify({ error: "Could not check AI quota." }), { status: 500, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
     const quota = quotaData[0];

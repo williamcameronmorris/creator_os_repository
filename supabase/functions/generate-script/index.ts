@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { requireUser, corsHeaders } from "../_shared/auth.ts";
 
 /**
  * generate-script Edge Function
@@ -7,19 +8,9 @@ import { createClient } from "npm:@supabase/supabase-js@2";
  * Calls Claude to generate a content script (hook/body/CTA or freeform notes)
  * based on the selected idea topic and content type.
  *
- * Request body:
- *   userId      - Supabase user ID
- *   workflowId  - content_workflow_stages ID
- *   topic       - selected idea or user-supplied topic
- *   contentType - "video" | "reel" | "post" | "blog" | "short" | etc.
- *   mode        - "simple" | "structured"
+ * Caller must be authenticated; userId is taken from the verified bearer token
+ * (any userId in the body is ignored). Deploy `--no-verify-jwt`.
  */
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
-};
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -36,9 +27,10 @@ Deno.serve(async (req: Request) => {
     }
 
     const supabase = createClient(supabaseUrl, supabaseKey);
-    const { userId, workflowId, topic, contentType, mode } = await req.json();
-
-    if (!userId) throw new Error("Missing required field: userId");
+    const auth = await requireUser(req, supabase);
+    if (!auth.ok) return auth.response;
+    const userId = auth.userId;
+    const { workflowId, topic, contentType, mode } = await req.json();
 
     // ── Check quota ──────────────────────────────────────────────────────────
     const { data: quotaData, error: quotaError } = await supabase

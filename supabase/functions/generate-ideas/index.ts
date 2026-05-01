@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { requireUser, corsHeaders } from "../_shared/auth.ts";
 
 /**
  * generate-ideas Edge Function
@@ -7,15 +8,9 @@ import { createClient } from "npm:@supabase/supabase-js@2";
  * Calls Claude to generate content ideas based on the user's platform performance
  * data. Writes results to `ai_content_suggestions` and decrements the AI quota.
  *
- * Request body:
- *   userId - Supabase user ID
+ * Caller must be authenticated; we ignore any userId field in the body and
+ * use the verified id from the bearer token instead. Deploy `--no-verify-jwt`.
  */
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
-};
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -32,9 +27,9 @@ Deno.serve(async (req: Request) => {
     }
 
     const supabase = createClient(supabaseUrl, supabaseKey);
-    const { userId } = await req.json();
-
-    if (!userId) throw new Error("Missing required field: userId");
+    const auth = await requireUser(req, supabase);
+    if (!auth.ok) return auth.response;
+    const userId = auth.userId;
 
     // ── Check and decrement quota ────────────────────────────────────────────
     const { data: quotaData, error: quotaError } = await supabase
