@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../lib/supabase';
 import { useSearchParams } from 'react-router-dom';
 import { ArrowLeft, ArrowRight } from 'lucide-react';
 
-type AuthView = 'signin' | 'signup' | 'forgot' | 'reset';
+type AuthView = 'signin' | 'signup' | 'check-email' | 'forgot' | 'reset';
 
 // Map raw Supabase error messages to user-friendly copy
 function friendlyAuthError(message: string, _view: AuthView): string {
@@ -45,6 +46,8 @@ export function Auth() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
+  const [submittedEmail, setSubmittedEmail] = useState('');
+  const [resendCooldown, setResendCooldown] = useState(0);
   const { signIn, signUp, resetPassword, updatePassword } = useAuth();
 
   useEffect(() => {
@@ -53,16 +56,55 @@ export function Auth() {
     }
   }, [searchParams]);
 
+  // Tick the resend cooldown down once a second
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const t = setInterval(() => setResendCooldown((s) => Math.max(0, s - 1)), 1000);
+    return () => clearInterval(t);
+  }, [resendCooldown]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setSuccess('');
     setLoading(true);
     try {
-      if (view === 'signup') await signUp(email, password);
-      else if (view === 'signin') await signIn(email, password);
+      if (view === 'signup') {
+        await signUp(email, password);
+        // Transition to the "check your inbox" screen. If the Supabase project
+        // has email confirmation OFF, the AuthContext session listener will
+        // sign the user in and the app will redirect past this screen before
+        // it really renders. If email confirmation is ON, this is what they
+        // see while waiting on the link.
+        setSubmittedEmail(email);
+        setPassword('');
+        setView('check-email');
+        setResendCooldown(60); // Supabase's stock rate-limit window
+      } else if (view === 'signin') {
+        await signIn(email, password);
+      }
     } catch (err: any) {
       setError(friendlyAuthError(err.message || 'An error occurred', view));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResend = async () => {
+    if (resendCooldown > 0 || !submittedEmail) return;
+    setError('');
+    setSuccess('');
+    setLoading(true);
+    try {
+      const { error: resendError } = await supabase.auth.resend({
+        type: 'signup',
+        email: submittedEmail,
+      });
+      if (resendError) throw resendError;
+      setSuccess('Sent. Check your inbox.');
+      setResendCooldown(60);
+    } catch (err: any) {
+      setError(friendlyAuthError(err.message || 'An error occurred', 'check-email'));
     } finally {
       setLoading(false);
     }
@@ -119,6 +161,14 @@ export function Auth() {
     minHeight: '100vh',
   };
 
+  // Section marker label per view
+  const sectionLabel =
+    view === 'reset' ? 'RESET'
+    : view === 'forgot' ? 'RECOVER'
+    : view === 'signup' ? 'SIGN UP'
+    : view === 'check-email' ? 'CONFIRM EMAIL'
+    : 'SIGN IN';
+
   return (
     <div style={pageStyle} className="flex items-center justify-center px-4 py-12">
       <div className="w-full max-w-md">
@@ -127,7 +177,7 @@ export function Auth() {
         <div className="t-micro mb-2">
           <span className="text-foreground">00</span>
           <span className="mx-2 text-muted-foreground">/</span>
-          <span>{view === 'reset' ? 'RESET' : view === 'forgot' ? 'RECOVER' : view === 'signup' ? 'SIGN UP' : 'SIGN IN'}</span>
+          <span>{sectionLabel}</span>
         </div>
 
         {/* Editorial heading */}
@@ -137,6 +187,8 @@ export function Auth() {
         >
           {view === 'signup' ? (
             <>Start your <em style={{ fontStyle: 'normal', color: 'var(--accent)' }}>command.</em></>
+          ) : view === 'check-email' ? (
+            <>Check your <em style={{ fontStyle: 'normal', color: 'var(--accent)' }}>inbox.</em></>
           ) : view === 'forgot' ? (
             <>Recover the <em style={{ fontStyle: 'normal', color: 'var(--accent)' }}>keys.</em></>
           ) : view === 'reset' ? (
@@ -145,13 +197,63 @@ export function Auth() {
             <>Welcome <em style={{ fontStyle: 'normal', color: 'var(--accent)' }}>back.</em></>
           )}
         </h1>
-        <p className="t-body mb-10" style={{ maxWidth: '34ch' }}>
-          {view === 'forgot'
-            ? 'Enter your email and we’ll send instructions to reset your password.'
-            : view === 'reset'
-            ? 'Choose a new password to finish resetting your account.'
-            : 'Your content studio and business office, unified.'}
-        </p>
+        {view !== 'check-email' && (
+          <p className="t-body mb-10" style={{ maxWidth: '34ch' }}>
+            {view === 'forgot'
+              ? 'Enter your email and we’ll send instructions to reset your password.'
+              : view === 'reset'
+              ? 'Choose a new password to finish resetting your account.'
+              : 'Your content studio and business office, unified.'}
+          </p>
+        )}
+
+        {/* ── CHECK-EMAIL VIEW ────────────────────────────────────── */}
+        {view === 'check-email' && (
+          <>
+            <div className="mb-6">
+              <p className="t-body mb-1">We sent a confirmation link to</p>
+              <p className="text-foreground font-medium break-all" style={{ fontSize: '1.0625rem' }}>
+                {submittedEmail}
+              </p>
+            </div>
+            <p className="t-body mb-8" style={{ maxWidth: '38ch' }}>
+              Click the link in the email to finish creating your account. Check your spam folder if it’s not in your inbox within a minute.
+            </p>
+
+            {error && <p className="t-micro mb-4" style={{ color: 'var(--destructive, #c44)' }}>{error}</p>}
+            {success && <p className="t-micro mb-4" style={{ color: 'var(--accent)' }}>✓ {success}</p>}
+
+            <button
+              type="button"
+              onClick={handleResend}
+              disabled={resendCooldown > 0 || loading}
+              className="btn-ie btn-ie-solid w-full disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              <span className="btn-ie-text">
+                {loading
+                  ? 'SENDING…'
+                  : resendCooldown > 0
+                  ? `RESEND IN ${resendCooldown}S`
+                  : 'RESEND CONFIRMATION'}
+              </span>
+            </button>
+
+            <div className="mt-8 pt-6 border-t border-border text-center">
+              <button
+                type="button"
+                onClick={() => {
+                  setView('signin');
+                  setError('');
+                  setSuccess('');
+                  setSubmittedEmail('');
+                }}
+                className="t-micro text-muted-foreground hover:text-foreground transition-colors"
+              >
+                BACK TO SIGN IN
+              </button>
+            </div>
+          </>
+        )}
 
         {/* ── FORGOT VIEW ─────────────────────────────────────────── */}
         {view === 'forgot' && (
