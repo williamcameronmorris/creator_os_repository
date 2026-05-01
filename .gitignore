@@ -26,3 +26,7 @@ dist-ssr
 # Tracking them causes merge conflicts on every build and bloats the repo.
 ios/App/App/public/
 android/app/src/main/assets/public/
+
+# Supabase CLI cache — populated by `supabase link`. Project-ref + version
+# pins for the linked project; machine-local, not portable.
+supabase/.temp/
