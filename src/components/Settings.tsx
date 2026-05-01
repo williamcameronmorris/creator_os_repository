@@ -1,11 +1,10 @@
 import { useState, useEffect } from 'react';
-import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase, type Profile } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
-import { Save, TrendingUp, DollarSign, AlertCircle, CheckCircle, Instagram, Youtube, Video, Link2, RefreshCw, X, Palette, Sun, Moon, User, ArrowRight } from 'lucide-react';
-import { getPlatformStatus, getInstagramAuthUrl, getTikTokAuthUrl, getYouTubeAuthUrl, disconnectPlatform, syncPlatform, getMetaAuthUrl, getThreadsAuthUrl, type PlatformStatus } from '../lib/platforms';
+import { Save, TrendingUp, DollarSign, AlertCircle, CheckCircle, Link2, Palette, Sun, Moon, User, ArrowRight } from 'lucide-react';
+import { PostForMeConnections } from './PostForMeConnections';
 
 export function Settings() {
   const { user } = useAuth();
@@ -14,8 +13,6 @@ export function Settings() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [platforms, setPlatforms] = useState<PlatformStatus[]>([]);
-  const [syncing, setSyncing] = useState<string | null>(null);
 
   const [profile, setProfile] = useState<Partial<Profile>>({
     cpm_tier: 'conservative',
@@ -33,7 +30,6 @@ export function Settings() {
   useEffect(() => {
     if (user) {
       loadProfile();
-      loadPlatforms();
     }
   }, [user]);
 
@@ -45,64 +41,6 @@ export function Settings() {
       .eq('id', user.id)
       .maybeSingle();
     if (data) setProfile(data);
-  };
-
-  const loadPlatforms = async () => {
-    if (!user) return;
-    const status = await getPlatformStatus(user.id);
-    setPlatforms(status);
-  };
-
-  const handleConnectPlatform = (platform: PlatformStatus['platform']) => {
-    let authUrl = '';
-    switch (platform) {
-      case 'facebook':
-        authUrl = getMetaAuthUrl();
-        break;
-      case 'threads':
-        authUrl = getThreadsAuthUrl();
-        break;
-      case 'instagram':
-        authUrl = getInstagramAuthUrl();
-        break;
-      case 'tiktok':
-        authUrl = getTikTokAuthUrl();
-        break;
-      case 'youtube':
-        authUrl = getYouTubeAuthUrl();
-        break;
-    }
-    if (authUrl) {
-      window.location.href = authUrl;
-    }
-  };
-
-  const handleDisconnectPlatform = async (platform: PlatformStatus['platform']) => {
-    if (!user) return;
-    try {
-      await disconnectPlatform(user.id, platform);
-      await loadPlatforms();
-      const label = platform === 'facebook' ? 'Facebook & Instagram Business' : platform;
-      setSuccess(`${label} disconnected successfully`);
-      setTimeout(() => setSuccess(''), 3000);
-    } catch (err: any) {
-      setError(err.message);
-    }
-  };
-
-  const handleSyncPlatform = async (platform: PlatformStatus['platform']) => {
-    if (!user) return;
-    setSyncing(platform);
-    try{
-      await syncPlatform(platform);
-      await loadPlatforms();
-      setSuccess(`${platform} synced successfully`);
-      setTimeout(() => setSuccess(''), 3000);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setSyncing(null);
-    }
   };
 
   const handleSave = async () => {
@@ -235,157 +173,10 @@ export function Settings() {
         </h3>
 
         <p className="text-muted-foreground text-sm mb-6">
-          Connect your social media accounts to enable real-time analytics and insights
+          Connect your social accounts via Post for Me to schedule and publish from one place.
         </p>
 
-        <div className="space-y-4">
-          {platforms.map((platform) => {
-            // ââ Platform display config ââââââââââââââââââââââââââââââââââââââ
-            type PlatformKey = typeof platform.platform;
-
-            const platformConfig: Record<PlatformKey, {
-              label: string;
-              subtitle: string;
-              iconBg: string;
-              icon: ReactNode;
-              badge?: string;
-            }> = {
-              facebook: {
-                label: 'Facebook + Instagram Business',
-                subtitle: 'Pages, publishing, analytics & messaging',
-                iconBg: 'bg-blue-600',
-                icon: (
-                  <svg viewBox="0 0 24 24" fill="white" className="w-6 h-6">
-                    <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
-                  </svg>
-                ),
-              },
-              instagram: {
-                label: 'Instagram',
-                subtitle: 'Business account via Meta connection above',
-                iconBg: 'bg-gradient-to-br from-purple-500 via-pink-500 to-orange-400',
-                icon: <Instagram className="w-6 h-6 text-white" />,
-              },
-              threads: {
-                label: 'Threads',
-                subtitle: 'Posts, replies, insights & publishing',
-                iconBg: 'bg-black',
-                icon: (
-                  <svg viewBox="0 0 192 192" fill="white" className="w-6 h-6">
-                    <path d="M141.537 88.9883C140.71 88.5919 139.87 88.2104 139.019 87.8451C137.537 60.5382 122.616 44.905 97.5619 44.745C97.4484 44.7443 97.3355 44.7443 97.222 44.7443C82.2364 44.7443 69.7731 51.1409 62.102 62.7807L75.881 72.2328C81.6116 63.5383 90.6052 61.6848 97.2286 61.6848C97.3051 61.6848 97.3819 61.6848 97.4576 61.6855C105.707 61.7381 111.932 64.1366 115.961 68.814C118.893 72.2193 120.854 76.925 121.825 82.8638C114.511 81.6207 106.601 81.2385 98.145 81.7233C74.3247 83.0954 59.0111 96.9879 60.0396 116.292C60.5615 126.084 65.4397 134.508 73.775 140.011C80.8224 144.663 89.899 146.938 99.3323 146.423C111.79 145.74 121.563 140.987 128.381 132.296C133.559 125.696 136.834 117.143 138.28 106.366C144.217 109.949 148.617 114.664 151.047 120.332C155.179 129.967 155.42 145.8 142.501 158.708C131.182 170.016 117.576 174.908 97.0135 175.059C74.2042 174.89 56.9538 167.575 45.7381 153.317C35.2355 139.966 29.8077 120.682 29.6052 96C29.8077 71.3178 35.2355 52.0336 45.7381 38.6827C56.9538 24.4249 74.2039 17.11 97.0132 16.9405C119.988 17.1113 137.539 24.4614 149.184 38.788C154.894 45.8136 159.199 54.6488 162.037 64.9503L178.184 60.6422C174.744 47.9622 169.331 37.0357 161.965 27.974C147.036 9.60668 125.202 0.195148 97.0695 0H96.9569C68.8816 0.19447 47.2921 9.6418 32.7883 28.0282C19.8819 44.4864 13.2244 67.3157 13.0007 95.9325L13 96L13.0007 96.0675C13.2244 124.684 19.8819 147.514 32.7883 163.972C47.2921 182.358 68.8816 191.806 96.9569 192H97.0695C122.03 191.827 139.624 185.292 154.118 170.811C173.081 151.866 172.51 128.119 166.26 113.541C161.776 103.087 153.227 94.5962 141.537 88.9883ZM98.4405 129.507C88.0005 130.095 77.1544 125.409 76.6196 115.372C76.2232 107.93 81.9158 99.626 99.0812 98.6368C101.047 98.5234 102.976 98.468 104.871 98.468C111.106 98.468 116.939 99.0737 122.242 100.233C120.264 124.935 108.662 128.946 98.4405 129.507Z" />
-                  </svg>
-                ),
-              },
-              tiktok: {
-                label: 'TikTok',
-                subtitle: 'Videos, analytics & uploads',
-                iconBg: 'bg-violet-600',
-                icon: <Video className="w-6 h-6 text-white" />,
-              },
-              youtube: {
-                label: 'YouTube',
-                subtitle: 'Videos, Shorts & analytics',
-                iconBg: 'bg-red-600',
-                icon: <Youtube className="w-6 h-6 text-white" />,
-              },
-            };
-
-            const config = platformConfig[platform.platform];
-
-            // Instagram row is informational when connected via Facebook â hide separate connect button
-            const isInstagramViaMeta = platform.platform === 'instagram' && platform.connected;
-
-            return (
-              <div
-                key={platform.platform}
-                className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 border border-border bg-card"
-              >
-                <div className="flex items-center gap-4 flex-1 min-w-0">
-                  <div className={`flex items-center justify-center w-12 h-12 flex-shrink-0 border border-border ${config.iconBg}`}>
-              {config.icon}
-                  </div>
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h4 className="font-semibold text-foreground">{config.label}</h4>
-                      {config.badge && (
-                        <span className="text-xs px-2 py-0.5 border border-blue-600 bg-blue-50 text-blue-700 font-medium">
-                          {config.badge}
-                        </span>
-                      )}
-                    </div>
-                    {platform.connected ? (
-                      <div className="text-sm text-muted-foreground truncate">
-                        {platform.username && (
-                          <span className="font-medium">
-                            {platform.platform === 'facebook' || platform.platform === 'threads'
-                              ? platform.username
-                              : `@${platform.username}`}
-                          </span>
-                        )}
-                        {platform.followers != null && platform.followers > 0 && (
-                          <span> · {platform.followers.toLocaleString()} followers</span>
-                        )}
-                      </div>
-                    ) : (
-                      <p className="text-sm text-muted-foreground">{config.subtitle}</p>
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2 flex-shrink-0 self-start sm:self-auto sm:ml-2">
-                  {platform.connected ? (
-                    isInstagramViaMeta ? (
-                      // Instagram connected via Meta â just show connected badge
-                      <span className="flex items-center gap-1.5 px-3 py-1.5 border border-emerald-600 text-sm text-emerald-700 bg-emerald-50/50 font-medium">
-                        <CheckCircle className="w-3.5 h-3.5" />
-                        Connected via Meta
-                      </span>
-                    ) : (
-                      <>
-                        <span className="flex items-center gap-1.5 px-3 py-1.5 border border-emerald-600 text-sm text-emerald-700 bg-emerald-50/50 font-medium">
-                          <CheckCircle className="w-3.5 h-3.5" />
-                          Connected
-                        </span>
-                        {/* No sync for facebook/threads (done via dedicated pages) */}
-                        {platform.platform !== 'facebook' && (
-                          <button
-                            onClick={() => handleSyncPlatform(platform.platform)}
-                            disabled={syncing === platform.platform}
-                            className="px-3 py-2 border border-border text-sm font-semibold transition-colors flex items-center gap-2 disabled:opacity-50 text-muted-foreground hover:text-foreground hover:bg-accent"
-                          >
-<RefreshCw className={`w-4 h-4 ${syncing === platform.platform ? 'animate-spin' : ''}`} />
-                            Sync
-                          </button>
-                        )}
-                        <button
-                          onClick={() => handleDisconnectPlatform(platform.platform)}
-                          className="px-3 py-2 border border-destructive text-sm font-semibold transition-colors flex items-center gap-2 text-destructive hover:bg-destructive/10"
-                        >
-                          <X className="w-4 h-4" />
-                          Disconnect
-                        </button>
-                      </>
-                    )
-                  ) : (
-                    // Don't show a connect button for Instagram if Facebook isn't connected yet
-                    platform.platform === 'instagram' ? (
-                      <span className="text-xs text-muted-foreground italic px-2">
-                        Connect Facebook first
-                      </span>
-                    ) : (
-                      <button
-                        onClick={() => handleConnectPlatform(platform.platform)}
-                        className="px-4 py-2 border border-foreground bg-foreground text-background text-sm font-semibold transition-colors hover:bg-background hover:text-foreground font-mono tracking-[0.04em]"
-                      >
-                        Connect
-                      </button>
-                    )
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+        <PostForMeConnections />
       </div>
 
       {/* ARCHIVED: CPM Tier â part of Brand Deals feature, re-enable when Brand Deals is active
@@ -591,7 +382,7 @@ export function Settings() {
           }`}
         >
           <Save className="w-5 h-5" />
-          {loading ? 'Saving...' : 'Save Settings'}
+          {loading ? 'Saving...' : 'Save Settings' }
         </button>
       </div>
       END ARCHIVED: Save Settings button */}
