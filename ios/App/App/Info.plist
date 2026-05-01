@@ -2,12 +2,12 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CAPACITOR_DEBUG</key>
+	<key>CAPACITOR_DEBUG</key>
 	<string>$(CAPACITOR_DEBUG)</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-        <string>Cliopatra</string>
+	<string>Cliopatra</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -30,13 +30,11 @@
 	<string>Main</string>
 	<key>UIRequiredDeviceCapabilities</key>
 	<array>
-		<string>armv7</string>
+		<string>arm64</string>
 	</array>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<key>UISupportedInterfaceOrientations~ipad</key>
 	<array>
@@ -47,5 +45,35 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+
+	<!-- Privacy strings: required by App Store review whenever the app
+	     calls APIs that touch these resources. ComposePost media upload
+	     uses the photo library + camera, so both must be declared. -->
+	<key>NSCameraUsageDescription</key>
+	<string>Capture photos and videos to post directly from Cliopatra.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Pick photos and videos from your library to post on Instagram, TikTok, YouTube, or Threads.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Save published posts back to your photo library.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Record audio for video posts.</string>
+
+	<!-- Universal-link allow-list for OAuth callbacks. The actual
+	     associated-domains entitlement lives in App.entitlements; this is
+	     the safety net so iOS knows which schemes our webview should
+	     handle. Add a custom CFBundleURLSchemes entry once we register a
+	     deep-link scheme with Meta/Google/TikTok. -->
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>https</string>
+	</array>
+
+	<!-- App Transport Security: keep the default (HTTPS-only) but allow
+	     local dev tunnels. -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoadsInWebContent</key>
+		<false/>
+	</dict>
 </dict>
 </plist>
