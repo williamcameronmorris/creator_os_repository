@@ -127,6 +127,22 @@ export function Onboarding({ onComplete }: Props) {
     );
   }
 
+  // Full-screen interstitial during step transitions. Replaces the current
+  // step's content with a centered indicator so the user has clear feedback
+  // that "something is happening" between Continue and the next step. Beats
+  // a tiny in-button spinner on mobile where the page can sit visually
+  // unchanged for a beat while Supabase round-trips.
+  if (submitting) {
+    return (
+      <div style={pageStyle} className="flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-1.5 h-1.5 bg-foreground animate-pulse mx-auto mb-4" />
+          <div className="t-micro">SAVING&hellip;</div>
+        </div>
+      </div>
+    );
+  }
+
   const step = profile.onboarding_step ?? 'name_niche';
 
   // 0/3 → 3/3 progress label
