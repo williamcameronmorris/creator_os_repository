@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { SubscriptionProvider } from './contexts/SubscriptionContext';
+import { ConnectionStatusProvider } from './contexts/ConnectionStatusContext';
 import { Auth } from './components/Auth';
 import { Onboarding } from './components/Onboarding';
 import { Layout } from './components/Layout';
@@ -110,16 +111,15 @@ function AppContent() {
 
   return (
     <Routes>
-      {/* ──────────────────────────────────────────────────
-      Clio (landing) ─────────────────────────────────────────────── */}
+      {/* Ã¢ÂÂÃ¢ÂÂ Clio (landing) Ã¢ÂÂÃ¢ÂÂ */}
       <Route path="/" element={<ProtectedRoute><Layout><Clio /></Layout></ProtectedRoute>} />
       <Route path="/clio" element={<Navigate to="/" replace />} />
 
-      {/* Legacy redirects */}
+      {/* Ã¢ÂÂÃ¢ÂÂ Legacy redirects Ã¢ÂÂÃ¢ÂÂ */}
       <Route path="/dashboard" element={<Navigate to="/" replace />} />
       <Route path="/command-center" element={<Navigate to="/" replace />} />
 
-      {/* Studio */}
+      {/* Ã¢ÂÂÃ¢ÂÂ Studio Ã¢ÂÂÃ¢ÂÂ */}
       <Route path="/studio" element={<ProtectedRoute><Layout><StudioHub /></Layout></ProtectedRoute>} />
       <Route path="/studio/workflow" element={<ProtectedRoute><Layout><Studio /></Layout></ProtectedRoute>} />
       <Route path="/studio/script" element={<ProtectedRoute><Layout><Studio /></Layout></ProtectedRoute>} />
@@ -129,7 +129,7 @@ function AppContent() {
       <Route path="/media" element={<ProtectedRoute><Layout><Media /></Layout></ProtectedRoute>} />
       <Route path="/saved-ideas" element={<ProtectedRoute><Layout><SavedIdeasPage /></Layout></ProtectedRoute>} />
 
-      {/* Office */}
+      {/* Ã¢ÂÂÃ¢ÂÂ Office Ã¢ÂÂÃ¢ÂÂ */}
       <Route path="/office" element={<ProtectedRoute><Layout><OfficeHub /></Layout></ProtectedRoute>} />
       <Route path="/office/connections" element={<ProtectedRoute><Layout><Connections /></Layout></ProtectedRoute>} />
       <Route path="/schedule" element={<ProtectedRoute><Layout><Schedule /></Layout></ProtectedRoute>} />
@@ -140,11 +140,11 @@ function AppContent() {
       <Route path="/revenue" element={<ProtectedRoute><Layout><Schedule /></Layout></ProtectedRoute>} />
       <Route path="/pipeline" element={<ProtectedRoute><Layout><Schedule /></Layout></ProtectedRoute>} />
 
-      {/* Settings */}
+      {/* Ã¢ÂÂÃ¢ÂÂ Settings Ã¢ÂÂÃ¢ÂÂ */}
       <Route path="/profile" element={<ProtectedRoute><Layout><Profile /></Layout></ProtectedRoute>} />
       <Route path="/settings" element={<ProtectedRoute><Layout><SettingsPage /></Layout></ProtectedRoute>} />
 
-      {/* OAuth Callbacks */}
+      {/* Ã¢ÂÂÃ¢ÂÂ OAuth Callbacks Ã¢ÂÂÃ¢ÂÂ */}
       <Route path="/auth/meta/callback" element={<ProtectedRoute><MetaCallback /></ProtectedRoute>} />
       <Route path="/auth/threads/callback" element={<ProtectedRoute><ThreadsCallback /></ProtectedRoute>} />
       <Route path="/auth/youtube/callback" element={<ProtectedRoute><YoutubeCallback /></ProtectedRoute>} />
@@ -162,9 +162,11 @@ export default function App() {
       <BrowserRouter>
         <ThemeProvider>
           <AuthProvider>
-            <SubscriptionProvider>
-              <AppContent />
-            </SubscriptionProvider>
+            <ConnectionStatusProvider>
+              <SubscriptionProvider>
+                <AppContent />
+              </SubscriptionProvider>
+            </ConnectionStatusProvider>
           </AuthProvider>
         </ThemeProvider>
       </BrowserRouter>
