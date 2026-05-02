@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { TokenHealthBanner } from './TokenHealthBanner';
+import { ConnectionGateBanner } from './ConnectionGateBanner';
 import {
   Settings as SettingsIcon,
   LogOut,
@@ -85,6 +86,7 @@ export function Layout({ children }: LayoutProps) {
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <TokenHealthBanner />
+      <ConnectionGateBanner />
 
       {/* Swipe back indicator */}
       {swipeProgress > 0 && (
