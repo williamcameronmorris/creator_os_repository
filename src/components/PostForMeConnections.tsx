@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ArrowRight } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { useConnectionStatus } from '../contexts/ConnectionStatusContext';
 import {
   POSTFORME_PLATFORMS,
   initPostForMeConnect,
@@ -21,8 +22,13 @@ interface Props {
 
 export function PostForMeConnections({ initialFlash }: Props) {
   const { user } = useAuth();
-  const [accounts, setAccounts] = useState<PostForMeAccount[]>([]);
-  const [loading, setLoading] = useState(true);
+  const ctx = useConnectionStatus();
+  // Seed from the global ConnectionStatusProvider so we don't double-fetch
+  // PFM's account list on every mount. The provider already loaded this
+  // when the user signed in. Only fall back to a local fetch if the
+  // provider hasn't finished yet (rare — first paint after sign-in).
+  const [accounts, setAccounts] = useState<PostForMeAccount[]>(ctx.accounts);
+  const [loading, setLoading] = useState(ctx.loading);
   const [busyPlatform, setBusyPlatform] = useState<string | null>(null);
   const [busyAccountId, setBusyAccountId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -30,7 +36,13 @@ export function PostForMeConnections({ initialFlash }: Props) {
 
   useEffect(() => {
     if (!user) return;
-    refresh();
+    if (ctx.loading) {
+      refresh();
+    } else {
+      setAccounts(ctx.accounts);
+      setLoading(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
   useEffect(() => {
@@ -84,6 +96,9 @@ export function PostForMeConnections({ initialFlash }: Props) {
             setAccounts(state.accounts);
             setBusyPlatform(null);
             setFlash(`Connected ${platform.toUpperCase()}.`);
+            // Keep the global ConnectionStatusProvider in sync so the
+            // gate banner disappears immediately on other pages too.
+            ctx.refresh();
             return;
           }
         } catch {
@@ -109,6 +124,9 @@ export function PostForMeConnections({ initialFlash }: Props) {
     try {
       const result = await disconnectPostForMeAccount(user.id, account.id);
       setAccounts(result.accounts);
+      // Sync the global provider so the banner re-appears if this was
+      // their last account.
+      ctx.refresh();
     } catch (err) {
       setError((err as Error).message);
     } finally {
