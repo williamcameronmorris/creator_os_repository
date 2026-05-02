@@ -1,306 +1,273 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { ArrowRight } from 'lucide-react';
 import { supabase, type Profile } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { CPM_TIERS } from '../lib/pricing';
-import { TrendingUp, DollarSign, CheckCircle, ChevronRight, ChevronLeft } from 'lucide-react';
 
-type OnboardingProps = {
-  onComplete: () => void;
-};
+/**
+ * First-time user onboarding flow. Replaces the pricing-era Onboarding that
+ * captured CPM tier / performance averages (now archived).
+ *
+ * Three internal steps, driven off `profile.onboarding_step`:
+ *
+ *   1. name_niche  — capture first name + niche (mandatory, written to DB
+ *                    and used by Clio's system prompts).
+ *   2. connect     — encourage at least one Post for Me connection. Stub
+ *                    today (Continue →); replaced in the connection-gate
+ *                    task with the real connection list + skip logic.
+ *   3. walkthrough — quick "here's what Clio does" pitch. Stub today;
+ *                    replaced with sample-prompt + dismiss card later.
+ *
+ * Each step writes to profiles + advances `onboarding_step`, then calls
+ * `onComplete` so App.tsx re-fetches the profile and re-renders this
+ * component on the new step. When step becomes 'done', App.tsx routes
+ * past Onboarding entirely.
+ */
 
-export function Onboarding({ onComplete }: OnboardingProps) {
+interface Props {
+  onComplete: () => void | Promise<void>;
+}
+
+export function Onboarding({ onComplete }: Props) {
   const { user } = useAuth();
-  const [step, setStep] = useState(1);
-  const [loading, setLoading] = useState(false);
-  const [step1Acknowledged, setStep1Acknowledged] = useState(false);
+  const [profile, setProfile] = useState<Partial<Profile> | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const [formData, setFormData] = useState<Partial<Profile>>({
-    youtube_avg_views: 0,
-    tiktok_avg_views: 0,
-    instagram_avg_views: 0,
-    youtube_shorts_avg_views: 0,
-    cpm_tier: 'conservative',
-    cpm_custom: null,
-  });
+  // Step 1 inputs
+  const [firstName, setFirstName] = useState('');
+  const [niche, setNiche] = useState('');
 
-  const handleComplete = async () => {
+  useEffect(() => {
     if (!user) return;
-
-    setLoading(true);
-    try {
-      await supabase
+    (async () => {
+      const { data } = await supabase
         .from('profiles')
-        .update({
-          ...formData,
-          onboarding_completed: true,
-          role: 'creator',
-        })
-        .eq('id', user.id);
-
-      onComplete();
-    } catch (error) {
-      console.error('Error completing onboarding:', error);
-    } finally {
+        .select('*')
+        .eq('id', user.id)
+        .maybeSingle();
+      if (data) {
+        setProfile(data);
+        // Pre-fill if the user already typed something and bounced
+        if (data.first_name) setFirstName(data.first_name);
+        if (data.niche_preference) setNiche(data.niche_preference);
+      }
       setLoading(false);
+    })();
+  }, [user]);
+
+  const advance = async (updates: Partial<Profile>) => {
+    if (!user) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update(updates)
+        .eq('id', user.id);
+      if (updateError) throw updateError;
+      await onComplete();
+    } catch (err) {
+      setError((err as Error).message || 'Something went wrong. Try again.');
+    } finally {
+      setSubmitting(false);
     }
   };
 
-  const canProceedStep2 =
-    formData.youtube_avg_views! > 0 ||
-    formData.tiktok_avg_views! > 0 ||
-    formData.instagram_avg_views! > 0 ||
-    formData.youtube_shorts_avg_views! > 0;
+  const handleStep1Submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmedName = firstName.trim();
+    const trimmedNiche = niche.trim();
+    if (!trimmedName) {
+      setError('Please enter your first name.');
+      return;
+    }
+    if (!trimmedNiche) {
+      setError('Please describe your niche in a few words.');
+      return;
+    }
+    await advance({
+      first_name: trimmedName,
+      niche_preference: trimmedNiche,
+      onboarding_step: 'connect',
+    });
+  };
+
+  const handleStep2Continue = async () => {
+    await advance({ onboarding_step: 'walkthrough' });
+  };
+
+  const handleStep3Finish = async () => {
+    await advance({ onboarding_step: 'done', onboarding_completed: true });
+  };
+
+  // ── Layout chrome (shared across steps) ──────────────────────────────────
+
+  const inputClass =
+    'w-full bg-transparent border border-border px-3 py-3 font-mono text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-accent transition-colors';
+
+  const pageStyle: React.CSSProperties = {
+    background: 'var(--background, #F7F4EE)',
+    color: 'var(--foreground, #1a1a1a)',
+    minHeight: '100vh',
+  };
+
+  if (loading || !profile) {
+    return (
+      <div style={pageStyle} className="flex items-center justify-center">
+        <div className="w-1.5 h-1.5 bg-foreground animate-pulse" />
+      </div>
+    );
+  }
+
+  const step = profile.onboarding_step ?? 'name_niche';
+
+  // 0/3 → 3/3 progress label
+  const stepNumber =
+    step === 'name_niche' ? 1 : step === 'connect' ? 2 : step === 'walkthrough' ? 3 : 3;
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
-      <div className="w-full max-w-3xl">
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-foreground mb-2">Welcome to Content Creator OS</h1>
-          <p className="text-muted-foreground">Let's set up your pricing system in 4 quick steps</p>
+    <div style={pageStyle} className="flex items-center justify-center px-4 py-12">
+      <div className="w-full max-w-md">
+
+        {/* Section marker */}
+        <div className="t-micro mb-2">
+          <span className="text-foreground">0{stepNumber}</span>
+          <span className="mx-2 text-muted-foreground">/</span>
+          <span>03 · {step === 'name_niche' ? 'YOU' : step === 'connect' ? 'CONNECT' : 'CLIO'}</span>
         </div>
 
-        <div className="flex items-center justify-center gap-2 mb-8">
-          {[1, 2, 3, 4].map((s) => (
-            <div key={s} className="flex items-center gap-2">
-              <div
-                className={`w-10 h-10 rounded-full flex items-center justify-center font-bold transition-all ${
-                  s === step
-                    ? 'bg-foreground text-background scale-110'
-                    : s < step
-                    ? 'bg-foreground text-background'
-                    : 'bg-muted text-muted-foreground'
-                }`}
-              >
-                {s < step ? <CheckCircle className="w-5 h-5" /> : s}
-              </div>
-              {s < 4 && (
-                <div
-                  className={`w-12 h-1 rounded ${
-                    s < step ? 'bg-foreground' : 'bg-muted'
-                  }`}
-                />
-              )}
-            </div>
-          ))}
-        </div>
-
-        <div className="bg-card border border-border rounded-2xl p-8 shadow-xl">
-          {step === 1 && (
-            <div>
-              <div className="flex items-center gap-3 mb-6">
-                <div className="flex items-center justify-center w-12 h-12 bg-accent rounded-lg">
-                  <TrendingUp className="w-6 h-6 text-foreground" />
-                </div>
-                <div>
-                  <h2 className="text-2xl font-bold text-foreground">Before We Start</h2>
-                  <p className="text-muted-foreground text-sm">Quick prep to get accurate pricing</p>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <div className="p-5 bg-accent border border-border rounded-lg">
-                  <p className="text-foreground leading-relaxed">
-                    To calculate accurate pricing, please <span className="font-semibold">find the number of views for the last 10 videos</span> from:
-                  </p>
-                  <ul className="mt-3 space-y-2 text-muted-foreground">
-                    <li className="flex items-center gap-2">
-                      <div className="w-1.5 h-1.5 bg-foreground rounded-full"></div>
-                      Instagram Reels
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <div className="w-1.5 h-1.5 bg-foreground rounded-full"></div>
-                      YouTube Shorts
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <div className="w-1.5 h-1.5 bg-foreground rounded-full"></div>
-                      YouTube Long-Form
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <div className="w-1.5 h-1.5 bg-foreground rounded-full"></div>
-                      TikTok
-                    </li>
-                  </ul>
-                  <p className="mt-4 text-foreground">
-                    Once you have those numbers, come back here and enter the details so we can help you get your deal started!
-                  </p>
-                </div>
-
-                <div className="flex items-start gap-3 p-4 bg-accent border border-border rounded-lg">
-                  <input
-                    type="checkbox"
-                    id="step1_ready"
-                    checked={step1Acknowledged}
-                    onChange={(e) => setStep1Acknowledged(e.target.checked)}
-                    className="mt-1 w-5 h-5 rounded bg-background border-border text-foreground focus:ring-2 focus:ring-primary"
-                  />
-                  <label htmlFor="step1_ready" className="text-foreground cursor-pointer">
-                    I have gathered my view counts and I'm ready to continue
-                  </label>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {step === 2 && (
-            <div>
-              <div className="flex items-center gap-3 mb-6">
-                <div className="flex items-center justify-center w-12 h-12 bg-accent rounded-lg">
-                  <TrendingUp className="w-6 h-6 text-foreground" />
-                </div>
-                <div>
-                  <h2 className="text-2xl font-bold text-foreground">Your Performance Averages</h2>
-                  <p className="text-muted-foreground text-sm">Enter at least one platform to get started</p>
-                </div>
-              </div>
-
-              <div className="space-y-6">
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">
-                    YouTube Long-Form Average Views
-                  </label>
-                  <input
-                    type="number"
-                    value={formData.youtube_avg_views}
-                    onChange={(e) =>
-                      setFormData({ ...formData, youtube_avg_views: parseInt(e.target.value) || 0 })
-                    }
-                    className="w-full px-4 py-3 bg-background border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                    placeholder="Average from last 16 videos"
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">Used for pricing long-form content</p>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">
-                    YouTube Shorts Average Views
-                  </label>
-                  <input
-                    type="number"
-                    value={formData.youtube_shorts_avg_views}
-                    onChange={(e) =>
-                      setFormData({ ...formData, youtube_shorts_avg_views: parseInt(e.target.value) || 0 })
-                    }
-                    className="w-full px-4 py-3 bg-background border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                    placeholder="Average from last 10 shorts"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">
-                    TikTok Average Views
-                  </label>
-                  <input
-                    type="number"
-                    value={formData.tiktok_avg_views}
-                    onChange={(e) =>
-                      setFormData({ ...formData, tiktok_avg_views: parseInt(e.target.value) || 0 })
-                    }
-                    className="w-full px-4 py-3 bg-background border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                    placeholder="Average from last 10 posts"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">
-                    Instagram Reels Average Views
-                  </label>
-                  <input
-                    type="number"
-                    value={formData.instagram_avg_views}
-                    onChange={(e) =>
-                      setFormData({ ...formData, instagram_avg_views: parseInt(e.target.value) || 0 })
-                    }
-                    className="w-full px-4 py-3 bg-background border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                    placeholder="Average from last 10 reels"
-                  />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {step === 3 && (
-            <div>
-              <div className="flex items-center gap-3 mb-6">
-                <div className="flex items-center justify-center w-12 h-12 bg-accent rounded-lg">
-                  <DollarSign className="w-6 h-6 text-foreground" />
-                </div>
-                <div>
-                  <h2 className="text-2xl font-bold text-foreground">Choose Your Tier</h2>
-                  <p className="text-muted-foreground text-sm">Start with Conservative and move up as you grow</p>
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                {(['conservative', 'standard', 'premium', 'specialized'] as const).map((tier) => (
-                  <button
-                    key={tier}
-                    onClick={() => setFormData({ ...formData, cpm_tier: tier, cpm_custom: null })}
-                    className={`w-full p-4 rounded-lg border-2 text-left transition-all ${
-                      formData.cpm_tier === tier
-                        ? 'border-foreground bg-accent'
-                        : 'border-border bg-background hover:border-foreground/50'
-                    }`}
-                  >
-                    <div className="mb-2">
-                      <span className="font-semibold text-foreground capitalize text-lg">{tier}</span>
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                      {tier === 'conservative' && 'Best for new creators building their first rate card'}
-                      {tier === 'standard' && 'For established creators with consistent engagement'}
-                      {tier === 'premium' && 'For creators with highly engaged, loyal audiences'}
-                      {tier === 'specialized' && 'For niche experts with premium, targeted audiences'}
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {step === 4 && (
-            <div className="text-center py-12">
-              <div className="flex justify-center mb-6">
-                <div className="flex items-center justify-center w-20 h-20 bg-accent rounded-full">
-                  <CheckCircle className="w-10 h-10 text-foreground" />
-                </div>
-              </div>
-              <h2 className="text-4xl font-bold text-foreground mb-4">You're All Set!</h2>
-              <p className="text-muted-foreground text-lg">Ready to start managing your content business</p>
-            </div>
-          )}
-
-          <div className="flex items-center justify-between mt-8 pt-6 border-t border-border">
-            <button
-              onClick={() => setStep(step - 1)}
-              disabled={step === 1}
-              className="px-6 py-3 bg-secondary hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed text-foreground font-medium rounded-lg transition-colors flex items-center gap-2"
+        {/* ── STEP 1 · name + niche ───────────────────────────────────── */}
+        {step === 'name_niche' && (
+          <>
+            <h1
+              className="text-foreground mb-3"
+              style={{ fontSize: 'clamp(2rem, 5vw, 3rem)', fontWeight: 500, letterSpacing: '-0.03em', lineHeight: 1.05 }}
             >
-              <ChevronLeft className="w-5 h-5" />
-              Back
-            </button>
+              Tell us <em style={{ fontStyle: 'normal', color: 'var(--accent)' }}>who you are.</em>
+            </h1>
+            <p className="t-body mb-10" style={{ maxWidth: '36ch' }}>
+              Clio uses your niche to suggest content ideas, scripts, and angles tailored to your audience.
+            </p>
 
-            {step < 4 ? (
+            <form onSubmit={handleStep1Submit} className="space-y-6">
+              <div>
+                <label htmlFor="first-name" className="t-micro block mb-2">FIRST NAME</label>
+                <input
+                  id="first-name"
+                  type="text"
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                  className={inputClass}
+                  placeholder="Cam"
+                  autoFocus
+                  required
+                  maxLength={60}
+                />
+              </div>
+
+              <div>
+                <label htmlFor="niche" className="t-micro block mb-2">YOUR NICHE</label>
+                <input
+                  id="niche"
+                  type="text"
+                  value={niche}
+                  onChange={(e) => setNiche(e.target.value)}
+                  className={inputClass}
+                  placeholder="e.g. fingerstyle guitar tutorials"
+                  required
+                  maxLength={140}
+                />
+                <p className="t-micro mt-2 text-muted-foreground" style={{ textTransform: 'none', letterSpacing: 0 }}>
+                  Be specific — &ldquo;personal finance for new parents&rdquo; gives Clio more to work with than &ldquo;finance.&rdquo;
+                </p>
+              </div>
+
+              {error && (
+                <p className="t-micro" style={{ color: 'var(--destructive, #c44)' }}>{error}</p>
+              )}
+
               <button
-                onClick={() => setStep(step + 1)}
-                disabled={
-                  (step === 1 && !step1Acknowledged) ||
-                  (step === 2 && !canProceedStep2)
-                }
-                className="px-6 py-3 bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-primary-foreground font-medium rounded-lg transition-colors flex items-center gap-2"
+                type="submit"
+                disabled={submitting}
+                className="btn-ie btn-ie-solid w-full disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
-                Next
-                <ChevronRight className="w-5 h-5" />
+                <span className="btn-ie-text">{submitting ? 'SAVING…' : 'CONTINUE'}</span>
+                {!submitting && <ArrowRight className="w-3 h-3" />}
               </button>
-            ) : (
-              <button
-                onClick={handleComplete}
-                disabled={loading}
-                className="px-6 py-3 bg-foreground hover:bg-foreground/90 disabled:bg-muted text-background font-medium rounded-lg transition-colors flex items-center gap-2"
-              >
-                <CheckCircle className="w-5 h-5" />
-                {loading ? 'Completing...' : 'Enter my Content Creator OS'}
-              </button>
+            </form>
+          </>
+        )}
+
+        {/* ── STEP 2 · connect (stub) ─────────────────────────────────── */}
+        {step === 'connect' && (
+          <>
+            <h1
+              className="text-foreground mb-3"
+              style={{ fontSize: 'clamp(2rem, 5vw, 3rem)', fontWeight: 500, letterSpacing: '-0.03em', lineHeight: 1.05 }}
+            >
+              Connect a <em style={{ fontStyle: 'normal', color: 'var(--accent)' }}>platform.</em>
+            </h1>
+            <p className="t-body mb-10" style={{ maxWidth: '38ch' }}>
+              Clio needs at least one connected social account to schedule posts and surface real performance data. You can connect more later.
+            </p>
+
+            <p className="t-micro mb-6 text-muted-foreground" style={{ textTransform: 'none', letterSpacing: 0 }}>
+              Platform connection step is wiring up next. For now, continue and you&rsquo;ll be reminded inside the app.
+            </p>
+
+            {error && (
+              <p className="t-micro mb-6" style={{ color: 'var(--destructive, #c44)' }}>{error}</p>
             )}
-          </div>
+
+            <button
+              type="button"
+              onClick={handleStep2Continue}
+              disabled={submitting}
+              className="btn-ie btn-ie-solid w-full disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              <span className="btn-ie-text">{submitting ? 'SAVING…' : 'CONTINUE'}</span>
+              {!submitting && <ArrowRight className="w-3 h-3" />}
+            </button>
+          </>
+        )}
+
+        {/* ── STEP 3 · walkthrough (stub) ─────────────────────────────── */}
+        {step === 'walkthrough' && (
+          <>
+            <h1
+              className="text-foreground mb-3"
+              style={{ fontSize: 'clamp(2rem, 5vw, 3rem)', fontWeight: 500, letterSpacing: '-0.03em', lineHeight: 1.05 }}
+            >
+              Meet <em style={{ fontStyle: 'normal', color: 'var(--accent)' }}>Clio.</em>
+            </h1>
+            <p className="t-body mb-10" style={{ maxWidth: '38ch' }}>
+              Clio is your content brain. Ask for video ideas, write scripts, plan your week — all powered by your niche.
+            </p>
+
+            <p className="t-micro mb-6 text-muted-foreground" style={{ textTransform: 'none', letterSpacing: 0 }}>
+              Walkthrough is wiring up next. For now, finish onboarding and you&rsquo;ll land on Clio&rsquo;s home screen.
+            </p>
+
+            {error && (
+              <p className="t-micro mb-6" style={{ color: 'var(--destructive, #c44)' }}>{error}</p>
+            )}
+
+            <button
+              type="button"
+              onClick={handleStep3Finish}
+              disabled={submitting}
+              className="btn-ie btn-ie-solid w-full disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              <span className="btn-ie-text">{submitting ? 'FINISHING…' : 'TAKE ME TO CLIO'}</span>
+              {!submitting && <ArrowRight className="w-3 h-3" />}
+            </button>
+          </>
+        )}
+
+        {/* Footer brand mark */}
+        <div className="mt-12 t-micro text-muted-foreground">
+          CLIOPATRA SOCIAL · v1
         </div>
       </div>
     </div>
