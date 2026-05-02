@@ -97,9 +97,10 @@ export function Onboarding({ onComplete }: Props) {
   };
 
   const handleStep2Continue = async () => {
-    // Pull the latest connection state in case PostForMeConnections finished
-    // a popup-based connect flow but the provider hasn't re-fetched yet.
-    await refreshConnections();
+    // Background refresh so the global hasConnected state is up to date
+    // for the banner on the next page, but don't block the user on it —
+    // PFM's account list fetch is ~500ms and the user shouldn't wait.
+    refreshConnections();
     await advance({ onboarding_step: 'walkthrough' });
   };
 
