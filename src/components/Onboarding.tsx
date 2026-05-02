@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { ArrowRight } from 'lucide-react';
 import { supabase, type Profile } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { useConnectionStatus } from '../contexts/ConnectionStatusContext';
+import { PostForMeConnections } from './PostForMeConnections';
 
 /**
  * First-time user onboarding flow. Replaces the pricing-era Onboarding that
@@ -29,6 +31,7 @@ interface Props {
 
 export function Onboarding({ onComplete }: Props) {
   const { user } = useAuth();
+  const { hasConnected, refresh: refreshConnections } = useConnectionStatus();
   const [profile, setProfile] = useState<Partial<Profile> | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -94,6 +97,9 @@ export function Onboarding({ onComplete }: Props) {
   };
 
   const handleStep2Continue = async () => {
+    // Pull the latest connection state in case PostForMeConnections finished
+    // a popup-based connect flow but the provider hasn't re-fetched yet.
+    await refreshConnections();
     await advance({ onboarding_step: 'walkthrough' });
   };
 
@@ -199,7 +205,7 @@ export function Onboarding({ onComplete }: Props) {
           </>
         )}
 
-        {/* ── STEP 2 · connect (stub) ─────────────────────────────────── */}
+        {/* ── STEP 2 · connect ────────────────────────────────────────── */}
         {step === 'connect' && (
           <>
             <h1
@@ -208,27 +214,38 @@ export function Onboarding({ onComplete }: Props) {
             >
               Connect a <em style={{ fontStyle: 'normal', color: 'var(--accent)' }}>platform.</em>
             </h1>
-            <p className="t-body mb-10" style={{ maxWidth: '38ch' }}>
-              Clio needs at least one connected social account to schedule posts and surface real performance data. You can connect more later.
+            <p className="t-body mb-10" style={{ maxWidth: '40ch' }}>
+              Clio can&rsquo;t schedule posts or read real performance data until you connect at least one social account. You can add more later.
             </p>
 
-            <p className="t-micro mb-6 text-muted-foreground" style={{ textTransform: 'none', letterSpacing: 0 }}>
-              Platform connection step is wiring up next. For now, continue and you&rsquo;ll be reminded inside the app.
-            </p>
+            <PostForMeConnections />
 
             {error && (
-              <p className="t-micro mb-6" style={{ color: 'var(--destructive, #c44)' }}>{error}</p>
+              <p className="t-micro mb-6 mt-6" style={{ color: 'var(--destructive, #c44)' }}>{error}</p>
             )}
 
-            <button
-              type="button"
-              onClick={handleStep2Continue}
-              disabled={submitting}
-              className="btn-ie btn-ie-solid w-full disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-            >
-              <span className="btn-ie-text">{submitting ? 'SAVING…' : 'CONTINUE'}</span>
-              {!submitting && <ArrowRight className="w-3 h-3" />}
-            </button>
+            <div className="mt-8">
+              <button
+                type="button"
+                onClick={handleStep2Continue}
+                disabled={submitting}
+                className="btn-ie btn-ie-solid w-full disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                <span className="btn-ie-text">
+                  {submitting
+                    ? 'SAVING…'
+                    : hasConnected
+                    ? 'CONTINUE'
+                    : 'CONTINUE WITHOUT CONNECTING'}
+                </span>
+                {!submitting && <ArrowRight className="w-3 h-3" />}
+              </button>
+              {!hasConnected && !submitting && (
+                <p className="t-micro mt-3 text-muted-foreground text-center" style={{ textTransform: 'none', letterSpacing: 0 }}>
+                  You&rsquo;ll see a reminder inside the app until you connect one.
+                </p>
+              )}
+            </div>
           </>
         )}
 
