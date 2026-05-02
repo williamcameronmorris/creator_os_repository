@@ -49,10 +49,16 @@ export type Profile = {
   payment_terms: string;
   onboarding_completed: boolean;
   onboarding_step: 'name_niche' | 'connect' | 'walkthrough' | 'done';
+  first_name?: string;
+  last_name?: string;
+  niche_preference?: string;
+  primary_platform?: string;
+  posting_frequency?: string;
+  notes?: string;
   created_at: string;
   updated_at: string;
 
-  // ── Meta / Facebook ───────────────────────────────────────────────────────
+  // ── Meta / Facebook ────────────────────────────────────────────────────────
   meta_user_id?: string;
   meta_access_token?: string;
   meta_token_expires_at?: string | null;
