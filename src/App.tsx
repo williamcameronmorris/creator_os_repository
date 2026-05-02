@@ -27,7 +27,6 @@ import { PostForMeCallback } from './components/PostForMeCallback';
 import { Connections } from './pages/Connections';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { supabase, type Profile as ProfileType } from './lib/supabase';
-import { PRICING_ENABLED } from './lib/featureFlags';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -97,9 +96,10 @@ function AppContent() {
     );
   }
 
-  // Pricing-focused Onboarding is skipped when PRICING_ENABLED is false.
-  // When the Post for Me-era onboarding flow ships it should replace this guard.
-  if (PRICING_ENABLED && profile && !profile.onboarding_completed) {
+  // First-time onboarding flow: name+niche → connect → walkthrough → done.
+  // Driven by profiles.onboarding_step. Anything other than 'done' routes
+  // the user into Onboarding regardless of which page they tried to load.
+  if (profile && profile.onboarding_step !== 'done') {
     return (
       <Routes>
         <Route path="/onboarding" element={<Onboarding onComplete={loadProfile} />} />
@@ -110,15 +110,16 @@ function AppContent() {
 
   return (
     <Routes>
-      {/* Ã¢ÂÂÃ¢ÂÂ Clio (landing) Ã¢ÂÂÃ¢ÂÂ */}
+      {/* ──────────────────────────────────────────────────
+      Clio (landing) ─────────────────────────────────────────────── */}
       <Route path="/" element={<ProtectedRoute><Layout><Clio /></Layout></ProtectedRoute>} />
       <Route path="/clio" element={<Navigate to="/" replace />} />
 
-      {/* Ã¢ÂÂÃ¢ÂÂ Legacy redirects Ã¢ÂÂÃ¢ÂÂ */}
+      {/* Legacy redirects */}
       <Route path="/dashboard" element={<Navigate to="/" replace />} />
       <Route path="/command-center" element={<Navigate to="/" replace />} />
 
-      {/* Ã¢ÂÂÃ¢ÂÂ Studio Ã¢ÂÂÃ¢ÂÂ */}
+      {/* Studio */}
       <Route path="/studio" element={<ProtectedRoute><Layout><StudioHub /></Layout></ProtectedRoute>} />
       <Route path="/studio/workflow" element={<ProtectedRoute><Layout><Studio /></Layout></ProtectedRoute>} />
       <Route path="/studio/script" element={<ProtectedRoute><Layout><Studio /></Layout></ProtectedRoute>} />
@@ -128,7 +129,7 @@ function AppContent() {
       <Route path="/media" element={<ProtectedRoute><Layout><Media /></Layout></ProtectedRoute>} />
       <Route path="/saved-ideas" element={<ProtectedRoute><Layout><SavedIdeasPage /></Layout></ProtectedRoute>} />
 
-      {/* Ã¢ÂÂÃ¢ÂÂ Office Ã¢ÂÂÃ¢ÂÂ */}
+      {/* Office */}
       <Route path="/office" element={<ProtectedRoute><Layout><OfficeHub /></Layout></ProtectedRoute>} />
       <Route path="/office/connections" element={<ProtectedRoute><Layout><Connections /></Layout></ProtectedRoute>} />
       <Route path="/schedule" element={<ProtectedRoute><Layout><Schedule /></Layout></ProtectedRoute>} />
@@ -139,11 +140,11 @@ function AppContent() {
       <Route path="/revenue" element={<ProtectedRoute><Layout><Schedule /></Layout></ProtectedRoute>} />
       <Route path="/pipeline" element={<ProtectedRoute><Layout><Schedule /></Layout></ProtectedRoute>} />
 
-      {/* Ã¢ÂÂÃ¢ÂÂ Settings Ã¢ÂÂÃ¢ÂÂ */}
+      {/* Settings */}
       <Route path="/profile" element={<ProtectedRoute><Layout><Profile /></Layout></ProtectedRoute>} />
       <Route path="/settings" element={<ProtectedRoute><Layout><SettingsPage /></Layout></ProtectedRoute>} />
 
-      {/* Ã¢ÂÂÃ¢ÂÂ OAuth Callbacks Ã¢ÂÂÃ¢ÂÂ */}
+      {/* OAuth Callbacks */}
       <Route path="/auth/meta/callback" element={<ProtectedRoute><MetaCallback /></ProtectedRoute>} />
       <Route path="/auth/threads/callback" element={<ProtectedRoute><ThreadsCallback /></ProtectedRoute>} />
       <Route path="/auth/youtube/callback" element={<ProtectedRoute><YoutubeCallback /></ProtectedRoute>} />
