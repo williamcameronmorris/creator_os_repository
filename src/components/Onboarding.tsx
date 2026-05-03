@@ -69,6 +69,19 @@ export function Onboarding({ onComplete }: Props) {
         .update(updates)
         .eq('id', user.id);
       if (updateError) throw updateError;
+
+      // Mirror the DB update into our local profile state so this component
+      // re-renders the new step IMMEDIATELY. Without this, Onboarding's
+      // local `profile` is stale until something external (Supabase's
+      // auth-state-change emitter on visibilitychange, or a token refresh
+      // ~every 20s) bumps the `user` reference and re-fires our [user]
+      // useEffect. That's why "swiping desktops unsticks the page" —
+      // visibilitychange triggers Supabase to re-emit the session.
+      setProfile((prev) => (prev ? { ...prev, ...updates } : prev));
+
+      // Still notify App.tsx so its routing (step==='done' → unmount us)
+      // sees the latest state. Awaited because the 'done' transition
+      // depends on App's profile being current.
       await onComplete();
     } catch (err) {
       setError((err as Error).message || 'Something went wrong. Try again.');
