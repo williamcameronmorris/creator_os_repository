@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase';
 import {
   TrendingUp, Eye, Heart, MessageCircle, Users, Instagram, Youtube,
   ArrowUp, ArrowDown, Lock, Crown, ExternalLink, Film, Image as ImageIcon, Layers,
+  Plus, Trash2, RefreshCw, AlertCircle,
 } from 'lucide-react';
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -42,6 +43,23 @@ interface PostPerformance {
   published_at: string;
 }
 
+interface CompetitorChannel {
+  id: string;
+  platform: string;
+  handle: string;
+  channel_id: string;
+  title: string;
+  thumbnail_url: string;
+  subscriber_count: number;
+  video_count: number;
+  view_count: number;
+  avg_views_per_video: number;
+  last_pulled_at: string | null;
+}
+
+const FREE_COMPETITOR_LIMIT = 1;
+const PAID_COMPETITOR_LIMIT = 10;
+
 export function Analytics() {
   const { user } = useAuth();
   const { tier } = useSubscription();
@@ -68,13 +86,115 @@ export function Analytics() {
   const [topPosts, setTopPosts] = useState<PostPerformance[]>([]);
   const [abResults, setAbResults] = useState<any[]>([]);
 
+  // Competitor tracking (YouTube v1)
+  const [competitors, setCompetitors] = useState<CompetitorChannel[]>([]);
+  const [youtubeProfile, setYoutubeProfile] = useState<{
+    connected: boolean; handle: string; followers: number; channel_id: string;
+  }>({ connected: false, handle: '', followers: 0, channel_id: '' });
+  const [competitorInput, setCompetitorInput] = useState('');
+  const [competitorBusy, setCompetitorBusy] = useState(false);
+  const [competitorError, setCompetitorError] = useState<string | null>(null);
+
   const isPremium = tier === 'paid';
+  const competitorLimit = isPremium ? PAID_COMPETITOR_LIMIT : FREE_COMPETITOR_LIMIT;
   const { timezone } = useTimezone();
 
   useEffect(() => {
-    if (user) loadAnalytics();
-    else setLoading(false);
+    if (user) {
+      loadAnalytics();
+      loadCompetitors();
+    } else {
+      setLoading(false);
+    }
   }, [user, timeRange]);
+
+  const loadCompetitors = async () => {
+    if (!user) return;
+    const [profileRes, competitorsRes] = await Promise.all([
+      supabase
+        .from('profiles')
+        .select('youtube_connected, youtube_handle, youtube_followers, youtube_channel_id')
+        .eq('id', user.id)
+        .maybeSingle(),
+      supabase
+        .from('competitor_channels')
+        .select('id, platform, handle, channel_id, title, thumbnail_url, subscriber_count, video_count, view_count, avg_views_per_video, last_pulled_at')
+        .eq('user_id', user.id)
+        .eq('platform', 'youtube')
+        .order('subscriber_count', { ascending: false }),
+    ]);
+    setYoutubeProfile({
+      connected: !!profileRes.data?.youtube_connected,
+      handle: profileRes.data?.youtube_handle || '',
+      followers: profileRes.data?.youtube_followers || 0,
+      channel_id: profileRes.data?.youtube_channel_id || '',
+    });
+    setCompetitors((competitorsRes.data || []) as CompetitorChannel[]);
+  };
+
+  const addCompetitor = async () => {
+    if (!competitorInput.trim() || competitorBusy) return;
+    if (competitors.length >= competitorLimit) {
+      if (!isPremium) {
+        setPaywallFeature('Track multiple competitors');
+        setShowPaywall(true);
+      } else {
+        setCompetitorError(`Limit reached (${competitorLimit}). Remove one to add another.`);
+      }
+      return;
+    }
+    setCompetitorBusy(true);
+    setCompetitorError(null);
+    try {
+      const { data, error } = await supabase.functions.invoke('competitor-sync-youtube', {
+        body: { action: 'add', handle: competitorInput.trim() },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      setCompetitorInput('');
+      await loadCompetitors();
+    } catch (err: any) {
+      setCompetitorError(err?.message || 'Could not add competitor');
+    } finally {
+      setCompetitorBusy(false);
+    }
+  };
+
+  const removeCompetitor = async (id: string) => {
+    if (competitorBusy) return;
+    setCompetitorBusy(true);
+    setCompetitorError(null);
+    try {
+      const { data, error } = await supabase.functions.invoke('competitor-sync-youtube', {
+        body: { action: 'remove', competitorId: id },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      setCompetitors((prev) => prev.filter((c) => c.id !== id));
+    } catch (err: any) {
+      setCompetitorError(err?.message || 'Could not remove competitor');
+    } finally {
+      setCompetitorBusy(false);
+    }
+  };
+
+  const syncCompetitors = async () => {
+    if (competitorBusy || competitors.length === 0) return;
+    setCompetitorBusy(true);
+    setCompetitorError(null);
+    try {
+      const { data, error } = await supabase.functions.invoke('competitor-sync-youtube', {
+        body: { action: 'sync' },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      await loadCompetitors();
+    } catch (err: any) {
+      setCompetitorError(err?.message || 'Could not refresh competitors');
+    } finally {
+      setCompetitorBusy(false);
+    }
+  };
 
   const handleTimeRangeChange = (range: '7d' | '30d' | '90d') => {
     if (!isPremium && (range === '30d' || range === '90d')) {
@@ -652,6 +772,173 @@ export function Analytics() {
               </div>
             )}
           </div>
+          {/* YouTube Competitor Tracking */}
+          <div className="p-6 bg-card border border-border">
+            <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-5 pb-4 border-b border-border">
+              <div>
+                <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-2">Competitors</p>
+                <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
+                  <Youtube className="w-5 h-5" style={{ color: PLATFORM_COLORS.youtube }} />
+                  YouTube Channels You're Tracking
+                </h3>
+                <p className="text-xs font-mono text-muted-foreground mt-2">
+                  See how peers stack up on subs, total views, and upload cadence.
+                </p>
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <span className="text-xs font-mono text-muted-foreground">
+                  {competitors.length} / {competitorLimit}
+                </span>
+                {competitors.length > 0 && (
+                  <button
+                    onClick={syncCompetitors}
+                    disabled={competitorBusy}
+                    className="px-3 py-1.5 text-xs font-mono border border-border text-foreground hover:bg-accent/50 disabled:opacity-50 transition-all flex items-center gap-1.5"
+                    title="Refresh competitor stats"
+                  >
+                    <RefreshCw className={`w-3 h-3 ${competitorBusy ? 'animate-spin' : ''}`} />
+                    REFRESH
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {!youtubeProfile.connected ? (
+              <div className="p-8 text-center bg-muted border border-border">
+                <Youtube className="w-10 h-10 mx-auto mb-3 text-muted-foreground/40" />
+                <p className="text-sm font-semibold text-foreground mb-1">Connect YouTube to track competitors</p>
+                <p className="text-xs text-muted-foreground">
+                  We use your YouTube connection to look up public channel data for the creators you track.
+                </p>
+              </div>
+            ) : (
+              <>
+                {/* Add competitor input */}
+                <div className="mb-5">
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={competitorInput}
+                      onChange={(e) => setCompetitorInput(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCompetitor(); } }}
+                      placeholder="@handle, channel URL, or channel name"
+                      disabled={competitorBusy || competitors.length >= competitorLimit}
+                      className="flex-1 px-3 py-2 text-sm bg-background border border-border focus:border-foreground focus:outline-none disabled:opacity-50"
+                    />
+                    <button
+                      onClick={addCompetitor}
+                      disabled={competitorBusy || !competitorInput.trim() || competitors.length >= competitorLimit}
+                      className="px-4 py-2 text-sm font-mono bg-foreground text-background hover:opacity-90 disabled:opacity-50 transition-all flex items-center gap-1.5"
+                    >
+                      <Plus className="w-4 h-4" />
+                      ADD
+                    </button>
+                  </div>
+                  {competitorError && (
+                    <div className="mt-2 px-3 py-2 text-xs bg-red-50 border border-red-200 text-red-700 flex items-start gap-2">
+                      <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                      <span>{competitorError}</span>
+                    </div>
+                  )}
+                  {!isPremium && competitors.length >= FREE_COMPETITOR_LIMIT && (
+                    <button
+                      onClick={() => { setPaywallFeature('Track up to 10 competitors'); setShowPaywall(true); }}
+                      className="mt-2 w-full py-2 border border-border text-foreground text-xs font-mono hover:bg-accent/30 transition-colors flex items-center justify-center gap-2"
+                    >
+                      <Lock className="w-3.5 h-3.5" /> UPGRADE TO TRACK UP TO 10 COMPETITORS
+                    </button>
+                  )}
+                </div>
+
+                {competitors.length === 0 ? (
+                  <p className="text-center py-8 text-muted-foreground text-sm">
+                    No competitors tracked yet. Add a YouTube channel above to compare.
+                  </p>
+                ) : (
+                  <div className="space-y-0">
+                    {/* Your channel reference row */}
+                    {youtubeProfile.channel_id && (
+                      <div className="flex items-center gap-3 p-3 bg-muted border border-border">
+                        <div className="w-10 h-10 bg-foreground text-background flex items-center justify-center text-xs font-bold flex-shrink-0">
+                          YOU
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-bold text-foreground truncate">
+                            {youtubeProfile.handle || 'Your YouTube'}
+                          </p>
+                          <p className="text-xs font-mono text-muted-foreground">
+                            {youtubeProfile.followers.toLocaleString()} subs
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                    {competitors.map((c) => {
+                      const subDelta = c.subscriber_count - youtubeProfile.followers;
+                      const ahead = subDelta > 0;
+                      return (
+                        <div key={c.id} className="flex items-start gap-3 p-3 border-b border-border last:border-b-0 hover:bg-accent/30 transition-colors">
+                          {c.thumbnail_url ? (
+                            <img
+                              src={c.thumbnail_url}
+                              alt={c.title}
+                              className="w-10 h-10 object-cover flex-shrink-0"
+                              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                            />
+                          ) : (
+                            <div className="w-10 h-10 bg-accent border border-border flex items-center justify-center flex-shrink-0">
+                              <Youtube className="w-5 h-5" style={{ color: PLATFORM_COLORS.youtube }} />
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1 flex-wrap">
+                              <p className="text-sm font-semibold text-foreground truncate">{c.title || c.handle}</p>
+                              {youtubeProfile.followers > 0 && (
+                                <span className={`text-[10px] font-mono px-1.5 py-0.5 border ${ahead ? 'border-foreground text-foreground' : 'border-border text-muted-foreground'}`}>
+                                  {ahead ? '+' : ''}{subDelta.toLocaleString()} vs you
+                                </span>
+                              )}
+                              <a
+                                href={`https://www.youtube.com/channel/${c.channel_id}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="ml-auto text-foreground hover:text-muted-foreground flex-shrink-0"
+                                title="View on YouTube"
+                              >
+                                <ExternalLink className="w-3.5 h-3.5" />
+                              </a>
+                              <button
+                                onClick={() => removeCompetitor(c.id)}
+                                disabled={competitorBusy}
+                                className="text-muted-foreground hover:text-red-600 disabled:opacity-50 flex-shrink-0"
+                                title="Remove"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                            <div className="grid grid-cols-3 gap-2 text-xs font-mono">
+                              <div>
+                                <span className="text-muted-foreground">Subs</span>
+                                <p className="font-semibold text-foreground">{c.subscriber_count.toLocaleString()}</p>
+                              </div>
+                              <div>
+                                <span className="text-muted-foreground">Videos</span>
+                                <p className="font-semibold text-foreground">{c.video_count.toLocaleString()}</p>
+                              </div>
+                              <div>
+                                <span className="text-muted-foreground">Avg views</span>
+                                <p className="font-semibold text-foreground">{Math.round(c.avg_views_per_video).toLocaleString()}</p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+
           {/* A/B test results */}
           {abResults.length > 0 && (
             <div className="p-6 bg-card border border-border">
