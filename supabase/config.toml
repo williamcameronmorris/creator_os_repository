@@ -1,0 +1,21 @@
+# Supabase project config.
+#
+# This file is partial: it only defines auth email templates so they live in
+# the repo. All other Auth settings (providers, SMTP, redirect URLs, etc.) are
+# managed in the Supabase Dashboard. Do NOT run `supabase config push` against
+# this file unless you have first synced the rest of the config locally, since
+# missing sections may be reset to defaults on the remote project.
+
+project_id = "mlionhgievukulyufnnr"
+
+[auth.email.template.recovery]
+subject = "Reset Your Password"
+content_path = "./supabase/templates/recovery.html"
+
+[auth.email.template.magic_link]
+subject = "Your Magic Link"
+content_path = "./supabase/templates/magic_link.html"
+
+[auth.email.template.email_change]
+subject = "Confirm Email Change"
+content_path = "./supabase/templates/email_change.html"
