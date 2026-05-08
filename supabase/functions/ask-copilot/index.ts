@@ -227,6 +227,80 @@ Deno.serve(async (req: Request) => {
       return `  - ${platform}${framework}${creator} — ${stats || "no stats"}${hook}${notes}`;
     }).join("\n");
 
+    // ── Hook Template fallback bank ─────────────────────────────────────
+    // hook_templates holds ~1000 parameterized hook formulas (with [insert X]
+    // blanks) curated from a viral hooks PDF. They have NO performance signal
+    // — they're scaffolding, not evidence. Conservative gating: only surface
+    // templates for frameworks where the user has ZERO Outlier examples in
+    // inspiration_entries. If they have an Outlier in a given framework, the
+    // Outlier wins; templates stay hidden so we don't dilute the citation
+    // hierarchy.
+    const STANDARD_FRAMEWORKS = [
+      "Proof-First", "Curiosity Gap", "Pain Point", "Challenge",
+      "Question + Proof", "Bold Claim", "Storytelling", "Contrarian",
+      "How-To", "List/Ranking",
+    ];
+    // Derive outlier-covered frameworks from ALL inspiration entries (via
+    // inspirationAll), not just the top-15 by likes. A framework with 20
+    // total Outliers but none in the top-15 by likes is NOT a gap — Clio
+    // can still cite an Outlier from it. The top-15 list is a render limit,
+    // not a truth source for what's available.
+    const outlierFrameworks = new Set<string>(
+      inspirationAll
+        .filter((e: { performance_tier?: string; hook_framework?: string }) =>
+          e.performance_tier === "Outlier" && e.hook_framework
+        )
+        .map((e: { hook_framework?: string }) => e.hook_framework as string)
+    );
+    const gapFrameworks = STANDARD_FRAMEWORKS.filter((f) => !outlierFrameworks.has(f));
+
+    let templateLines = "";
+    if (gapFrameworks.length > 0) {
+      // Pull 2 random templates per gap framework, capped at 12 total. Random()
+      // ordering is fine here — a different surfaced sample per request keeps
+      // suggestions varied without needing real personalization.
+      const perFramework = 2;
+      const cap = 12;
+      // Parallel fetch — all gap framework queries fire at once.
+      const fetched = await Promise.all(
+        gapFrameworks.map(async (fw) => {
+          const { data: tmpls } = await supabase
+            .from("hook_templates")
+            .select("template_text, source_url")
+            .eq("hook_framework", fw)
+            .limit(50);
+          return { fw, pool: (tmpls || []) as Array<{ template_text: string; source_url?: string }> };
+        })
+      );
+      const templatesByFramework: Record<string, string[]> = {};
+      for (const { fw, pool } of fetched) {
+        // Shuffle in place
+        for (let i = pool.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [pool[i], pool[j]] = [pool[j], pool[i]];
+        }
+        const picked = pool.slice(0, perFramework);
+        if (picked.length > 0) {
+          templatesByFramework[fw] = picked.map(
+            (t) => `      "${t.template_text}"${t.source_url ? ` — origin: ${t.source_url}` : ""}`
+          );
+        }
+      }
+      const ordered = Object.entries(templatesByFramework);
+      const lines: string[] = [];
+      let count = 0;
+      for (const [fw, tmpls] of ordered) {
+        if (count >= cap) break;
+        lines.push(`  ${fw}:`);
+        for (const t of tmpls) {
+          if (count >= cap) break;
+          lines.push(t);
+          count++;
+        }
+      }
+      templateLines = lines.join("\n");
+    }
+
     const dealLines = deals.length > 0
       ? deals.map((d: any) => {
           const name = d.brand_name || d.brand || "Unknown brand";
@@ -263,7 +337,7 @@ Total entries: ${inspirationAll.length} | By tier: ${Object.entries(tierCounts).
 Top hook frameworks (most-saved): ${topFrameworks || "none"}
 
 ${inspirationLines || "  No Outliers in library yet"}
-
+${templateLines ? `\n═══ TEMPLATE BANK — formula scaffolding for frameworks with ZERO saved Outliers ═══\nThese are parameterized hook formulas with [insert X] blanks. NO performance data. Use ONLY when a framework has no relevant Outlier above. NEVER cite these as evidence — they are starting points to riff on.\n${templateLines}` : ""}
 ─── BACKGROUND CONTEXT (current state per platform — use as reference, not as headline numbers) ───
 ${platformLines || "  No platform data available"}
 
@@ -299,7 +373,8 @@ POST-LEVEL REASONING — when the user asks "what should I post" or "how am I do
 6. Pick out 1-2 SPECIFIC posts from the data block and name what worked or didn't.
 7. Pair the recommendation with a concrete saved Outlier example by quoting the saved Hook text and tactical notes.
 8. Never recommend a hook framework absent from "Top hook frameworks".
-9. If the library has zero Outliers in a relevant framework, say so — don't make up examples.
+9. If the library has zero Outliers in a relevant framework: if a TEMPLATE BANK formula in that framework fits the user's content, you MAY suggest it as scaffolding — but call it a "template formula to riff on", NEVER cite it as a proven example. If no template fits either, say the library has no example for this framework yet.
+10. Outlier examples ALWAYS take priority over Template Bank formulas. Templates are fallback only.
 
 ANTI-PATTERNS — do not do these:
 - "Your Instagram is carrying all the momentum at 145K followers, 0.20% engagement…" (this is platform-level kitchen sink)
