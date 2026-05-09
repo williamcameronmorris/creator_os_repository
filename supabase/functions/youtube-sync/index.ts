@@ -185,8 +185,36 @@ Deno.serve(async (req: Request) => {
         comments: analytics?.comments ? parseInt(analytics.comments) : commentCount,
         engagement_rate: viewCount > 0 ? ((likeCount + commentCount) / viewCount) * 100 : 0,
       };
-      if (!existing) { await supabase.from("content_posts").insert(postData); }
-      else { await supabase.from("content_posts").update(postData).eq("id", existing.id); }
+      let postId: string | null = existing?.id ?? null;
+      if (!existing) {
+        const { data: inserted } = await supabase
+          .from("content_posts")
+          .insert(postData)
+          .select("id")
+          .single();
+        postId = inserted?.id ?? null;
+      } else {
+        await supabase.from("content_posts").update(postData).eq("id", existing.id);
+      }
+
+      // Append today's snapshot to the per-post daily history. Idempotent on
+      // (post_id, snapshot_date) so re-running the sync the same day overwrites.
+      if (postId) {
+        await supabase.from("content_post_metrics_daily").upsert(
+          {
+            post_id: postId,
+            user_id: userId,
+            platform: "youtube",
+            snapshot_date: new Date().toISOString().split("T")[0],
+            metrics: {
+              views: postData.views,
+              likes: postData.likes,
+              comments: postData.comments,
+            },
+          },
+          { onConflict: "post_id,snapshot_date" }
+        );
+      }
       processedCount++;
     }
 

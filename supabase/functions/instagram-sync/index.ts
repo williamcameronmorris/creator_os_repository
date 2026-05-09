@@ -219,10 +219,35 @@ Deno.serve(async (req: Request) => {
         views: item.video_views || 0,
       };
 
+      let postId: string | null = existingPost?.id ?? null;
       if (!existingPost) {
-        await supabase.from("content_posts").insert(postData);
+        const { data: inserted } = await supabase
+          .from("content_posts")
+          .insert(postData)
+          .select("id")
+          .single();
+        postId = inserted?.id ?? null;
       } else {
         await supabase.from("content_posts").update(postData).eq("id", existingPost.id);
+      }
+
+      // Append today's snapshot to the per-post daily history. Idempotent on
+      // (post_id, snapshot_date) so re-running the sync the same day overwrites.
+      if (postId) {
+        await supabase.from("content_post_metrics_daily").upsert(
+          {
+            post_id: postId,
+            user_id: userId,
+            platform: "instagram",
+            snapshot_date: new Date().toISOString().split("T")[0],
+            metrics: {
+              likes: item.like_count || 0,
+              comments: item.comments_count || 0,
+              video_views: item.video_views || 0,
+            },
+          },
+          { onConflict: "post_id,snapshot_date" }
+        );
       }
     }
 
