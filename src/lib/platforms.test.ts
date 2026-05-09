@@ -9,6 +9,7 @@ vi.stubEnv('VITE_YOUTUBE_CLIENT_ID', 'yt_client_id');
 
 beforeEach(() => {
   sessionStorage.clear();
+  localStorage.clear();
 });
 
 describe('getInstagramAuthUrl', () => {
@@ -40,7 +41,15 @@ describe('getYouTubeAuthUrl', () => {
     const state = url.searchParams.get('state');
     expect(state).toBeTruthy();
     expect(state!.length).toBeGreaterThanOrEqual(16);
-    expect(sessionStorage.getItem('oauth_state_youtube')).toBe(state);
+    // State is persisted as JSON {state, expiresAt} in localStorage so the
+    // OAuth round-trip survives tab/process boundaries (iOS Capacitor →
+    // Safari, etc). The 10-min TTL is enforced by consumeOAuthState.
+    const raw = localStorage.getItem('oauth_state_youtube');
+    expect(raw).toBeTruthy();
+    const parsed = JSON.parse(raw!);
+    expect(parsed.state).toBe(state);
+    expect(typeof parsed.expiresAt).toBe('number');
+    expect(parsed.expiresAt).toBeGreaterThan(Date.now());
   });
 
   it('always uses the dedicated callback route (not the settings fallback)', () => {
