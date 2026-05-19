@@ -29,7 +29,7 @@ function inlineMarkdown(text: string, lineKey: number) {
   return parts.length > 0 ? parts : [text];
 }
 
-// Detect numbered content ideas in Clio responses (e.g. "1. **Guitar Gear Collabs** â ...")
+// Detect numbered content ideas in Clio responses (e.g. "1. **Guitar Gear Collabs** - ...")
 // Returns { ideas: [{number, title, description}], preamble, postscript }
 function parseActionableIdeas(text: string) {
   const lines = text.split('\n');
@@ -41,8 +41,8 @@ function parseActionableIdeas(text: string) {
   let currentIdea: { number: number; title: string; description: string; raw: string } | null = null;
 
   for (const line of lines) {
-    // Match patterns like "1. **Title** â description" or "1. Title â description"
-    const ideaMatch = line.match(/^(\d+)\.\s+\*{0,2}(.+?)\*{0,2}\s*[â\-â:]\s*(.+)/);
+    // Match patterns like "1. **Title** - description" or "1. Title - description"
+    const ideaMatch = line.match(/^(\d+)\.\s+\*{0,2}(.+?)\*{0,2}\s*[\u2014\u2013\-:]\s*(.+)/);
     if (ideaMatch) {
       if (currentIdea) ideas.push(currentIdea);
       foundFirstIdea = true;

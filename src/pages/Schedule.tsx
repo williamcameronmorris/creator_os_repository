@@ -333,7 +333,7 @@ export function Schedule() {
                           {post.publish_status === 'publishing' && (
                             <span className="flex items-center gap-1 px-1.5 py-0.5 text-xs rounded-full bg-blue-500/10 text-blue-600 font-semibold">
                               <Loader2 className="w-3 h-3 animate-spin" />
-                              PublishingÃ¢ÂÂ¦
+                              Publishing&hellip;
                             </span>
                           )}
                           {post.publish_status === 'published' && (
