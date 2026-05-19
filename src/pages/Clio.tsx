@@ -29,59 +29,77 @@ function inlineMarkdown(text: string, lineKey: number) {
   return parts.length > 0 ? parts : [text];
 }
 
-// Detect numbered content ideas in Clio responses (e.g. "1. **Guitar Gear Collabs** - ...")
-// Returns { ideas: [{number, title, description}], preamble, postscript }
+// Detect a numbered list of content ideas in a Clio response. Handles the
+// markdown-heading format the copilot emits ("## 1. Title" followed by body
+// paragraphs / Hook / Why) as well as plain "1. Title" lines.
+// Returns { ideas: [{ number, title, body }], preamble } or null when fewer
+// than 2 ideas are found.
 function parseActionableIdeas(text: string) {
   const lines = text.split('\n');
-  const ideas: { number: number; title: string; description: string; raw: string }[] = [];
+  const ideas: { number: number; title: string; body: string }[] = [];
   const preambleLines: string[] = [];
-  const postscriptLines: string[] = [];
-  let foundFirstIdea = false;
-  let foundPostscript = false;
-  let currentIdea: { number: number; title: string; description: string; raw: string } | null = null;
+  let current: { number: number; title: string; bodyLines: string[] } | null = null;
+
+  // "## 1. Title", "1) Title", "**2.** Title" \u2014 optional heading hashes + bold.
+  const IDEA_START = /^#{0,6}\s*\*{0,2}\s*(\d+)[.)]\s+(.+)$/;
+  const HR = /^(-{3,}|\*{3,}|_{3,})$/;
+
+  const flush = () => {
+    if (current) {
+      ideas.push({ number: current.number, title: current.title, body: current.bodyLines.join('\n').trim() });
+    }
+  };
 
   for (const line of lines) {
-    // Match patterns like "1. **Title** - description" or "1. Title - description"
-    const ideaMatch = line.match(/^(\d+)\.\s+\*{0,2}(.+?)\*{0,2}\s*[\u2014\u2013\-:]\s*(.+)/);
-    if (ideaMatch) {
-      if (currentIdea) ideas.push(currentIdea);
-      foundFirstIdea = true;
-      foundPostscript = false;
-      currentIdea = {
-        number: parseInt(ideaMatch[1]),
-        title: ideaMatch[2].replace(/\*\*/g, '').trim(),
-        description: ideaMatch[3].trim(),
-        raw: line,
+    const trimmed = line.trim();
+    const match = trimmed.match(IDEA_START);
+    if (match) {
+      flush();
+      current = {
+        number: parseInt(match[1], 10),
+        title: match[2].replace(/\*\*/g, '').replace(/#+$/, '').trim(),
+        bodyLines: [],
       };
-    } else if (currentIdea && line.trim() && !line.match(/^\d+\./)) {
-      // Continuation of previous idea
-      currentIdea.description += ' ' + line.trim();
-    } else if (!foundFirstIdea) {
+    } else if (HR.test(trimmed)) {
+      continue; // section divider \u2014 drop
+    } else if (current) {
+      current.bodyLines.push(line);
+    } else {
       preambleLines.push(line);
-    } else if (line.trim() === '' && currentIdea) {
-      // Blank line after an idea, could be gap or end
-      continue;
-    } else if (foundFirstIdea && !line.match(/^\d+\./)) {
-      if (currentIdea) { ideas.push(currentIdea); currentIdea = null; }
-      foundPostscript = true;
-      postscriptLines.push(line);
     }
   }
-  if (currentIdea) ideas.push(currentIdea);
+  flush();
 
-  // Only treat as actionable if we found 2+ numbered ideas
+  // Only treat as actionable if we found 2+ numbered ideas.
   if (ideas.length < 2) return null;
 
-  return {
-    ideas,
-    preamble: preambleLines.join('\n').trim(),
-    postscript: postscriptLines.join('\n').trim(),
-  };
+  return { ideas, preamble: preambleLines.join('\n').trim() };
 }
 
-// Render plain markdown (non-actionable responses)
+// Render lightweight markdown: bold, headings, horizontal rules, list items.
 function renderMarkdown(text: string) {
   return text.split('\n').map((line, i) => {
+    const trimmed = line.trim();
+
+    // Horizontal rule
+    if (/^(-{3,}|\*{3,}|_{3,})$/.test(trimmed)) {
+      return <div key={i} className="border-t border-border my-4" />;
+    }
+
+    // Heading (#, ##, ### ...)
+    const heading = trimmed.match(/^(#{1,6})\s+(.+)$/);
+    if (heading) {
+      return (
+        <span
+          key={i}
+          className="block text-foreground mt-4 mb-1 first:mt-0"
+          style={{ fontWeight: 500, fontSize: heading[1].length <= 1 ? '1.05rem' : '0.95rem', letterSpacing: '-0.01em' }}
+        >
+          {inlineMarkdown(heading[2], i)}
+        </span>
+      );
+    }
+
     const isListItem = line.trimStart().startsWith('- ');
     return (
       <span key={i} style={isListItem ? { display: 'block', paddingLeft: '1rem' } : undefined}>
@@ -277,27 +295,23 @@ export function Clio() {
       {response && (() => {
         const parsed = parseActionableIdeas(response);
         if (parsed) {
+          // If the user asked for a specific count and we got fewer, flag it.
+          const m = query.match(/\b(\d+)\s+(?:content\s+)?(?:ideas?|suggestions?|posts?)\b/i);
+          const requested = m ? parseInt(m[1], 10) : 0;
           return (
             <div className="pb-6 mb-10 animate-reveal-up">
               <span className="t-micro accent-dot mb-4 block">Clio</span>
               {parsed.preamble && (
-                <div className="t-body text-foreground leading-relaxed whitespace-pre-wrap mb-4">
+                <div className="t-body text-foreground leading-relaxed whitespace-pre-wrap mb-5">
                   {renderMarkdown(parsed.preamble)}
                 </div>
               )}
-              {(() => {
-                // If the user asked for a specific count and we got fewer ideas, surface a soft warning.
-                const m = query.match(/\b(\d+)\s+(?:content\s+)?(?:ideas?|suggestions?|posts?)\b/i);
-                const requested = m ? parseInt(m[1], 10) : 0;
-                if (requested > 0 && parsed.ideas.length < requested && parsed.ideas.length >= 2) {
-                  return (
-                    <div className="t-micro text-muted-foreground mb-3 inline-flex items-center gap-2 px-2.5 py-1 border border-border">
-                      Showing {parsed.ideas.length} of {requested} · ask again for the full set
-                    </div>
-                  );
-                }
-                return null;
-              })()}
+              {requested > 0 && parsed.ideas.length < requested && (
+                <div className="t-micro text-muted-foreground mb-3 inline-flex items-center gap-2 px-2.5 py-1 border border-border">
+                  Showing {parsed.ideas.length} of {requested} · ask again for the full set
+                </div>
+              )}
+              <div className="t-body text-muted-foreground mb-3">Tap an idea to start a script in Studio.</div>
               <div>
                 {parsed.ideas.map((idea, i) => (
                   <button
@@ -305,25 +319,31 @@ export function Clio() {
                     onClick={() => {
                       const params = new URLSearchParams({
                         idea: idea.title,
-                        reasoning: idea.description.substring(0, 200),
+                        reasoning: idea.body.slice(0, 600),
+                        autostart: '1',
                       });
                       navigate(`/studio/workflow?${params.toString()}`);
                     }}
-                    className="w-full text-left group"
+                    className="w-full text-left group block border-b border-border py-5"
                   >
-                    <div className="flex items-baseline gap-4 py-4 border-b border-border hover:bg-transparent transition-colors">
-                      <span className="t-micro font-bold text-foreground" style={{ minWidth: '1.5rem' }}>
+                    <div className="flex items-baseline gap-4">
+                      <span className="t-micro text-muted-foreground" style={{ minWidth: '1.5rem' }}>
                         {String(i + 1).padStart(2, '0')}
                       </span>
-                      <div className="flex-1">
-                        <span className="text-sm font-semibold text-foreground block group-hover:text-accent transition-colors">
+                      <div className="flex-1 min-w-0">
+                        <span
+                          className="block text-foreground group-hover:text-accent transition-colors"
+                          style={{ fontWeight: 500, fontSize: '0.95rem', letterSpacing: '-0.01em' }}
+                        >
                           {idea.title}
                         </span>
-                        {idea.description && (
-                          <span className="t-body block mt-0.5">{idea.description}</span>
+                        {idea.body && (
+                          <div className="t-body text-muted-foreground leading-relaxed whitespace-pre-wrap mt-1.5">
+                            {renderMarkdown(idea.body)}
+                          </div>
                         )}
                       </div>
-                      <span className="t-micro text-muted-foreground group-hover:text-accent transition-colors">
+                      <span className="t-micro text-muted-foreground group-hover:text-accent transition-colors whitespace-nowrap">
                         START →
                       </span>
                     </div>

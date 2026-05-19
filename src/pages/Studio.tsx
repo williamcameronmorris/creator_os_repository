@@ -21,6 +21,7 @@ export function Studio() {
   const [aiQuota, setAiQuota] = useState<AIQuotaInfo | null>(null);
   const [prefilledIdea, setPrefilledIdea] = useState<AIContentSuggestion | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
+  const [bootstrapping, setBootstrapping] = useState(() => searchParams.has('idea') && searchParams.has('autostart'));
 
   useEffect(() => {
     const loadQuota = async () => {
@@ -32,10 +33,14 @@ export function Studio() {
     loadQuota();
   }, []);
 
-  // Pre-load Daily Brief idea into Ideation stage instead of auto-advancing
+  // Handle an idea handed in via the URL. With ?autostart=1 (Clio's idea
+  // cards) we skip Ideation entirely — create the workflow and drop straight
+  // into Scripting. Without it (e.g. the 30-day challenge) we pre-fill the
+  // Ideation stage and let the user confirm.
   useEffect(() => {
     const ideaParam = searchParams.get('idea');
     if (!ideaParam) return;
+    const autostart = searchParams.get('autostart') === '1';
     const idea: AIContentSuggestion = {
       id: '',
       user_id: '',
@@ -49,7 +54,11 @@ export function Studio() {
       created_at: new Date().toISOString(),
     };
     setSearchParams({}, { replace: true });
-    setPrefilledIdea(idea);
+    if (autostart) {
+      handleIdeaSelected(idea).finally(() => setBootstrapping(false));
+    } else {
+      setPrefilledIdea(idea);
+    }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleIdeaSelected = async (idea: AIContentSuggestion) => {
@@ -115,6 +124,14 @@ export function Studio() {
       setCompletedStages([]);
     }, 3000);
   };
+
+  if (bootstrapping) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="w-1.5 h-1.5 bg-foreground animate-pulse" />
+      </div>
+    );
+  }
 
   if (showSuccess) {
     return (
