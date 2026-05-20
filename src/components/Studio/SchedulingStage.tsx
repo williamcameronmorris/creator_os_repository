@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Send, AlertTriangle, Image as ImageIcon, Sparkles, Clock } from 'lucide-react';
+import { Image as ImageIcon, Sparkles, Clock, AlertTriangle } from 'lucide-react';
 import { DateTimePicker } from '../DateTimePicker';
 
 interface TimeSlot {
@@ -59,7 +59,6 @@ export function SchedulingStage({ workflowId, contentType, onComplete }: Schedul
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    // Pull last 90 days of published posts with engagement data
     const ninetyDaysAgo = new Date();
     ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
 
@@ -74,12 +73,10 @@ export function SchedulingStage({ workflowId, contentType, onComplete }: Schedul
       .limit(50);
 
     if (!posts || posts.length === 0) {
-      // No data — fall back to generic best practices
       setTimeSlots(getDefaultTimeSlots());
       return;
     }
 
-    // Group by hour-of-day and compute avg engagement
     const hourBuckets: Record<number, { total: number; count: number }> = {};
     for (const post of posts) {
       const dateStr = post.published_date || post.scheduled_date;
@@ -99,7 +96,6 @@ export function SchedulingStage({ workflowId, contentType, onComplete }: Schedul
       return;
     }
 
-    // Build top 3 recommended slots (next 7 days at top hours)
     const now = new Date();
     const slots: TimeSlot[] = [];
     const usedHours = new Set<number>();
@@ -108,7 +104,6 @@ export function SchedulingStage({ workflowId, contentType, onComplete }: Schedul
       if (usedHours.has(hour)) continue;
       usedHours.add(hour);
 
-      // Find next occurrence of this hour (at least 1h from now)
       const candidate = new Date();
       candidate.setHours(hour, 0, 0, 0);
       if (candidate <= now) candidate.setDate(candidate.getDate() + 1);
@@ -168,7 +163,7 @@ export function SchedulingStage({ workflowId, contentType, onComplete }: Schedul
       .maybeSingle();
 
     if (error || !post) {
-      console.error("Error scheduling:", error);
+      console.error('Error scheduling:', error);
       setLoading(false);
       return;
     }
@@ -190,13 +185,15 @@ export function SchedulingStage({ workflowId, contentType, onComplete }: Schedul
   return (
     <div className="max-w-4xl mx-auto">
       <div className="mb-8">
-        <h2 className="text-2xl font-bold text-gray-900">Packaging & Scheduling</h2>
-        <p className="text-gray-500 text-sm">Finalize your post and pick a time slot.</p>
+        <h2 className="text-foreground" style={{ fontSize: '1.5rem', fontWeight: 500, letterSpacing: '-0.01em', lineHeight: 1.15 }}>
+          Packaging &amp; scheduling
+        </h2>
+        <p className="t-body">Finalize your post and pick a time slot.</p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <div className="space-y-6">
-          <div className="bg-gray-900 rounded-2xl overflow-hidden shadow-xl aspect-[9/16] relative flex items-center justify-center">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div>
+          <div className="bg-foreground overflow-hidden aspect-[9/16] relative flex items-center justify-center">
             {mediaUrl ? (
               contentType === 'reel' || contentType === 'tiktok' || mediaUrl.match(/\.(mp4|mov|webm)$/i) ? (
                 <video src={mediaUrl} controls className="w-full h-full object-cover" />
@@ -204,87 +201,76 @@ export function SchedulingStage({ workflowId, contentType, onComplete }: Schedul
                 <img src={mediaUrl} alt="Preview" className="w-full h-full object-cover" />
               )
             ) : (
-              <div className="text-gray-500 flex flex-col items-center">
-                <ImageIcon className="w-12 h-12 mb-2 opacity-50" />
-                <p>No media attached</p>
+              <div className="text-background/40 flex flex-col items-center">
+                <ImageIcon className="w-10 h-10 mb-2" />
+                <p className="text-sm">No media attached</p>
               </div>
             )}
 
             {!mediaUrl && (
-              <div className="absolute inset-0 bg-black/50 flex items-center justify-center p-6 text-center">
-                <div className="bg-white/10 backdrop-blur-md border border-white/20 p-4 rounded-xl text-white text-sm">
-                  <AlertTriangle className="w-6 h-6 text-yellow-400 mx-auto mb-2" />
-                  Warning: No media file found.
-                </div>
+              <div className="absolute inset-x-4 bottom-4 flex items-start gap-2 p-3 bg-background border border-border text-xs text-foreground">
+                <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                <p>Warning: no media file found.</p>
               </div>
             )}
           </div>
         </div>
 
-        <div className="space-y-6">
-          <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
-            <h3 className="font-bold text-gray-900 mb-4">Final Polish</h3>
+        <div className="bg-card border border-border p-6 flex flex-col">
+          <h3 className="t-micro text-foreground mb-4">Final polish</h3>
 
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">Caption</label>
-                <textarea
-                  value={caption}
-                  onChange={(e) => setCaption(e.target.value)}
-                  className="w-full p-4 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none min-h-[200px] text-sm"
-                  placeholder="Write your final caption..."
-                />
-              </div>
-
-              {timeSlots.length > 0 && (
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-1.5">
-                    <Sparkles className="w-4 h-4 text-blue-500" />
-                    {timeSlots[0].score > 0 ? 'Optimal Times (based on your data)' : 'Suggested Times'}
-                  </label>
-                  <div className="space-y-2">
-                    {timeSlots.map((slot, i) => (
-                      <button
-                        key={i}
-                        onClick={() => setScheduledDate(slot.datetime)}
-                        className={`w-full text-left p-3 rounded-xl border transition-all ${
-                          scheduledDate === slot.datetime
-                            ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500'
-                            : 'border-gray-200 hover:border-blue-300 hover:bg-violet-50'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2">
-                          <Clock className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                          <div>
-                            <p className="text-sm font-medium text-gray-800">{slot.label}</p>
-                            <p className="text-xs text-gray-500">{slot.reason}</p>
-                          </div>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">Or pick a custom time</label>
-                <DateTimePicker
-                  value={scheduledDate}
-                  onChange={(v) => setScheduledDate(v)}
-                />
-              </div>
+          <div className="space-y-5">
+            <div>
+              <label className="block t-micro text-muted-foreground mb-2">Caption</label>
+              <textarea
+                value={caption}
+                onChange={(e) => setCaption(e.target.value)}
+                className="w-full p-3 bg-background border border-border focus:outline-none focus:border-foreground text-sm text-foreground placeholder:text-muted-foreground min-h-[180px] resize-y"
+                placeholder="Write your final caption…"
+              />
             </div>
 
-            <div className="mt-8 pt-6 border-t border-gray-200">
-              <button
-                onClick={handleSchedule}
-                disabled={loading || !scheduledDate}
-                className="w-full py-4 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl transition-all shadow-lg hover:shadow-blue-500/25 flex items-center justify-center gap-2"
-              >
-                {loading ? 'Scheduling...' : <><Send className="w-5 h-5" /> Confirm Schedule</>}
-              </button>
+            {timeSlots.length > 0 && (
+              <div>
+                <label className="t-micro text-muted-foreground mb-2 flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-accent" />
+                  {timeSlots[0].score > 0 ? 'Optimal times (based on your data)' : 'Suggested times'}
+                </label>
+                <div className="divide-y divide-border border border-border">
+                  {timeSlots.map((slot, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setScheduledDate(slot.datetime)}
+                      className={`w-full text-left p-3 transition-colors flex items-center gap-3 ${
+                        scheduledDate === slot.datetime
+                          ? 'bg-foreground/5'
+                          : 'hover:bg-foreground/5'
+                      }`}
+                    >
+                      <Clock className={`w-4 h-4 flex-shrink-0 ${scheduledDate === slot.datetime ? 'text-accent' : 'text-muted-foreground'}`} />
+                      <div className="min-w-0">
+                        <p className={`text-sm ${scheduledDate === slot.datetime ? 'text-accent' : 'text-foreground'}`} style={{ fontWeight: 500 }}>{slot.label}</p>
+                        <p className="t-body">{slot.reason}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div>
+              <label className="block t-micro text-muted-foreground mb-2">Or pick a custom time</label>
+              <DateTimePicker value={scheduledDate} onChange={(v) => setScheduledDate(v)} />
             </div>
           </div>
+
+          <button
+            onClick={handleSchedule}
+            disabled={loading || !scheduledDate}
+            className="btn-ie btn-ie-solid w-full mt-6 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <span className="btn-ie-text">{loading ? 'Scheduling…' : 'Confirm schedule'}</span>
+          </button>
         </div>
       </div>
     </div>

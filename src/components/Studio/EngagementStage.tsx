@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { MessageCircle, Share2, Pin, Heart, CheckCircle2, ExternalLink, Clock, Eye, ThumbsUp, BarChart2 } from 'lucide-react';
+import { MessageCircle, Share2, Pin, ExternalLink, Clock } from 'lucide-react';
 
 interface LiveMetrics {
   views: number;
@@ -28,7 +28,7 @@ interface EngagementStageProps {
   onComplete: () => void;
 }
 
-export function EngagementStage({ workflowId, contentType, onComplete }: EngagementStageProps) {
+export function EngagementStage({ workflowId, contentType: _contentType, onComplete }: EngagementStageProps) {
   const [loading, setLoading] = useState(false);
   const [postUrl, setPostUrl] = useState<string | null>(null);
   const [platform, setPlatform] = useState<string>('instagram');
@@ -41,7 +41,7 @@ export function EngagementStage({ workflowId, contentType, onComplete }: Engagem
         return [
           { id: 'watch', label: 'Watch full video (verify upload quality)', icon: <Share2 className="w-4 h-4" /> },
           { id: 'pin', label: 'Pin a comment with a question/CTA', icon: <Pin className="w-4 h-4" /> },
-          { id: 'community', label: 'Share to Community Tab', icon: <MessageCircle className="w-4 h-4" /> },
+          { id: 'community', label: 'Share to Community tab', icon: <MessageCircle className="w-4 h-4" /> },
           { id: 'reply', label: 'Reply to first 5 comments', icon: <MessageCircle className="w-4 h-4" /> }
         ];
       case 'tiktok':
@@ -98,7 +98,6 @@ export function EngagementStage({ workflowId, contentType, onComplete }: Engagem
         setChecklist(defaults);
       }
 
-      // Pull real post data if available
       if (workflow.published_post_id) {
         const { data: post } = await supabase
           .from('content_posts')
@@ -153,77 +152,91 @@ export function EngagementStage({ workflowId, contentType, onComplete }: Engagem
     setLoading(false);
   };
 
-  const progress = Math.round((checklist.filter(i => i.checked).length / checklist.length) * 100);
+  const checkedCount = checklist.filter(i => i.checked).length;
+  const progress = checklist.length > 0 ? Math.round((checkedCount / checklist.length) * 100) : 0;
+  const allDone = checklist.length > 0 && checkedCount === checklist.length;
 
   return (
     <div className="max-w-3xl mx-auto">
-      <div className="text-center mb-10">
-        <div className="inline-flex items-center justify-center p-3 bg-amber-100 text-amber-600 rounded-full mb-4 ring-4 ring-amber-50">
-          <Clock className="w-8 h-8" />
+      <div className="mb-10">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-10 h-10 border border-border flex items-center justify-center">
+            <Clock className="w-5 h-5 text-foreground" />
+          </div>
+          <div>
+            <h2 className="text-foreground" style={{ fontSize: '1.5rem', fontWeight: 500, letterSpacing: '-0.01em', lineHeight: 1.15 }}>
+              The Golden Hour
+            </h2>
+            <p className="t-body">Algorithms boost content that gets engagement in the first 60 minutes. Complete this checklist to maximize reach.</p>
+          </div>
         </div>
-        <h2 className="text-2xl font-bold text-gray-900">The Golden Hour</h2>
-        <p className="text-gray-500 max-w-md mx-auto mt-2">
-          Algorithms boost content that gets engagement in the first 60 minutes. Complete this checklist to maximize reach.
-        </p>
       </div>
 
       {liveMetrics && (liveMetrics.views > 0 || liveMetrics.likes > 0) && (
         <div className="grid grid-cols-3 gap-3 mb-6">
-          <div className="bg-white border border-gray-200 rounded-xl p-4 text-center">
-            <Eye className="w-4 h-4 text-gray-400 mx-auto mb-1" />
-            <p className="text-xl font-bold text-gray-900">{liveMetrics.views.toLocaleString()}</p>
-            <p className="text-xs text-gray-400">Views</p>
-          </div>
-          <div className="bg-white border border-gray-200 rounded-xl p-4 text-center">
-            <ThumbsUp className="w-4 h-4 text-gray-400 mx-auto mb-1" />
-            <p className="text-xl font-bold text-gray-900">{liveMetrics.likes.toLocaleString()}</p>
-            <p className="text-xs text-gray-400">Likes</p>
-          </div>
-          <div className="bg-white border border-gray-200 rounded-xl p-4 text-center">
-            <BarChart2 className="w-4 h-4 text-gray-400 mx-auto mb-1" />
-            <p className="text-xl font-bold text-gray-900">{liveMetrics.engagementRate.toFixed(1)}%</p>
-            <p className="text-xs text-gray-400">Engagement</p>
-          </div>
+          {[
+            { label: 'Views', value: liveMetrics.views.toLocaleString() },
+            { label: 'Likes', value: liveMetrics.likes.toLocaleString() },
+            { label: 'Engagement', value: `${liveMetrics.engagementRate.toFixed(1)}%` },
+          ].map((m) => (
+            <div key={m.label} className="bg-card border border-border p-4 text-center">
+              <p className="t-micro text-muted-foreground mb-1">{m.label}</p>
+              <p className="text-foreground" style={{ fontSize: '1.25rem', fontWeight: 500, letterSpacing: '-0.01em' }}>{m.value}</p>
+            </div>
+          ))}
         </div>
       )}
 
-      <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
-        <div className="h-2 bg-gray-100">
-          <div className="h-full bg-amber-500 transition-all duration-500 ease-out" style={{ width: `${progress}%` }} />
+      <div className="bg-card border border-border">
+        <div className="h-px bg-foreground/10 relative">
+          <div className="absolute inset-y-0 left-0 bg-accent transition-all duration-500" style={{ width: `${progress}%` }} />
         </div>
 
-        <div className="p-8">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="font-bold text-lg text-gray-900 flex items-center gap-2">
-              <span className="capitalize">{platform}</span> Checklist
+        <div className="p-6 sm:p-8">
+          <div className="flex items-center justify-between mb-5">
+            <h3 className="t-micro text-foreground">
+              <span className="capitalize">{platform}</span> checklist
             </h3>
             {postUrl && (
-              <a href={postUrl} target="_blank" rel="noreferrer" className="text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1">
-                Go to Post <ExternalLink className="w-3 h-3" />
+              <a href={postUrl} target="_blank" rel="noreferrer" className="t-micro text-accent hover:underline inline-flex items-center gap-1">
+                Go to post <ExternalLink className="w-3 h-3" />
               </a>
             )}
           </div>
 
-          <div className="space-y-3">
+          <div className="divide-y divide-border border-t border-b border-border">
             {checklist.map((item) => (
-              <label key={item.id} className={`flex items-center p-4 rounded-xl border-2 transition-all cursor-pointer group ${item.checked ? 'border-emerald-500 bg-emerald-50/50' : 'border-slate-100 hover:border-amber-200 hover:bg-amber-50/30'}`}>
-                <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center mr-4 transition-colors ${item.checked ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-gray-300 group-hover:border-amber-400'}`}>
-                  {item.checked && <CheckCircle2 className="w-4 h-4" />}
+              <label key={item.id} className="flex items-center gap-3 py-3 cursor-pointer group">
+                <input
+                  type="checkbox"
+                  className="hidden"
+                  checked={item.checked}
+                  onChange={() => toggleItem(item.id)}
+                />
+                <div className={`w-5 h-5 border flex items-center justify-center transition-colors ${
+                  item.checked ? 'border-accent bg-accent' : 'border-border group-hover:border-foreground'
+                }`}>
+                  {item.checked && (
+                    <svg viewBox="0 0 16 16" className="w-3 h-3 text-accent-foreground" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <path d="M3 8.5L6.5 12L13 4.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  )}
                 </div>
-                <input type="checkbox" className="hidden" checked={item.checked} onChange={() => toggleItem(item.id)} />
-                <div className="flex-1 flex items-center gap-3">
-                  <div className={`p-2 rounded-lg ${item.checked ? 'bg-emerald-100 text-emerald-600' : 'bg-gray-100 text-gray-500'}`}>
-                    {item.icon}
-                  </div>
-                  <span className={`font-medium ${item.checked ? 'text-emerald-900' : 'text-gray-700'}`}>{item.label}</span>
+                <div className={`w-7 h-7 border border-border flex items-center justify-center flex-shrink-0 ${item.checked ? 'text-accent border-accent' : 'text-foreground'}`}>
+                  {item.icon}
                 </div>
+                <span className={`text-sm ${item.checked ? 'text-muted-foreground line-through' : 'text-foreground'}`}>{item.label}</span>
               </label>
             ))}
           </div>
 
-          <div className="mt-8 pt-6 border-t border-slate-100 flex justify-end">
-            <button onClick={handleFinish} disabled={loading} className="px-8 py-3 bg-violet-600 text-white rounded-xl font-medium hover:bg-violet-700 transition-shadow shadow-lg flex items-center gap-2">
-              {progress === 100 ? <><Heart className="w-4 h-4 text-red-400 fill-red-400" /> Golden Hour Complete</> : "Finish Engagement"}
+          <div className="mt-6 flex justify-end">
+            <button
+              onClick={handleFinish}
+              disabled={loading}
+              className="btn-ie btn-ie-solid disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <span className="btn-ie-text">{allDone ? 'Golden hour complete' : 'Finish engagement'}</span>
             </button>
           </div>
         </div>

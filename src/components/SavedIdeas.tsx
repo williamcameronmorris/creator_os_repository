@@ -211,17 +211,19 @@ export function SavedIdeas() {
 
   return (
     <div className="max-w-6xl mx-auto">
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex items-end justify-between mb-8 gap-4 flex-wrap">
         <div>
-          <h1 className="text-3xl font-black uppercase tracking-tight text-foreground mb-2">Saved Content Ideas</h1>
-          <p className="text-muted-foreground text-xs font-mono uppercase tracking-[0.08em]">Store and organize your content inspiration</p>
+          <h1 className="t-display text-foreground mb-2">
+            Saved <em style={{ fontStyle: 'normal', color: 'var(--accent)' }}>ideas.</em>
+          </h1>
+          <p className="t-micro text-muted-foreground">Store and organize your content inspiration</p>
         </div>
         <button
           onClick={() => setShowAddModal(true)}
-          className="flex items-center gap-2 font-mono text-[10px] font-bold tracking-[0.08em] uppercase border border-foreground bg-foreground text-background px-4 py-2.5 hover:bg-background hover:text-foreground transition-colors"
+          className="inline-flex items-center gap-2 font-mono text-[10px] font-medium tracking-[0.08em] uppercase border border-foreground bg-foreground text-background px-4 py-2.5 hover:bg-background hover:text-foreground transition-colors"
         >
-          <Plus className="w-5 h-5" />
-          Save New Idea
+          <Plus className="w-4 h-4" />
+          Save new idea
         </button>
       </div>
 
@@ -262,36 +264,33 @@ export function SavedIdeas() {
       </div>
 
       {loading ? (
-        <div className="text-center py-12">
-          <div className="inline-block w-8 h-8 border-4 border-violet-600 border-t-transparent rounded-full animate-spin"></div>
+        <div className="flex items-center justify-center py-16">
+          <div className="w-1.5 h-1.5 bg-foreground animate-pulse" />
         </div>
       ) : filteredIdeas.length === 0 ? (
         <div className="text-center py-16 px-4">
           <div className="flex justify-center mb-6">
-            <div className="relative">
-              <div className="absolute inset-0 bg-gradient-to-r from-violet-500 to-fuchsia-500 rounded-full blur-2xl opacity-20 animate-pulse"></div>
-              <div className="relative flex items-center justify-center w-24 h-24 bg-gradient-to-br from-violet-500/20 to-fuchsia-500/20 rounded-full border-2 border-violet-500/30">
-                <Bookmark className="w-12 h-12 text-violet-500" />
-              </div>
+            <div className="w-16 h-16 border border-border flex items-center justify-center">
+              <Bookmark className="w-7 h-7 text-foreground" />
             </div>
           </div>
-          <h3 className="text-2xl font-bold text-foreground mb-3">
-            {showArchived ? 'No Archived Ideas' : searchQuery || filterPlatform !== 'all' ? 'No Ideas Found' : 'Save Content Ideas for Later'}
+          <h3 className="text-foreground mb-3" style={{ fontSize: '1.25rem', fontWeight: 500, letterSpacing: '-0.01em' }}>
+            {showArchived ? 'No archived ideas' : searchQuery || filterPlatform !== 'all' ? 'No ideas found' : 'Save content ideas for later'}
           </h3>
-          <p className="text-muted-foreground mb-8 max-w-md mx-auto">
+          <p className="t-body mb-8 max-w-md mx-auto">
             {showArchived
-              ? 'You haven\'t archived any content ideas yet.'
+              ? "You haven't archived any content ideas yet."
               : searchQuery || filterPlatform !== 'all'
               ? 'Try adjusting your search or filters.'
-              : 'Capture inspiration and plan your content strategy. Save ideas when they strike and come back to them when you\'re ready to create.'}
+              : "Capture inspiration and plan your content strategy. Save ideas when they strike and come back to them when you're ready to create."}
           </p>
           {!showArchived && !searchQuery && filterPlatform === 'all' && (
             <button
               onClick={() => setShowAddModal(true)}
-              className="inline-flex items-center gap-2 font-mono text-[10px] font-bold tracking-[0.08em] uppercase border border-foreground bg-foreground text-background px-4 py-2.5 hover:bg-background hover:text-foreground transition-colors"
+              className="inline-flex items-center gap-2 font-mono text-[10px] font-medium tracking-[0.08em] uppercase border border-foreground bg-foreground text-background px-4 py-2.5 hover:bg-background hover:text-foreground transition-colors"
             >
-              <Lightbulb className="w-5 h-5" />
-              Save Your First Idea
+              <Lightbulb className="w-4 h-4" />
+              Save your first idea
             </button>
           )}
         </div>
@@ -304,31 +303,27 @@ export function SavedIdeas() {
             >
               <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center gap-2">
-                  <div className="flex items-center justify-center w-10 h-10 bg-gradient-to-br from-violet-500/20 to-fuchsia-500/20 rounded-lg">
+                  <div className="flex items-center justify-center w-10 h-10 border border-border text-foreground">
                     <PlatformIcon platform={idea.platform} />
                   </div>
                   <div>
-                    <div className="text-xs font-medium text-muted-foreground capitalize">
-                      {idea.platform}
-                    </div>
-                    <div className="text-xs text-muted-foreground capitalize">
-                      {idea.content_type}
-                    </div>
+                    <div className="text-xs text-muted-foreground capitalize">{idea.platform}</div>
+                    <div className="text-xs text-muted-foreground capitalize">{idea.content_type}</div>
                   </div>
                 </div>
                 <button
                   onClick={() => toggleFavorite(idea)}
                   className={`p-1.5 transition-colors border ${
                     idea.is_favorite
-                      ? 'border-yellow-500 text-yellow-500 bg-yellow-500/10'
-                      : 'border-border text-muted-foreground hover:text-yellow-500 hover:border-yellow-500'
+                      ? 'border-accent text-accent bg-accent/10'
+                      : 'border-border text-muted-foreground hover:text-accent hover:border-accent'
                   }`}
                 >
                   <Star className={`w-4 h-4 ${idea.is_favorite ? 'fill-current' : ''}`} />
                 </button>
               </div>
 
-              <h3 className="text-lg font-bold text-foreground mb-2 line-clamp-2">
+              <h3 className="text-foreground mb-2 line-clamp-2" style={{ fontSize: '1rem', fontWeight: 500, letterSpacing: '-0.01em' }}>
                 {idea.title}
               </h3>
 
@@ -396,8 +391,8 @@ export function SavedIdeas() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-card border border-border max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="sticky top-0 bg-card border-b border-border p-6 flex items-center justify-between">
-              <h2 className="text-2xl font-bold text-foreground">
-                {editingIdea ? 'Edit Content Idea' : 'Save New Content Idea'}
+              <h2 className="text-foreground" style={{ fontSize: '1.25rem', fontWeight: 500, letterSpacing: '-0.01em' }}>
+                {editingIdea ? 'Edit content idea' : 'Save new content idea'}
               </h2>
               <button
                 onClick={resetForm}
@@ -489,7 +484,7 @@ export function SavedIdeas() {
                   value={formData.tags}
                   onChange={(e) => setFormData({ ...formData, tags: e.target.value })}
                   placeholder="e.g., tutorial, lifestyle, trending"
-                  className="w-full px-4 py-2.5 bg-secondary border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500"
+                  className="w-full px-4 py-2.5 bg-background border border-border focus:outline-none focus:border-foreground"
                 />
               </div>
 
@@ -502,7 +497,7 @@ export function SavedIdeas() {
                   value={formData.inspiration_source}
                   onChange={(e) => setFormData({ ...formData, inspiration_source: e.target.value })}
                   placeholder="e.g., @username, trending topic, personal experience"
-                  className="w-full px-4 py-2.5 bg-secondary border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500"
+                  className="w-full px-4 py-2.5 bg-background border border-border focus:outline-none focus:border-foreground"
                 />
               </div>
 
@@ -515,7 +510,7 @@ export function SavedIdeas() {
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                   placeholder="Additional thoughts, reminders, or details..."
                   rows={3}
-                  className="w-full px-4 py-2.5 bg-secondary border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500"
+                  className="w-full px-4 py-2.5 bg-background border border-border focus:outline-none focus:border-foreground"
                 />
               </div>
 
@@ -525,7 +520,7 @@ export function SavedIdeas() {
                   id="is_favorite"
                   checked={formData.is_favorite}
                   onChange={(e) => setFormData({ ...formData, is_favorite: e.target.checked })}
-                  className="w-4 h-4 text-violet-600 rounded focus:ring-2 focus:ring-violet-500"
+                  className="w-4 h-4 accent-foreground"
                 />
                 <label htmlFor="is_favorite" className="text-sm text-foreground">
                   Mark as favorite

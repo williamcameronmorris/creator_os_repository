@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { TrendingUp, ArrowUp, ArrowDown, Lightbulb, CheckCircle2, Save, Bot, Wand2, AlertCircle } from 'lucide-react';
+import { ArrowUp, ArrowDown, Lightbulb, CheckCircle2, Save, Bot, Wand2, AlertCircle } from 'lucide-react';
 
 interface AnalysisStageProps {
   workflowId: string;
@@ -46,7 +46,6 @@ export function AnalysisStage({ workflowId, onComplete }: AnalysisStageProps) {
     setPlatform(plat);
     setContentType(ctype);
 
-    // Restore saved analysis if exists
     if (workflow.analysis_notes) {
       try {
         const saved = typeof workflow.analysis_notes === 'string'
@@ -60,14 +59,12 @@ export function AnalysisStage({ workflowId, onComplete }: AnalysisStageProps) {
     if (workflow.published_post_id) {
       setPostId(workflow.published_post_id);
 
-      // Fetch real post metrics
       const { data: post } = await supabase
         .from('content_posts')
         .select('views, likes, comments, engagement_rate, content_type')
         .eq('id', workflow.published_post_id)
         .maybeSingle();
 
-      // Fetch historical avg for same platform + content type (last 90 days, excluding this post)
       const ninetyDaysAgo = new Date();
       ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
 
@@ -180,125 +177,126 @@ export function AnalysisStage({ workflowId, onComplete }: AnalysisStageProps) {
 
   const hasAvg = metrics.avgViews > 0;
   const overperformed = metrics.views >= metrics.avgViews;
-  const performanceColor = !hasAvg ? 'text-gray-500' : overperformed ? 'text-emerald-600' : 'text-amber-600';
-  const performanceIcon = overperformed ? <ArrowUp className="w-4 h-4" /> : <ArrowDown className="w-4 h-4" />;
+  const PerfArrow = overperformed ? ArrowUp : ArrowDown;
+  const deltaPct = hasAvg && metrics.avgViews > 0
+    ? Math.abs(Math.round(((metrics.views - metrics.avgViews) / metrics.avgViews) * 100))
+    : 0;
 
   return (
     <div className="max-w-3xl mx-auto">
-      <div className="text-center mb-10">
-        <h2 className="text-2xl font-bold text-gray-900">The Retro</h2>
-        <p className="text-gray-500 text-sm mt-1">
-          Review performance and capture one key learning to improve your next video.
-        </p>
+      <div className="mb-8">
+        <h2 className="text-foreground" style={{ fontSize: '1.5rem', fontWeight: 500, letterSpacing: '-0.01em', lineHeight: 1.15 }}>
+          The Retro
+        </h2>
+        <p className="t-body">Review performance and capture one key learning to improve your next video.</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-        <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm text-center">
-          <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Views</p>
-          <div className="flex items-center justify-center gap-2">
-            <span className="text-3xl font-bold text-gray-900">{metrics.views.toLocaleString()}</span>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-8">
+        <div className="bg-card border border-border p-5">
+          <p className="t-micro text-muted-foreground mb-2">Views</p>
+          <div className="flex items-baseline gap-2">
+            <span className="text-foreground" style={{ fontSize: '1.75rem', fontWeight: 500, letterSpacing: '-0.02em' }}>
+              {metrics.views.toLocaleString()}
+            </span>
             {hasAvg && metrics.views > 0 && (
-              <div className={`flex items-center text-xs font-bold ${performanceColor} bg-violet-50 px-2 py-1 rounded-lg`}>
-                {performanceIcon}
-                {Math.abs(Math.round(((metrics.views - metrics.avgViews) / metrics.avgViews) * 100))}%
-              </div>
+              <span className={`inline-flex items-center gap-0.5 t-micro ${overperformed ? 'text-accent' : 'text-muted-foreground'}`}>
+                <PerfArrow className="w-3 h-3" />
+                {deltaPct}%
+              </span>
             )}
           </div>
-          <p className="text-xs text-gray-400 mt-2">
+          <p className="t-body mt-2">
             {hasAvg ? `vs. your avg (${metrics.avgViews.toLocaleString()})` : 'No comparison data yet'}
           </p>
         </div>
 
-        <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm text-center">
-          <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Engagement</p>
-          <div className="text-3xl font-bold text-gray-900">{metrics.engagementRate.toFixed(1)}%</div>
-          <p className="text-xs text-gray-400 mt-2">
+        <div className="bg-card border border-border p-5">
+          <p className="t-micro text-muted-foreground mb-2">Engagement</p>
+          <span className="text-foreground block" style={{ fontSize: '1.75rem', fontWeight: 500, letterSpacing: '-0.02em' }}>
+            {metrics.engagementRate.toFixed(1)}%
+          </span>
+          <p className="t-body mt-2">
             {metrics.likes.toLocaleString()} likes · {metrics.comments.toLocaleString()} comments
           </p>
         </div>
 
-        <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm text-center flex flex-col items-center justify-center">
-          <div className={`w-10 h-10 rounded-full flex items-center justify-center mb-2 ${hasAvg && metrics.views > 0 ? (overperformed ? 'bg-emerald-50' : 'bg-amber-50') : 'bg-blue-50'}`}>
-            <TrendingUp className={`w-5 h-5 ${hasAvg && metrics.views > 0 ? (overperformed ? 'text-emerald-600' : 'text-amber-600') : 'text-blue-600'}`} />
-          </div>
-          <p className="text-sm font-medium text-gray-600">
+        <div className="bg-card border border-border p-5 flex flex-col justify-between">
+          <p className="t-micro text-muted-foreground mb-2">Verdict</p>
+          <p className="text-sm text-foreground" style={{ fontWeight: 500 }}>
             {!metrics.hasRealData
               ? 'Metrics sync after publish'
               : !hasAvg
                 ? 'First post — no baseline yet'
                 : overperformed
-                  ? 'Outperformed your avg!'
-                  : 'Below your avg'}
+                  ? 'Outperformed your average'
+                  : 'Below your average'}
           </p>
         </div>
       </div>
 
-      <div className="bg-violet-50 border border-gray-200 rounded-2xl p-8">
-        <div className="flex items-start gap-4 mb-6">
-          <div className="p-3 bg-yellow-100 rounded-xl text-yellow-700">
-            <Lightbulb className="w-6 h-6" />
+      <div className="bg-card border border-border p-6 sm:p-8">
+        <div className="flex items-start gap-3 mb-6">
+          <div className="w-10 h-10 border border-border flex items-center justify-center flex-shrink-0">
+            <Lightbulb className="w-5 h-5 text-foreground" />
           </div>
           <div className="flex-1">
-            <h3 className="text-lg font-bold text-gray-900">What did we learn?</h3>
-            <p className="text-gray-500 text-sm">
-              Don't just look at numbers. Why did this perform the way it did?
-            </p>
+            <h3 className="text-foreground" style={{ fontSize: '1.0625rem', fontWeight: 500, letterSpacing: '-0.01em' }}>
+              What did we learn?
+            </h3>
+            <p className="t-body">Don't just look at numbers. Why did this perform the way it did?</p>
           </div>
           <button
             onClick={handleGenerateAnalysis}
             disabled={generating || !postId}
-            className="flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-700 font-medium disabled:opacity-50 flex-shrink-0"
+            className="t-micro text-accent hover:underline inline-flex items-center gap-1.5 flex-shrink-0 disabled:opacity-50 disabled:no-underline disabled:cursor-not-allowed"
             title={!postId ? 'No published post linked' : 'Generate AI analysis'}
           >
-            {generating ? <Wand2 className="w-4 h-4 animate-spin" /> : <Bot className="w-4 h-4" />}
-            {generating ? 'Analyzing...' : 'AI Analysis'}
+            {generating ? <Wand2 className="w-3.5 h-3.5 animate-spin" /> : <Bot className="w-3.5 h-3.5" />}
+            {generating ? 'Analyzing…' : 'AI analysis'}
           </button>
         </div>
 
-        <div className="space-y-6">
+        <div className="space-y-5">
           {aiError && (
-            <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
+            <div className="flex items-start gap-2 p-3 border border-destructive text-sm text-destructive bg-destructive/5">
               <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
               {aiError}
             </div>
           )}
+
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              Key Takeaway (The "Insight")
-            </label>
+            <label className="block t-micro text-muted-foreground mb-2">Key takeaway (the "insight")</label>
             <textarea
               value={insight}
               onChange={(e) => setInsight(e.target.value)}
-              placeholder="e.g. The text overlay hook worked better than just talking..."
-              className="w-full p-4 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none bg-white min-h-[100px]"
+              placeholder='e.g. The text overlay hook worked better than just talking…'
+              className="w-full p-3 bg-background border border-border focus:outline-none focus:border-foreground text-sm text-foreground placeholder:text-muted-foreground min-h-[100px] resize-y"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              Next Video Idea (Optional)
-            </label>
+            <label className="block t-micro text-muted-foreground mb-2">Next video idea (optional)</label>
             <input
               type="text"
               value={nextIdea}
               onChange={(e) => setNextIdea(e.target.value)}
-              placeholder="e.g. Try the same hook format on a different topic..."
-              className="w-full p-4 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+              placeholder="e.g. Try the same hook format on a different topic…"
+              className="w-full p-3 bg-background border border-border focus:outline-none focus:border-foreground text-sm text-foreground placeholder:text-muted-foreground"
             />
-            <p className="text-xs text-gray-400 mt-2 flex items-center gap-1">
-              <CheckCircle2 className="w-3 h-3" />
+            <p className="t-body mt-2 inline-flex items-center gap-1.5">
+              <CheckCircle2 className="w-3 h-3 text-accent" />
               This will automatically be added to your Saved Ideas.
             </p>
           </div>
 
-          <div className="pt-4 flex justify-end">
+          <div className="flex justify-end pt-2">
             <button
               onClick={handleSave}
               disabled={loading || !insight}
-              className="px-8 py-3 bg-violet-600 text-white rounded-xl font-medium hover:bg-violet-700 transition-all shadow-lg flex items-center gap-2 disabled:opacity-50"
+              className="btn-ie btn-ie-solid inline-flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              {loading ? 'Saving...' : 'Complete Workflow'}
-              <Save className="w-4 h-4" />
+              <span className="btn-ie-text">{loading ? 'Saving…' : 'Complete workflow'}</span>
+              <Save className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>

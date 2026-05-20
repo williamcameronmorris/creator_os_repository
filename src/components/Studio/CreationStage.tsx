@@ -24,8 +24,8 @@ export function CreationStage({ workflowId, contentType, onComplete, onSkip }: C
           { id: 'orientation', label: 'Vertical (9:16) format', checked: false }
         ]
       : [
-          { id: 'res', label: '4K / 1080p Resolution', checked: false },
-          { id: 'audio', label: 'Mic check / Audio levels', checked: false },
+          { id: 'res', label: '4K / 1080p resolution', checked: false },
+          { id: 'audio', label: 'Mic check / audio levels', checked: false },
           { id: 'fps', label: 'Frame rate set (24/30/60)', checked: false },
           { id: 'orientation', label: 'Horizontal (16:9) format', checked: false }
         ]
@@ -70,77 +70,76 @@ export function CreationStage({ workflowId, contentType, onComplete, onSkip }: C
     ));
   };
 
+  const FormatIcon = isMobileFormat ? Smartphone : Video;
+
   return (
     <div className="max-w-4xl mx-auto">
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex items-start justify-between mb-8 gap-4">
         <div className="flex items-center gap-3">
-          <div className={`p-3 rounded-xl ${isMobileFormat ? 'bg-pink-100 text-pink-600' : 'bg-blue-100 text-blue-600'}`}>
-            {isMobileFormat ? <Smartphone className="w-6 h-6" /> : <Video className="w-6 h-6" />}
+          <div className="w-10 h-10 border border-border flex items-center justify-center flex-shrink-0">
+            <FormatIcon className="w-5 h-5 text-foreground" />
           </div>
           <div>
-            <h2 className="text-2xl font-bold text-gray-900">Production</h2>
-            <p className="text-gray-500 text-sm">
-              {isMobileFormat ? 'Mobile-first setup' : 'Professional setup'}
-            </p>
+            <h2 className="text-foreground" style={{ fontSize: '1.5rem', fontWeight: 500, letterSpacing: '-0.01em', lineHeight: 1.15 }}>
+              Production
+            </h2>
+            <p className="t-body">{isMobileFormat ? 'Mobile-first setup.' : 'Professional setup.'}</p>
           </div>
         </div>
-
-        <button onClick={onSkip} className="text-gray-400 hover:text-gray-600 text-sm">
+        <button onClick={onSkip} className="t-micro text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap">
           Skip this step
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <div className={`border-2 border-dashed rounded-2xl flex flex-col items-center justify-center p-8 transition-colors ${
-          mediaUrl ? 'border-green-300 bg-green-50' : 'border-gray-300 bg-violet-50 hover:border-blue-400'
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className={`border border-dashed flex flex-col items-center justify-center p-8 min-h-[280px] transition-colors ${
+          mediaUrl ? 'border-accent bg-card' : 'border-border bg-card hover:border-foreground/60'
         }`}>
           {mediaUrl ? (
             <div className="text-center">
-              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <CheckCircle2 className="w-8 h-8 text-green-600" />
+              <div className="w-12 h-12 border border-accent flex items-center justify-center mx-auto mb-4">
+                <CheckCircle2 className="w-5 h-5 text-accent" />
               </div>
-              <p className="text-green-800 font-medium mb-4">Media Uploaded</p>
-              <a href={mediaUrl} target="_blank" rel="noreferrer" className="text-xs text-green-600 hover:underline block mb-4">
-                View File
-              </a>
-              <label className="cursor-pointer text-sm font-semibold text-gray-600 bg-white px-4 py-2 rounded-lg border border-gray-200 hover:bg-violet-50 shadow-sm">
-                Replace File
+              <p className="text-foreground mb-1" style={{ fontWeight: 500 }}>Media uploaded</p>
+              <a href={mediaUrl} target="_blank" rel="noreferrer" className="t-micro text-accent hover:underline block mb-4">View file</a>
+              <label className="btn-ie inline-block cursor-pointer">
+                <span className="btn-ie-text">Replace file</span>
                 <input type="file" className="hidden" accept="video/*,image/*" onChange={handleUpload} />
               </label>
             </div>
           ) : (
             <div className="text-center">
-              <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                {uploading ? <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" /> : <Upload className="w-8 h-8 text-blue-600" />}
+              <div className="w-12 h-12 border border-border flex items-center justify-center mx-auto mb-4">
+                {uploading
+                  ? <div className="w-5 h-5 border-2 border-foreground border-t-transparent rounded-full animate-spin" />
+                  : <Upload className="w-5 h-5 text-foreground" />}
               </div>
-              <p className="text-gray-900 font-medium mb-1">{uploading ? 'Uploading...' : 'Upload Draft'}</p>
-              <p className="text-gray-500 text-sm mb-4">Drag & drop or click to browse</p>
-              <label className="cursor-pointer bg-violet-600 text-white px-6 py-2 rounded-xl text-sm font-medium hover:bg-violet-700 transition-colors shadow-lg">
-                Select File
+              <p className="text-foreground mb-1" style={{ fontWeight: 500 }}>{uploading ? 'Uploading…' : 'Upload draft'}</p>
+              <p className="t-body mb-5">Drag & drop or click to browse</p>
+              <label className="btn-ie btn-ie-solid inline-block cursor-pointer">
+                <span className="btn-ie-text">Select file</span>
                 <input type="file" className="hidden" accept="video/*,image/*" onChange={handleUpload} />
               </label>
             </div>
           )}
         </div>
 
-        <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
-          <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
-            Quality Check
-            <span className="text-xs font-normal text-gray-400 bg-gray-100 px-2 py-1 rounded-full">
-              {checklist.filter(i => i.checked).length}/{checklist.length}
-            </span>
-          </h3>
+        <div className="bg-card border border-border p-6 flex flex-col">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="t-micro text-foreground">Quality check</h3>
+            <span className="t-micro text-muted-foreground">{checklist.filter(i => i.checked).length}/{checklist.length}</span>
+          </div>
 
-          <div className="space-y-3">
+          <div className="divide-y divide-border">
             {checklist.map(item => (
-              <label key={item.id} className="flex items-center gap-3 p-3 rounded-xl border border-slate-100 hover:border-gray-200 hover:bg-violet-50 transition-all cursor-pointer">
+              <label key={item.id} className="flex items-center gap-3 py-3 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={item.checked}
                   onChange={() => toggleCheck(item.id)}
-                  className="w-5 h-5 rounded text-blue-600 focus:ring-blue-500 border-gray-300"
+                  className="w-4 h-4 accent-foreground"
                 />
-                <span className={`text-sm ${item.checked ? 'text-gray-400 line-through' : 'text-gray-700 font-medium'}`}>
+                <span className={`text-sm ${item.checked ? 'text-muted-foreground line-through' : 'text-foreground'}`}>
                   {item.label}
                 </span>
               </label>
@@ -148,17 +147,17 @@ export function CreationStage({ workflowId, contentType, onComplete, onSkip }: C
           </div>
 
           {!mediaUrl && (
-            <div className="mt-6 flex items-start gap-3 p-3 bg-amber-50 text-amber-800 rounded-lg text-xs">
-              <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+            <div className="mt-5 flex items-start gap-2 p-3 border border-border text-xs text-muted-foreground">
+              <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
               <p>You can proceed without uploading, but scheduling automations won't work.</p>
             </div>
           )}
 
           <button
             onClick={onComplete}
-            className="w-full mt-6 py-3 bg-violet-600 text-white rounded-xl font-medium hover:bg-violet-700 transition-colors shadow-lg"
+            className="btn-ie btn-ie-solid w-full mt-6"
           >
-            Finish Creation
+            <span className="btn-ie-text">Finish creation</span>
           </button>
         </div>
       </div>
