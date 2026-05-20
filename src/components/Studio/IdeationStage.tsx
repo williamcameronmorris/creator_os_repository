@@ -40,20 +40,14 @@ export function IdeationStage({ onIdeaSelected, prefilledIdea }: IdeationStagePr
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-ideas`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-          },
-          body: JSON.stringify({ userId: user.id }),
-        }
-      );
-      const result = await response.json();
-      if (!response.ok) { throw new Error(result.error || 'Failed to generate ideas'); }
-      if (result.suggestions && result.suggestions.length > 0) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const { data: result, error } = await supabase.functions.invoke('generate-ideas', {
+        body: { userId: user.id },
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (error) { throw new Error(error.message || 'Failed to generate ideas'); }
+      if (result?.suggestions && result.suggestions.length > 0) {
         setSuggestions(prev => [...result.suggestions, ...prev]);
       }
     } catch (err) {
