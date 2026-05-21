@@ -59,6 +59,28 @@ async function fetchPostForMeContext(): Promise<PfmContext> {
   }
 }
 
+/**
+ * Derive a short human label for a post. Posts synced from Post for Me store
+ * their text in `caption` with no `title`; the legacy importer set `title` to
+ * a truncated caption. Prefer the real caption, fall back to title. Cam's
+ * captions trail into bare "." separator lines + hashtag blocks — cut at the
+ * first of those so the label is just the hook.
+ */
+function postLabel(p: { title?: string | null; caption?: string | null }): string {
+  const caption = (p.caption || "").trim();
+  if (caption) {
+    const kept: string[] = [];
+    for (const line of caption.split("\n")) {
+      const t = line.trim();
+      if (t === "" || /^[.\-•·]+$/.test(t)) break;
+      kept.push(t);
+    }
+    const text = (kept.join(" ") || caption).replace(/\s+/g, " ").trim();
+    if (text) return text.length > 200 ? text.slice(0, 200).trimEnd() + "…" : text;
+  }
+  return (p.title || "").trim() || "Untitled";
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type" } });
@@ -108,8 +130,8 @@ Deno.serve(async (req: Request) => {
     const [profileResult, metricsResult, postsResult, recentPostsResult, deals, pfmContext, inspirationResult, inspirationCountsResult] = await Promise.all([
       supabase.from("profiles").select("full_name, display_name, instagram_avg_views, tiktok_avg_views, youtube_avg_views, instagram_access_token, instagram_business_account_id, tiktok_access_token, youtube_access_token").eq("id", userId).maybeSingle(),
       supabase.from("platform_metrics").select("platform, date, followers_count, avg_engagement_rate").eq("user_id", userId).gte("date", sevenDaysAgo).order("date", { ascending: false }),
-      supabase.from("content_posts").select("title, platform, media_type, views, likes, comments, engagement_rate, published_at").eq("user_id", userId).eq("status", "published").gte("published_at", thirtyDaysAgo).order("engagement_rate", { ascending: false }).limit(10),
-      supabase.from("content_posts").select("title, platform, media_type, views, likes, comments, saves, shares, engagement_rate, published_at").eq("user_id", userId).eq("status", "published").gte("published_at", sevenDaysAgo).order("published_at", { ascending: false }).limit(15),
+      supabase.from("content_posts").select("title, caption, platform, media_type, views, likes, comments, engagement_rate, published_at").eq("user_id", userId).eq("status", "published").gte("published_at", thirtyDaysAgo).order("likes", { ascending: false, nullsFirst: false }).limit(10),
+      supabase.from("content_posts").select("title, caption, platform, media_type, views, likes, comments, saves, shares, engagement_rate, published_at").eq("user_id", userId).eq("status", "published").gte("published_at", sevenDaysAgo).order("published_at", { ascending: false }).limit(15),
       fetchDeals(),
       fetchPostForMeContext(),
       supabase.from("inspiration_entries").select("post_title, platform, content_format, hook_framework, hook_text, topic_tags, tactical_notes, creator, likes, views").eq("performance_tier", "Outlier").order("likes", { ascending: false, nullsFirst: false }).limit(15),
@@ -188,10 +210,11 @@ Deno.serve(async (req: Request) => {
 
     const posts = postsResult.data || [];
     const topPostLines = posts.slice(0, 5).map((p, i) => {
-      const engStr = p.engagement_rate ? ` (${Number(p.engagement_rate).toFixed(1)}% eng)` : "";
-      const viewStr = p.views ? ` — ${Number(p.views).toLocaleString()} views` : "";
+      const likeStr = p.likes ? ` — ${Number(p.likes).toLocaleString()} likes` : "";
+      const viewStr = p.views ? `, ${Number(p.views).toLocaleString()} views` : "";
+      const engStr = p.engagement_rate ? `, ${Number(p.engagement_rate).toFixed(1)}% eng` : "";
       const dateStr = p.published_at ? ` [${new Date(p.published_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}]` : "";
-      return `  ${i + 1}. [${p.platform}]${dateStr} "${p.title || "Untitled"}"${viewStr}${engStr}`;
+      return `  ${i + 1}. [${p.platform}]${dateStr} "${postLabel(p)}"${likeStr}${viewStr}${engStr}`;
     }).join("\n");
 
     const recentPosts = recentPostsResult.data || [];
@@ -202,7 +225,7 @@ Deno.serve(async (req: Request) => {
       const commentStr = p.comments ? `, ${Number(p.comments).toLocaleString()} comments` : "";
       const saveStr = p.saves ? `, ${Number(p.saves).toLocaleString()} saves` : "";
       const engStr = p.engagement_rate ? `, ${Number(p.engagement_rate).toFixed(1)}% eng` : "";
-      return `  - ${dateStr} [${p.platform}] "${p.title || "Untitled"}" — ${viewStr}${likeStr}${commentStr}${saveStr}${engStr}`;
+      return `  - ${dateStr} [${p.platform}] "${postLabel(p)}" — ${viewStr}${likeStr}${commentStr}${saveStr}${engStr}`;
     }).join("\n");
 
     const inspirationOutliers = inspirationResult.data || [];
@@ -329,7 +352,7 @@ Connected platforms: ${connectedPlatforms.length > 0 ? connectedPlatforms.join("
 ${viewsSummary}
 ${recentPostLines || "  No posts in the last 7 days"}
 
-═══ TOP POSTS (last 30 days, ranked by engagement rate) ═══
+═══ TOP POSTS (last 30 days, ranked by likes) ═══
 ${topPostLines || "  No published posts yet"}
 
 ═══ INSPIRATION LIBRARY — saved Outlier examples (study these for hook patterns) ═══
@@ -357,7 +380,7 @@ ${dealLines}${deals.length > 0 ? `\nTotal pipeline value: $${totalDealValue.toLo
       },
       body: JSON.stringify({
         model: "claude-haiku-4-5-20251001",
-        max_tokens: 700,
+        max_tokens: 2000,
         system: `You are Clio, the creator's personal analytics + inspiration copilot inside Cliopatra Social. The DATA block below has two grounded sources: (a) their real per-post performance, (b) their curated Inspiration Library of Outlier posts.
 
 YOUR JOB: reason at the POST level, not the platform level. Find patterns across specific posts. Pair what they're already doing well with a concrete saved Outlier example. Avoid kitchen-sink platform summaries.
@@ -375,6 +398,7 @@ POST-LEVEL REASONING — when the user asks "what should I post" or "how am I do
 8. Never recommend a hook framework absent from "Top hook frameworks".
 9. If the library has zero Outliers in a relevant framework: if a TEMPLATE BANK formula in that framework fits the user's content, you MAY suggest it as scaffolding — but call it a "template formula to riff on", NEVER cite it as a proven example. If no template fits either, say the library has no example for this framework yet.
 10. Outlier examples ALWAYS take priority over Template Bank formulas. Templates are fallback only.
+11. An empty "THIS WEEK'S POSTS" window is normal — creators don't post every week. NEVER treat it as a blocker. When it's empty, ground your answer in TOP POSTS (last 30 days) and the Inspiration Library. Deliver the ideas the user asked for; do not refuse or ask them to supply a content pillar, audience, or format you can already infer from their posts and captions.
 
 ANTI-PATTERNS — do not do these:
 - "Your Instagram is carrying all the momentum at 145K followers, 0.20% engagement…" (this is platform-level kitchen sink)
