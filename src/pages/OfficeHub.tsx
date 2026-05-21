@@ -10,7 +10,12 @@ interface ScheduledItem {
   id: string;
   caption: string;
   platform: string;
-  scheduled_date: string;
+  // Canonical scheduled instant (timestamptz). Newer rows write this; legacy
+  // rows may only have scheduled_date with the date component truncated to
+  // 00:00 UTC, which renders as "7:00 PM prev day" in CDT. Always prefer
+  // scheduled_for and fall back to scheduled_date for legacy rows.
+  scheduled_for: string | null;
+  scheduled_date: string | null;
   media_urls: string[] | null;
   thumbnail_url: string | null;
   media_type: string | null;
@@ -32,7 +37,7 @@ export function OfficeHub() {
       // posts live in `content_posts_unified`. Query both, dedupe by id, then
       // sort + truncate to 7 — otherwise PostForMe-published IG posts never
       // surface in the Upcoming list.
-      const cols = 'id, caption, platform, scheduled_date, status, media_urls, thumbnail_url, media_type';
+      const cols = 'id, caption, platform, scheduled_for, scheduled_date, status, media_urls, thumbnail_url, media_type';
       const cutoff = new Date().toISOString();
       const [unified, modern] = await Promise.all([
         supabase.from('content_posts_unified').select(cols)
@@ -47,8 +52,9 @@ export function OfficeHub() {
       for (const p of [...(unified.data || []), ...(modern.data || [])]) {
         byId.set(p.id, p as ScheduledItem);
       }
+      const whenOf = (p: ScheduledItem) => p.scheduled_for || p.scheduled_date || '';
       const merged = Array.from(byId.values())
-        .sort((a, b) => a.scheduled_date.localeCompare(b.scheduled_date))
+        .sort((a, b) => whenOf(a).localeCompare(whenOf(b)))
         .slice(0, 7);
 
       setScheduled(merged);
@@ -81,7 +87,7 @@ export function OfficeHub() {
   };
 
   const nextPublish = scheduled[0]
-    ? formatWhen(scheduled[0].scheduled_date).replace('\n', ' · ')
+    ? formatWhen(scheduled[0].scheduled_for || scheduled[0].scheduled_date || '').replace('\n', ' · ')
     : null;
 
   const getThumb = (item: ScheduledItem) =>
@@ -163,7 +169,7 @@ export function OfficeHub() {
                         style={{ width: 80 }}
                       >
                         <span className="t-micro" style={{ whiteSpace: 'pre-line', lineHeight: 1.3 }}>
-                          {formatWhen(item.scheduled_date)}
+                          {formatWhen(item.scheduled_for || item.scheduled_date || '')}
                         </span>
                       </div>
 
