@@ -293,20 +293,39 @@ async function syncForUser(userId: string): Promise<SyncSummary> {
     const platformPostIds = posts.map((p) => p.platform_post_id).filter((id): id is string => Boolean(id));
     if (platformPostIds.length === 0) continue;
 
+    // Dedup against this platform's WHOLE history, by platform_post_id AND by
+    // published_at. The legacy importer (provider='direct') stored Instagram
+    // posts without a platform_post_id we can match on, so an id-only check
+    // re-imported every post it already had as a duplicate row. Matching the
+    // exact post timestamp catches those.
     const { data: existing, error: existingErr } = await supabase
       .from("content_posts")
-      .select("platform_post_id")
+      .select("platform_post_id, published_at")
       .eq("user_id", userId)
-      .eq("platform", platform)
-      .in("platform_post_id", platformPostIds);
+      .eq("platform", platform);
     if (existingErr) {
       summary.errors.push(`feed lookup ${platform}: ${existingErr.message}`);
       continue;
     }
-    const existingIds = new Set((existing || []).map((r) => r.platform_post_id));
+    const existingIds = new Set(
+      (existing || []).map((r) => r.platform_post_id).filter((id): id is string => Boolean(id)),
+    );
+    const existingTimes = new Set(
+      (existing || [])
+        .map((r) => (r.published_at ? new Date(r.published_at).getTime() : NaN))
+        .filter((t) => !Number.isNaN(t)),
+    );
 
     const newRows = posts
-      .filter((p) => p.platform_post_id && !existingIds.has(p.platform_post_id))
+      .filter((p) => {
+        if (!p.platform_post_id) return false;
+        if (existingIds.has(p.platform_post_id)) return false;
+        if (p.posted_at) {
+          const t = new Date(p.posted_at).getTime();
+          if (!Number.isNaN(t) && existingTimes.has(t)) return false;
+        }
+        return true;
+      })
       .map((p) => ({
         user_id: userId,
         platform: p.platform,
@@ -397,11 +416,11 @@ async function syncForUser(userId: string): Promise<SyncSummary> {
 
     const { error, count } = await supabase
       .from("content_posts")
-      .update(updates)
+      .update(updates, { count: "exact" })
       .eq("postforme_post_id", result.postId)
       .eq("platform", result.platform)
       .eq("user_id", userId)
-      .select("id", { count: "exact" });
+      .select("id");
     if (error) summary.errors.push(`content_posts update ${result.postId}: ${error.message}`);
     else summary.postsMatched += count || 0;
   }
