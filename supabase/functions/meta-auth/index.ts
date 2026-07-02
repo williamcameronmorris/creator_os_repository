@@ -36,10 +36,23 @@ Deno.serve(async (req: Request) => {
       throw new Error("META_APP_SECRET is not configured. Run: supabase secrets set META_APP_SECRET=your_secret");
     }
 
-    const { code, redirect_uri, userId } = await req.json();
+    // Verify the caller's session. userId previously came from the request
+    // body, which let anyone with the public anon key write OAuth tokens onto
+    // another user's profile row. The token-bound id is the only safe source.
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+    const authClient = createClient(supabaseUrl, supabaseServiceKey);
+    const { data: authData, error: authErr } = await authClient.auth.getUser(authHeader.slice(7));
+    if (authErr || !authData?.user) {
+      return new Response(JSON.stringify({ error: "Invalid session" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+    const userId = authData.user.id;
 
-    if (!code || !redirect_uri || !userId) {
-      throw new Error("Missing required fields: code, redirect_uri, userId");
+    const { code, redirect_uri } = await req.json();
+    if (!code || !redirect_uri) {
+      throw new Error("Missing required fields: code, redirect_uri");
     }
 
     // ─── Step 1: Exchange auth code for short-lived user token ───────────────

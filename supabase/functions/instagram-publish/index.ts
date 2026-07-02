@@ -76,6 +76,25 @@ Deno.serve(async (req: Request) => {
     return new Response(null, { status: 200, headers: corsHeaders });
   }
 
+  // ── Security guard ──────────────────────────────────────────────────────
+  // This function uses the service-role key to read a user's stored access
+  // tokens and publish on their behalf, trusting `userId` from the request
+  // body. It must therefore ONLY be callable by the internal cron dispatcher
+  // (publish-scheduled-posts), which authenticates with the service-role
+  // bearer. Reject anything else — otherwise anyone holding the public anon
+  // key could publish to any user's connected account (IDOR).
+  {
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+    const authHeader = req.headers.get("Authorization") ?? "";
+    const bearer = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
+    if (!serviceRoleKey || bearer !== serviceRoleKey) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized — internal function" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+  }
+
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;

@@ -21,15 +21,20 @@ interface PfmContext { accounts: PfmAccount[]; followersByPlatform: Record<strin
  * Pull connected accounts + follower counts from Post for Me, with a hard
  * 3s timeout so a slow PFM doesn't block Clio. Falls back to empty on error.
  */
-async function fetchPostForMeContext(): Promise<PfmContext> {
+async function fetchPostForMeContext(externalId: string): Promise<PfmContext> {
   const empty: PfmContext = { accounts: [], followersByPlatform: {} };
   if (!POSTFORME_API_KEY) return empty;
   const ctrl = new AbortController();
   const timeout = setTimeout(() => ctrl.abort(), 3000);
   try {
-    const accountsRes = await fetch(`${PFM_BASE}/v1/social-accounts`, {
-      headers: { Authorization: `Bearer ${POSTFORME_API_KEY}` }, signal: ctrl.signal,
-    });
+    // Post for Me is a single shared workspace keyed by external_id (= our
+    // user id). Without this filter every user's Clio saw every OTHER user's
+    // connected accounts and follower counts. Scope to the caller, matching
+    // postforme-sync's listAccounts(userId).
+    const accountsRes = await fetch(
+      `${PFM_BASE}/v1/social-accounts?external_id=${encodeURIComponent(externalId)}`,
+      { headers: { Authorization: `Bearer ${POSTFORME_API_KEY}` }, signal: ctrl.signal },
+    );
     if (!accountsRes.ok) { clearTimeout(timeout); return empty; }
     const accountsBody = await accountsRes.json();
     const accountList: PfmAccount[] = Array.isArray(accountsBody) ? accountsBody : (accountsBody?.data || []);
@@ -133,7 +138,7 @@ Deno.serve(async (req: Request) => {
       supabase.from("content_posts").select("title, caption, platform, media_type, views, likes, comments, engagement_rate, published_at").eq("user_id", userId).eq("status", "published").gte("published_at", thirtyDaysAgo).order("likes", { ascending: false, nullsFirst: false }).limit(10),
       supabase.from("content_posts").select("title, caption, platform, media_type, views, likes, comments, saves, shares, engagement_rate, published_at").eq("user_id", userId).eq("status", "published").gte("published_at", sevenDaysAgo).order("published_at", { ascending: false }).limit(15),
       fetchDeals(),
-      fetchPostForMeContext(),
+      fetchPostForMeContext(userId),
       supabase.from("inspiration_entries").select("post_title, platform, content_format, hook_framework, hook_text, topic_tags, tactical_notes, creator, likes, views").eq("performance_tier", "Outlier").order("likes", { ascending: false, nullsFirst: false }).limit(15),
       supabase.from("inspiration_entries").select("performance_tier, hook_framework"),
     ]);

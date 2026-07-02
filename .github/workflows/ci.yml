@@ -12,7 +12,7 @@ concurrency:
 
 jobs:
   check:
-    name: typecheck / test / build
+    name: lint / typecheck / test / build
     runs-on: ubuntu-latest
     env:
       # Unit tests don't hit Supabase, but modules that import ./lib/supabase
@@ -27,20 +27,32 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
-      # Using `npm install` rather than `npm ci` so CI tolerates short windows
-      # of package.json / package-lock.json drift (e.g. when a dep is added
-      # but the lockfile sync is committed in a follow-up). `npm ci` is
-      # stricter but turns drift into a hard CI failure. Flip back to
-      # `npm ci` once we've put discipline (or a pre-commit hook) around
-      # lockfile sync.
-      - run: npm install --no-audit --no-fund
+      # npm ci installs exactly what package-lock.json pins — reproducible and
+      # fails loudly on lockfile drift (the class of bug behind the manualChunks
+      # incident). Keep the lockfile in sync in the same commit as package.json.
+      - run: npm ci --no-audit --no-fund
 
-      # Typecheck currently has ~268 pre-existing errors. Tracked as advisory
-      # (continue-on-error) so the signal is visible in CI without blocking
-      # PRs; flip to a hard gate once the debt is cleared.
-      - name: Typecheck (advisory)
-        run: npm run typecheck
+      # Lint is advisory for now (167 pre-existing problems, mostly no-explicit-any
+      # and unused vars). Visible in CI without blocking; flip to a hard gate once
+      # burned down.
+      - name: Lint (advisory)
+        run: npm run lint
         continue-on-error: true
+
+      # Typecheck ratchet: the count of `error TS` lines must not exceed the
+      # committed baseline (.typecheck-baseline). New type errors fail CI; fixing
+      # errors means lowering the baseline in the same PR. Burn to 0, then delete
+      # this ratchet and make `tsc --noEmit` a plain hard gate.
+      - name: Typecheck (ratchet)
+        run: |
+          COUNT=$(npm run typecheck 2>&1 | grep -c "error TS" || true)
+          BASELINE=$(cat .typecheck-baseline 2>/dev/null || echo 0)
+          echo "Typecheck errors: $COUNT (baseline: $BASELINE)"
+          if [ "$COUNT" -gt "$BASELINE" ]; then
+            echo "::error::Typecheck errors increased from $BASELINE to $COUNT. New errors:"
+            npm run typecheck 2>&1 | grep "error TS" || true
+            exit 1
+          fi
 
       - run: npm run test
 

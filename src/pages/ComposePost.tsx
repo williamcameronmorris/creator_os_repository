@@ -15,6 +15,8 @@ import {
   formatSuggestedTime,
   type SuggestedTime,
 } from '../lib/suggestedTimes';
+import { useTimezone } from '../hooks/useTimezone';
+import { localInputToUtc } from '../lib/timezone';
 
 /**
  * ComposePost — Post for Me-backed quick publisher.
@@ -58,6 +60,7 @@ const PLATFORM_RULES: Record<string, PlatformRule> = {
 export function ComposePost() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { timezone } = useTimezone();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -212,7 +215,11 @@ export function ComposePost() {
         scheduledForRow = new Date().toISOString();
       } else if (mode === 'schedule') {
         if (!scheduleAt) throw new Error('Pick a date/time to schedule');
-        scheduledAt = new Date(scheduleAt).toISOString();
+        // Interpret the datetime-local value in the user's profile timezone,
+        // matching how OfficeHub/Schedule display it. Using new Date(...) here
+        // would interpret it in the browser's timezone and publish at the wrong
+        // wall-clock time whenever the two differ.
+        scheduledAt = localInputToUtc(scheduleAt, timezone);
         scheduledForRow = scheduledAt;
       } else {
         scheduledAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
@@ -252,7 +259,15 @@ export function ComposePost() {
       }));
 
       const { error: insertErr } = await supabase.from('content_posts').insert(rows);
-      if (insertErr) console.warn('Mirror insert warning:', insertErr.message);
+      if (insertErr) {
+        // The post already published via PostForMe, but the local mirror insert
+        // failed — so it would be invisible to Office/Schedule/Analytics with no
+        // trace. Surface it rather than swallowing (previously a console.warn).
+        throw new Error(
+          `Published to the platform, but saving it to your dashboard failed: ${insertErr.message}. ` +
+          `The post is live; it just won't appear in Office until the next sync.`
+        );
+      }
 
       setPublishState('done');
       setTimeout(() => navigate('/office'), 1200);
