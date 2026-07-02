@@ -99,8 +99,15 @@ export function Schedule() {
 
   const handleDelete = async (postId: string) => {
     if (!confirm('Are you sure you want to delete this post?')) return;
-    const { error } = await supabase.from('content_posts_unified').delete().eq('id', postId);
-    if (!error) loadPosts();
+    // content_posts_unified is a read-only dedup VIEW over content_posts — a
+    // delete against it errors and was silently ignored, so the post always
+    // reappeared. Write to the base table instead.
+    const { error } = await supabase.from('content_posts').delete().eq('id', postId);
+    if (error) {
+      alert(`Could not delete post: ${error.message}`);
+      return;
+    }
+    loadPosts();
   };
 
   const handleEdit = (post: Post) => navigate(`/schedule/edit/${post.id}`);
@@ -355,7 +362,8 @@ export function Schedule() {
                           {post.publish_status === 'failed' && (
                             <button
                               onClick={async () => {
-                                await supabase.from('content_posts_unified').update({ publish_status: null, publish_error: null }).eq('id', post.id);
+                                // Write to the base table, not the read-only view.
+                                await supabase.from('content_posts').update({ publish_status: null, publish_error: null }).eq('id', post.id);
                                 loadPosts();
                               }}
                               className="p-1.5 transition-colors hover:bg-accent border border-border"

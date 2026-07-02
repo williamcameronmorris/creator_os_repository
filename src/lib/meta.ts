@@ -227,13 +227,20 @@ export async function exchangeMetaCode(
   code: string,
   userId: string
 ): Promise<MetaAuthResult> {
+  // Send the user's session token so meta-auth binds the write to the verified
+  // caller (it no longer trusts userId from the body).
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = session?.access_token;
+  if (!token) throw new Error('You must be signed in to connect Meta.');
+
   const response = await fetch(
     `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/meta-auth`,
     {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+        apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({ code, redirect_uri: META_REDIRECT_URI, userId }),
     }
@@ -256,13 +263,20 @@ export async function exchangeThreadsCode(
   code: string,
   userId: string
 ): Promise<{ success: boolean; threadsHandle: string; threadsFollowers: number }> {
+  // Send the user's session token so threads-auth binds the write to the
+  // verified caller (it no longer trusts userId from the body).
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = session?.access_token;
+  if (!token) throw new Error('You must be signed in to connect Threads.');
+
   const response = await fetch(
     `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/threads-auth`,
     {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+        apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({ code, redirect_uri: THREADS_REDIRECT_URI, userId }),
     }
