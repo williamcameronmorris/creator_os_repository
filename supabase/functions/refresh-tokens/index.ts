@@ -41,6 +41,32 @@ Deno.serve(async (req: Request) => {
     return new Response(null, { status: 200, headers: corsHeaders });
   }
 
+  // ── Security guard (cron-only) ──────────────────────────────────────────
+  // Refreshes every user's long-lived tokens and returns per-user ids/status.
+  // Must never be callable with the public anon key (that would leak the full
+  // user roster and let anyone force mass refreshes). Accept only the
+  // service-role bearer (how the pg_cron job authenticates) or the shared
+  // Cron_Secret, matching publish-scheduled-posts.
+  {
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+    const expectedCron = Deno.env.get("Cron_Secret");
+    const authHeader = req.headers.get("Authorization") ?? "";
+    const bearer = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
+    let cronSecret: string | undefined;
+    try {
+      const raw = await req.text();
+      if (raw) cronSecret = JSON.parse(raw).cronSecret;
+    } catch { /* no body / not JSON */ }
+    const isService = bearer !== "" && bearer === serviceRoleKey;
+    const isCron = !!cronSecret && !!expectedCron && cronSecret === expectedCron;
+    if (!isService && !isCron) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized — cron-only function" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+  }
+
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
