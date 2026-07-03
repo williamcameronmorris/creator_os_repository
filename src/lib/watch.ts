@@ -30,6 +30,7 @@ export interface WatchVideo {
   view_count: number | null;
   published_at: string | null;
   is_top: boolean;
+  packaging_percentile: number | null;
   creatorTitle: string | null;
   channelId: string | null;
 }
@@ -63,7 +64,7 @@ export async function getWatchFeed(
 
   const { data, error } = await supabase
     .from('suggested_creator_videos')
-    .select('id, suggested_creator_id, platform, video_id, title, thumbnail_url, view_count, published_at, is_top')
+    .select('id, suggested_creator_id, platform, video_id, title, thumbnail_url, view_count, published_at, is_top, packaging_percentile')
     .in('suggested_creator_id', [...byId.keys()])
     .order('view_count', { ascending: false, nullsFirst: false })
     .limit(30);
@@ -89,7 +90,7 @@ export async function getCreator(id: string): Promise<SuggestedCreator | null> {
 export async function getCreatorVideos(creatorId: string): Promise<WatchVideo[]> {
   const { data, error } = await supabase
     .from('suggested_creator_videos')
-    .select('id, suggested_creator_id, platform, video_id, title, thumbnail_url, view_count, published_at, is_top')
+    .select('id, suggested_creator_id, platform, video_id, title, thumbnail_url, view_count, published_at, is_top, packaging_percentile')
     .eq('suggested_creator_id', creatorId)
     .order('view_count', { ascending: false, nullsFirst: false });
   if (error) throw error;

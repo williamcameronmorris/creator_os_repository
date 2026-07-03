@@ -190,6 +190,9 @@ export function WatchCreator() {
               <div className="flex items-center justify-between mt-1">
                 <span className="font-mono text-[9px] text-muted-foreground">
                   {formatCount(v.view_count)} views
+                  {v.packaging_percentile != null && (
+                    <span style={{ color: '#8a6d22' }}> · {v.packaging_percentile}pct</span>
+                  )}
                 </span>
                 <button
                   onClick={() => sendToClio(v)}

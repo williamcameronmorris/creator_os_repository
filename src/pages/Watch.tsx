@@ -311,6 +311,14 @@ export function Watch() {
                   <span>{v.creatorTitle}</span>
                   <span className="w-0.5 h-0.5 rounded-full bg-current opacity-50" />
                   <span>{formatCount(v.view_count)} views</span>
+                  {v.packaging_percentile != null && (
+                    <>
+                      <span className="w-0.5 h-0.5 rounded-full bg-current opacity-50" />
+                      <span style={{ color: '#8a6d22' }}>
+                        {v.packaging_percentile}th pct packaging
+                      </span>
+                    </>
+                  )}
                 </div>
               </div>
             ))}

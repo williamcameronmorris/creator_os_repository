@@ -83,11 +83,37 @@ async function ytJson(
   return data;
 }
 
+const BB = "https://api.brightbean.xyz/v1";
+const MAX_SCORED_PER_NICHE = 10;
+
+/** Brightbean packaging score for a title+thumbnail: niche-relative CTR
+ * percentile (0-100). Returns null on any failure so scoring is non-fatal. */
+async function scorePackaging(
+  title: string,
+  thumbnailUrl: string | null,
+  key: string,
+): Promise<{ percentile: number; score: number } | null> {
+  try {
+    const res = await fetch(`${BB}/score/packaging`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ title, thumbnail_url: thumbnailUrl }),
+    });
+    if (!res.ok) return null;
+    const d = await res.json();
+    if (typeof d.percentile !== "number") return null;
+    return { percentile: Math.round(d.percentile), score: Number(d.score) };
+  } catch {
+    return null;
+  }
+}
+
 async function discoverNiche(
   supabase: ReturnType<typeof createClient>,
   auth: YtAuth,
   niche: string,
-): Promise<{ creators: number; videos: number }> {
+  bbKey?: string,
+): Promise<{ creators: number; videos: number; scored: number }> {
   const publishedAfter = new Date(Date.now() - 120 * 86400000).toISOString();
 
   // 1. Popular recent short videos in the niche → candidate videos + channels.
@@ -177,7 +203,7 @@ async function discoverNiche(
   const avgByChannel = new Map(top.map((c: any) => [c.channel_id, c.avg_views || 1]));
 
   // 5. Upsert videos for the top creators.
-  const videoRows = videoStats
+  const videoRows: Array<Record<string, unknown>> = videoStats
     .filter((v: any) => idByChannel.has(v.channel_id))
     .map((v: any) => ({
       suggested_creator_id: idByChannel.get(v.channel_id),
@@ -187,8 +213,32 @@ async function discoverNiche(
       thumbnail_url: v.thumbnail_url,
       view_count: v.view_count,
       published_at: v.published_at,
+      // Fallback signal when Brightbean scoring is unavailable.
       is_top: v.view_count >= 2 * (avgByChannel.get(v.channel_id) || 1),
+      packaging_percentile: null,
+      packaging_score: null,
     }));
+
+  // Brightbean packaging score → the real "why it's working" signal. Non-fatal:
+  // if the key is missing or a call fails, the view-based is_top stays.
+  let scored = 0;
+  if (bbKey && videoRows.length > 0) {
+    const toScore = videoRows.slice(0, MAX_SCORED_PER_NICHE);
+    const results = await Promise.all(
+      toScore.map((r) =>
+        scorePackaging(r.title as string, (r.thumbnail_url as string) || null, bbKey),
+      ),
+    );
+    results.forEach((res, i) => {
+      if (res) {
+        toScore[i].packaging_percentile = res.percentile;
+        toScore[i].packaging_score = res.score;
+        toScore[i].is_top = res.percentile >= 70;
+        scored++;
+      }
+    });
+  }
+
   let videoCount = 0;
   if (videoRows.length > 0) {
     const { error: e2 } = await supabase
@@ -198,7 +248,7 @@ async function discoverNiche(
     videoCount = videoRows.length;
   }
 
-  return { creators: creatorRows.length, videos: videoCount };
+  return { creators: creatorRows.length, videos: videoCount, scored };
 }
 
 Deno.serve(async (req: Request) => {
@@ -285,10 +335,11 @@ Deno.serve(async (req: Request) => {
       if (niches.length === 0) niches = ["guitar"];
     }
 
-    const results: Array<{ niche: string; creators?: number; videos?: number; error?: string }> = [];
+    const bbKey = Deno.env.get("BRIGHTBEAN_API_KEY") || undefined;
+    const results: Array<{ niche: string; creators?: number; videos?: number; scored?: number; error?: string }> = [];
     for (const niche of niches) {
       try {
-        const r = await discoverNiche(supabase, auth, niche);
+        const r = await discoverNiche(supabase, auth, niche, bbKey);
         results.push({ niche, ...r });
       } catch (e) {
         results.push({ niche, error: (e as Error).message });
