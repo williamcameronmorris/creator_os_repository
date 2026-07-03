@@ -314,7 +314,7 @@ export function Watch() {
                   {v.packaging_percentile != null && (
                     <>
                       <span className="w-0.5 h-0.5 rounded-full bg-current opacity-50" />
-                      <span style={{ color: '#8a6d22' }}>
+                      <span style={v.packaging_percentile >= 60 ? { color: '#8a6d22' } : undefined}>
                         {v.packaging_percentile}th pct packaging
                       </span>
                     </>

@@ -191,7 +191,9 @@ export function WatchCreator() {
                 <span className="font-mono text-[9px] text-muted-foreground">
                   {formatCount(v.view_count)} views
                   {v.packaging_percentile != null && (
-                    <span style={{ color: '#8a6d22' }}> · {v.packaging_percentile}pct</span>
+                    <span style={v.packaging_percentile >= 60 ? { color: '#8a6d22' } : undefined}>
+                      {' · '}{v.packaging_percentile}pct
+                    </span>
                   )}
                 </span>
                 <button
