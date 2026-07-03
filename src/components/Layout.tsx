@@ -14,6 +14,7 @@ import {
   PlayCircle,
   Briefcase,
   SquarePen,
+  Eye,
 } from 'lucide-react';
 
 interface LayoutProps {
@@ -31,9 +32,10 @@ export function Layout({ children }: LayoutProps) {
   const touchStartY = useRef<number | null>(null);
   const isSwipingBack = useRef(false);
 
-  const getActiveTab = (): 'clio' | 'studio' | 'office' | 'settings' => {
+  const getActiveTab = (): 'clio' | 'studio' | 'watch' | 'office' | 'settings' => {
     const p = location.pathname;
     if (p === '/settings' || p === '/profile') return 'settings';
+    if (p.startsWith('/watch')) return 'watch';
     if (p.startsWith('/studio') || p === '/media' || p === '/saved-ideas') return 'studio';
     if (p.startsWith('/office') || p === '/schedule' || p === '/analytics' || p.startsWith('/daily-pulse')) return 'office';
     return 'clio';
@@ -202,6 +204,17 @@ export function Layout({ children }: LayoutProps) {
             <span className="font-mono text-[8px] font-bold tracking-widest uppercase opacity-0">+</span>
           </Link>
 
+          {/* Watch */}
+          <Link
+            to="/watch"
+            className={`flex flex-col items-center justify-center flex-1 h-full gap-1 transition-colors ${
+              activeTab === 'watch' ? 'text-foreground' : 'text-muted-foreground'
+            }`}
+          >
+            <Eye className="w-5 h-5" />
+            <span className="font-mono text-[8px] font-bold tracking-widest uppercase">Watch</span>
+          </Link>
+
           {/* Office */}
           <Link
             to="/office"
@@ -211,17 +224,6 @@ export function Layout({ children }: LayoutProps) {
           >
             <Briefcase className="w-5 h-5" />
             <span className="font-mono text-[8px] font-bold tracking-widest uppercase">Office</span>
-          </Link>
-
-          {/* Settings */}
-          <Link
-            to="/settings"
-            className={`flex flex-col items-center justify-center flex-1 h-full gap-1 transition-colors ${
-              activeTab === 'settings' ? 'text-foreground' : 'text-muted-foreground'
-            }`}
-          >
-            <SettingsIcon className="w-5 h-5" />
-            <span className="font-mono text-[8px] font-bold tracking-widest uppercase">Settings</span>
           </Link>
 
         </div>
