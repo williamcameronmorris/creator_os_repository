@@ -30,6 +30,9 @@ const corsHeaders = {
 const YT = "https://www.googleapis.com/youtube/v3";
 const MAX_NICHES_PER_RUN = 5;
 const CREATORS_PER_NICHE = 8;
+// Channels above this are almost always general-audience virality (Zack D.
+// Films etc.), not niche creators worth studying. Drop them.
+const MAX_SUBSCRIBERS = 3_000_000;
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -95,7 +98,7 @@ async function discoverNiche(
       q: niche,
       type: "video",
       videoDuration: "short",
-      order: "viewCount",
+      order: "relevance",
       publishedAfter,
       maxResults: 25,
       relevanceLanguage: "en",
@@ -131,7 +134,7 @@ async function discoverNiche(
         avg_views: count > 0 ? Math.round(views / count) : 0,
       };
     })
-    .filter((c: any) => c.title);
+    .filter((c: any) => c.title && c.subscriber_count <= MAX_SUBSCRIBERS);
   channels.sort((a: any, b: any) => b.subscriber_count - a.subscriber_count);
   const top = channels.slice(0, CREATORS_PER_NICHE);
   if (top.length === 0) return { creators: 0, videos: 0 };
