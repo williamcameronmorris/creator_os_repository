@@ -1,14 +1,16 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Play, Sparkles, Flame } from 'lucide-react';
+import { Play, Sparkles, Flame, Heart, MessageCircle } from 'lucide-react';
 import {
   getSuggestedCreators,
   getWatchFeed,
+  getMyInstagramPosts,
   formatCount,
   clioParams,
   WATCH_NICHE,
   type SuggestedCreator,
   type WatchVideo,
+  type MyPost,
 } from '../lib/watch';
 import { WatchPlayer } from '../components/WatchPlayer';
 
@@ -31,6 +33,7 @@ export function Watch() {
   const [platform, setPlatform] = useState<Platform>('youtube');
   const [creators, setCreators] = useState<SuggestedCreator[]>([]);
   const [feed, setFeed] = useState<WatchVideo[]>([]);
+  const [myPosts, setMyPosts] = useState<MyPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [playing, setPlaying] = useState<WatchVideo | null>(null);
@@ -39,21 +42,21 @@ export function Watch() {
     let active = true;
     setLoading(true);
     setError('');
-    if (platform !== 'youtube') {
-      setCreators([]);
-      setFeed([]);
-      setLoading(false);
-      return;
-    }
     (async () => {
       try {
-        const [c, f] = await Promise.all([
-          getSuggestedCreators('youtube'),
-          getWatchFeed('youtube'),
-        ]);
-        if (!active) return;
-        setCreators(c);
-        setFeed(f);
+        if (platform === 'youtube') {
+          const [c, f] = await Promise.all([
+            getSuggestedCreators('youtube'),
+            getWatchFeed('youtube'),
+          ]);
+          if (!active) return;
+          setCreators(c);
+          setFeed(f);
+        } else if (platform === 'instagram') {
+          const posts = await getMyInstagramPosts();
+          if (!active) return;
+          setMyPosts(posts);
+        }
       } catch (e) {
         if (active) setError((e as Error).message);
       } finally {
@@ -67,6 +70,18 @@ export function Watch() {
 
   const sendToClio = (v: WatchVideo) => navigate(`/studio/script?${clioParams(v)}`);
 
+  const remixToClio = (p: MyPost) => {
+    const firstLine = (p.caption || '').split('\n')[0].trim().slice(0, 120) || 'One of my past posts';
+    const params = new URLSearchParams({
+      autostart: '1',
+      idea: firstLine,
+      platform: 'instagram',
+      type: 'reel',
+      reasoning: 'Remix of one of your past posts',
+    });
+    navigate(`/studio/script?${params.toString()}`);
+  };
+
   return (
     <div className="max-w-md mx-auto px-4 pt-4">
       {/* header row */}
@@ -74,12 +89,14 @@ export function Watch() {
         <span className="font-mono text-[10px] tracking-widest uppercase text-muted-foreground">
           Watching
         </span>
-        <span
-          className="font-mono text-[9px] tracking-widest uppercase px-2 py-1 border"
-          style={{ borderColor: GOLD, color: '#8a6d22' }}
-        >
-          {WATCH_NICHE}
-        </span>
+        {platform !== 'instagram' && (
+          <span
+            className="font-mono text-[9px] tracking-widest uppercase px-2 py-1 border"
+            style={{ borderColor: GOLD, color: '#8a6d22' }}
+          >
+            {WATCH_NICHE}
+          </span>
+        )}
       </div>
 
       {/* platform tabs */}
@@ -114,17 +131,92 @@ export function Watch() {
         </div>
       )}
 
-      {!loading && !error && platform !== 'youtube' && (
+      {!loading && !error && platform === 'tiktok' && (
         <div className="py-16 text-center">
-          <p className="text-sm text-foreground mb-1">
-            {platform === 'instagram' ? 'Instagram' : 'TikTok'} is coming next
-          </p>
-          <p className="text-xs text-muted-foreground">
-            {platform === 'instagram'
-              ? 'This tab will show your own posts, newest first.'
-              : 'Watch creators from TikTok here soon.'}
-          </p>
+          <p className="text-sm text-foreground mb-1">TikTok is coming next</p>
+          <p className="text-xs text-muted-foreground">Watch creators from TikTok here soon.</p>
         </div>
+      )}
+
+      {!loading && !error && platform === 'instagram' && (
+        <>
+          <div className="flex items-center justify-between mb-3">
+            <span className="font-mono text-[9px] tracking-widest uppercase text-muted-foreground">
+              My posts · newest first
+            </span>
+          </div>
+          {myPosts.length === 0 ? (
+            <div className="py-16 text-center text-sm text-muted-foreground">
+              No published Instagram posts yet. Connect Instagram in Settings to sync them.
+            </div>
+          ) : (
+            <div className="flex flex-col">
+              {myPosts.map((p) => (
+                <div key={p.id} className="flex gap-3 py-3 border-b border-border">
+                  <div
+                    className="flex-shrink-0 relative"
+                    style={{ width: 70, height: 88, background: '#1A1816' }}
+                  >
+                    {p.thumbnail_url && (
+                      <img
+                        src={p.thumbnail_url}
+                        alt=""
+                        className="w-full h-full object-cover"
+                        loading="lazy"
+                        onError={(e) => {
+                          (e.currentTarget as HTMLImageElement).style.display = 'none';
+                        }}
+                      />
+                    )}
+                    {p.media_type === 'video' && (
+                      <span className="absolute inset-0 flex items-center justify-center">
+                        <Play className="w-4 h-4" style={{ color: '#F7F4EE' }} />
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0 flex flex-col">
+                    <p className="text-[13px] leading-snug text-foreground line-clamp-2">
+                      {p.caption || 'Untitled post'}
+                    </p>
+                    <span className="font-mono text-[10px] text-muted-foreground mt-1">
+                      {p.published_at
+                        ? new Date(p.published_at).toLocaleDateString(undefined, {
+                            month: 'short',
+                            day: 'numeric',
+                          })
+                        : ''}
+                      {p.media_type ? ` · ${p.media_type}` : ''}
+                    </span>
+                    <div className="flex items-center gap-4 mt-auto pt-2">
+                      {p.views ? (
+                        <span className="flex items-center gap-1 text-[11px] text-foreground">
+                          <Play className="w-3 h-3 text-muted-foreground" />
+                          {formatCount(p.views)}
+                        </span>
+                      ) : null}
+                      <span className="flex items-center gap-1 text-[11px] text-foreground">
+                        <Heart className="w-3 h-3 text-muted-foreground" />
+                        {formatCount(p.likes)}
+                      </span>
+                      <span className="flex items-center gap-1 text-[11px] text-foreground">
+                        <MessageCircle className="w-3 h-3 text-muted-foreground" />
+                        {formatCount(p.comments)}
+                      </span>
+                      <button
+                        onClick={() => remixToClio(p)}
+                        className="ml-auto flex items-center gap-1 font-mono text-[9px] tracking-wider uppercase"
+                        style={{ color: '#8a6d22' }}
+                      >
+                        <Sparkles className="w-3 h-3" />
+                        Remix
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
       )}
 
       {!loading && !error && platform === 'youtube' && (

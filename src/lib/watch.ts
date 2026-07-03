@@ -122,6 +122,42 @@ export async function untrackCreator(channelId: string): Promise<void> {
   if (error) throw error;
 }
 
+export interface MyPost {
+  id: string;
+  caption: string | null;
+  media_type: string | null;
+  thumbnail_url: string | null;
+  views: number | null;
+  likes: number | null;
+  comments: number | null;
+  published_at: string | null;
+}
+
+/** The signed-in user's own published Instagram posts, newest first. */
+export async function getMyInstagramPosts(): Promise<MyPost[]> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+  const { data, error } = await supabase
+    .from('content_posts')
+    .select('id, caption, media_type, thumbnail_url, views, likes, comments, published_at, published_date')
+    .eq('user_id', user.id)
+    .eq('platform', 'instagram')
+    .eq('status', 'published')
+    .order('published_at', { ascending: false, nullsFirst: false })
+    .limit(40);
+  if (error) throw error;
+  return (data || []).map((r) => ({
+    id: r.id,
+    caption: r.caption,
+    media_type: r.media_type,
+    thumbnail_url: r.thumbnail_url,
+    views: r.views,
+    likes: r.likes,
+    comments: r.comments,
+    published_at: r.published_at || r.published_date,
+  }));
+}
+
 /** Query string that hands a watched video to Studio scripting as an idea seed. */
 export function clioParams(v: WatchVideo): string {
   return new URLSearchParams({
