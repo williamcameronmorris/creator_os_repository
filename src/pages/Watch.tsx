@@ -13,6 +13,7 @@ import {
   type MyPost,
 } from '../lib/watch';
 import { WatchPlayer } from '../components/WatchPlayer';
+import { WatchVideoStats } from '../components/WatchVideoStats';
 
 const GOLD = '#C8A24B';
 const ACCENTS = ['#B07050', '#7A9E89', '#C8A24B', '#1A1816'];
@@ -307,19 +308,8 @@ export function Watch() {
                     Clio
                   </button>
                 </div>
-                <div className="flex items-center gap-2 mt-1.5 text-[11px] text-muted-foreground">
-                  <span>{v.creatorTitle}</span>
-                  <span className="w-0.5 h-0.5 rounded-full bg-current opacity-50" />
-                  <span>{formatCount(v.view_count)} views</span>
-                  {v.packaging_percentile != null && (
-                    <>
-                      <span className="w-0.5 h-0.5 rounded-full bg-current opacity-50" />
-                      <span style={v.packaging_percentile >= 60 ? { color: '#8a6d22' } : undefined}>
-                        {v.packaging_percentile}th pct packaging
-                      </span>
-                    </>
-                  )}
-                </div>
+                <div className="mt-1.5 text-[11px] text-muted-foreground">{v.creatorTitle}</div>
+                <WatchVideoStats video={v} niche={WATCH_NICHE} />
               </div>
             ))}
           </div>

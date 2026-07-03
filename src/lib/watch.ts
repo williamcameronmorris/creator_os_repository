@@ -33,6 +33,8 @@ export interface WatchVideo {
   packaging_percentile: number | null;
   creatorTitle: string | null;
   channelId: string | null;
+  creator_avg_views: number | null;
+  creator_subscriber_count: number | null;
 }
 
 // Page 1 ships YouTube for a single seeded niche. Deriving the niche per user
@@ -70,11 +72,16 @@ export async function getWatchFeed(
     .limit(30);
   if (error) throw error;
 
-  return (data || []).map((r) => ({
-    ...r,
-    creatorTitle: byId.get(r.suggested_creator_id)?.title ?? null,
-    channelId: byId.get(r.suggested_creator_id)?.channel_id ?? null,
-  })) as WatchVideo[];
+  return (data || []).map((r) => {
+    const c = byId.get(r.suggested_creator_id);
+    return {
+      ...r,
+      creatorTitle: c?.title ?? null,
+      channelId: c?.channel_id ?? null,
+      creator_avg_views: c?.avg_views ?? null,
+      creator_subscriber_count: c?.subscriber_count ?? null,
+    };
+  }) as WatchVideo[];
 }
 
 export async function getCreator(id: string): Promise<SuggestedCreator | null> {
@@ -94,7 +101,13 @@ export async function getCreatorVideos(creatorId: string): Promise<WatchVideo[]>
     .eq('suggested_creator_id', creatorId)
     .order('view_count', { ascending: false, nullsFirst: false });
   if (error) throw error;
-  return (data || []).map((r) => ({ ...r, creatorTitle: null, channelId: null })) as WatchVideo[];
+  return (data || []).map((r) => ({
+    ...r,
+    creatorTitle: null,
+    channelId: null,
+    creator_avg_views: null,
+    creator_subscriber_count: null,
+  })) as WatchVideo[];
 }
 
 export async function getTrackedChannelIds(): Promise<Set<string>> {
