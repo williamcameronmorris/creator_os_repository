@@ -1,14 +1,16 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Play, Sparkles, Flame, X } from 'lucide-react';
+import { useNavigate, Link } from 'react-router-dom';
+import { Play, Sparkles, Flame } from 'lucide-react';
 import {
   getSuggestedCreators,
   getWatchFeed,
   formatCount,
+  clioParams,
   WATCH_NICHE,
   type SuggestedCreator,
   type WatchVideo,
 } from '../lib/watch';
+import { WatchPlayer } from '../components/WatchPlayer';
 
 const GOLD = '#C8A24B';
 const ACCENTS = ['#B07050', '#7A9E89', '#C8A24B', '#1A1816'];
@@ -63,16 +65,7 @@ export function Watch() {
     };
   }, [platform]);
 
-  const sendToClio = (v: WatchVideo) => {
-    const params = new URLSearchParams({
-      autostart: '1',
-      idea: v.title,
-      platform: 'youtube',
-      type: 'short',
-      reasoning: `Modeled from ${v.creatorTitle ?? 'a top creator'}'s top-performing short`,
-    });
-    navigate(`/studio/script?${params.toString()}`);
-  };
+  const sendToClio = (v: WatchVideo) => navigate(`/studio/script?${clioParams(v)}`);
 
   return (
     <div className="max-w-md mx-auto px-4 pt-4">
@@ -147,9 +140,13 @@ export function Watch() {
           </div>
           <div className="flex gap-4 overflow-x-auto pb-4 mb-2 border-b border-border -mx-4 px-4">
             {creators.map((c, i) => (
-              <div key={c.id} className="flex flex-col items-center gap-1.5 w-16 flex-shrink-0">
+              <Link
+                key={c.id}
+                to={`/watch/creator/${c.id}`}
+                className="flex flex-col items-center gap-1.5 w-16 flex-shrink-0"
+              >
                 <div
-                  className="w-13 h-13 rounded-full flex items-center justify-center text-cream font-semibold text-sm"
+                  className="rounded-full flex items-center justify-center font-semibold text-sm"
                   style={{
                     width: 52,
                     height: 52,
@@ -165,7 +162,7 @@ export function Watch() {
                 <span className="font-mono text-[9px] text-muted-foreground">
                   {formatCount(c.subscriber_count)}
                 </span>
-              </div>
+              </Link>
             ))}
           </div>
 
@@ -231,46 +228,14 @@ export function Watch() {
 
       {/* in-app player */}
       {playing && (
-        <div
-          className="fixed inset-0 z-[70] flex items-center justify-center px-4"
-          style={{ background: 'rgba(0,0,0,0.85)' }}
-          onClick={() => setPlaying(null)}
-        >
-          <div className="w-full max-w-md" onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-end mb-2">
-              <button
-                onClick={() => setPlaying(null)}
-                className="w-8 h-8 flex items-center justify-center"
-                style={{ color: '#F7F4EE' }}
-                aria-label="Close player"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div style={{ aspectRatio: '9 / 16', maxHeight: '78vh' }} className="mx-auto">
-              <iframe
-                title={playing.title}
-                src={`https://www.youtube.com/embed/${playing.video_id}?autoplay=1&playsinline=1`}
-                className="w-full h-full"
-                style={{ border: 0 }}
-                allow="autoplay; encrypted-media; picture-in-picture"
-                allowFullScreen
-              />
-            </div>
-            <button
-              onClick={() => {
-                const v = playing;
-                setPlaying(null);
-                sendToClio(v);
-              }}
-              className="w-full mt-3 flex items-center justify-center gap-2 py-2.5 font-mono text-[10px] tracking-widest uppercase"
-              style={{ background: GOLD, color: '#43340c' }}
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              Turn into a Clio idea
-            </button>
-          </div>
-        </div>
+        <WatchPlayer
+          video={playing}
+          onClose={() => setPlaying(null)}
+          onSendToClio={(v) => {
+            setPlaying(null);
+            sendToClio(v);
+          }}
+        />
       )}
     </div>
   );
