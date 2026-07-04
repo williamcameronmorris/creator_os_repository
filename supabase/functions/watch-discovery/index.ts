@@ -30,6 +30,10 @@ const corsHeaders = {
 const YT = "https://www.googleapis.com/youtube/v3";
 const MAX_NICHES_PER_RUN = 5;
 const CREATORS_PER_NICHE = 8;
+const VIDEOS_PER_CREATOR = 3;
+// A video is flagged "top" when it beats its creator's average by this much.
+// (Tunable — the badge treatment itself is a later design pass.)
+const OUTLIER_MULT = 10;
 // Channels above this are almost always general-audience virality (Zack D.
 // Films etc.), not niche creators worth studying. Drop them.
 const MAX_SUBSCRIBERS = 3_000_000;
@@ -132,16 +136,14 @@ async function discoverNiche(
     auth,
   );
   const items: any[] = search.items || [];
-  const videoIds = items.map((i) => i.id?.videoId).filter(Boolean);
-
   const channelIds: string[] = [];
   for (const it of items) {
     const ch = it.snippet?.channelId;
     if (ch && !channelIds.includes(ch)) channelIds.push(ch);
   }
-  if (channelIds.length === 0) return { creators: 0, videos: 0 };
+  if (channelIds.length === 0) return { creators: 0, videos: 0, scored: 0 };
 
-  // 2. Channel stats.
+  // 2. Channel stats → drop mega-channels, rank by subs, take the top N.
   const chans = await ytJson(
     "channels",
     { part: "snippet,statistics", id: channelIds.slice(0, 20).join(","), maxResults: 50 },
@@ -163,14 +165,44 @@ async function discoverNiche(
     .filter((c: any) => c.title && c.subscriber_count <= MAX_SUBSCRIBERS);
   channels.sort((a: any, b: any) => b.subscriber_count - a.subscriber_count);
   const top = channels.slice(0, CREATORS_PER_NICHE);
-  if (top.length === 0) return { creators: 0, videos: 0 };
+  if (top.length === 0) return { creators: 0, videos: 0, scored: 0 };
 
-  // 3. Video stats.
-  const vids = await ytJson(
-    "videos",
-    { part: "snippet,statistics", id: videoIds.slice(0, 40).join(","), maxResults: 50 },
-    auth,
+  // 3. Each creator's OUTLIERS: their top shorts by view count, not the niche
+  // search's recent videos. This is what makes the feed "what's working"
+  // rather than "what's recent."
+  const perCreator = await Promise.all(
+    top.map((c: any) =>
+      ytJson(
+        "search",
+        {
+          part: "snippet",
+          channelId: c.channel_id,
+          type: "video",
+          videoDuration: "short",
+          order: "viewCount",
+          maxResults: 5,
+        },
+        auth,
+      )
+        .then((r: any) =>
+          ((r.items || []) as any[])
+            .map((i) => i.id?.videoId)
+            .filter(Boolean)
+            .slice(0, VIDEOS_PER_CREATOR),
+        )
+        .catch(() => [] as string[]),
+    ),
   );
+  const allVideoIds = [...new Set(perCreator.flat())];
+
+  // 4. Stats for those top shorts.
+  const vids = allVideoIds.length
+    ? await ytJson(
+        "videos",
+        { part: "snippet,statistics", id: allVideoIds.slice(0, 50).join(","), maxResults: 50 },
+        auth,
+      )
+    : { items: [] };
   const videoStats = (vids.items || []).map((v: any) => ({
     video_id: v.id as string,
     channel_id: v.snippet?.channelId as string,
@@ -202,9 +234,11 @@ async function discoverNiche(
   const idByChannel = new Map((upserted || []).map((r: any) => [r.channel_id, r.id]));
   const avgByChannel = new Map(top.map((c: any) => [c.channel_id, c.avg_views || 1]));
 
-  // 5. Upsert videos for the top creators.
+  // 5. Upsert videos for the top creators (highest-viewed first, so the
+  //    capped Brightbean scoring pass covers the strongest ones).
   const videoRows: Array<Record<string, unknown>> = videoStats
     .filter((v: any) => idByChannel.has(v.channel_id))
+    .sort((a: any, b: any) => b.view_count - a.view_count)
     .map((v: any) => ({
       suggested_creator_id: idByChannel.get(v.channel_id),
       platform: "youtube",
@@ -213,8 +247,7 @@ async function discoverNiche(
       thumbnail_url: v.thumbnail_url,
       view_count: v.view_count,
       published_at: v.published_at,
-      // Fallback signal when Brightbean scoring is unavailable.
-      is_top: v.view_count >= 2 * (avgByChannel.get(v.channel_id) || 1),
+      is_top: v.view_count >= OUTLIER_MULT * (avgByChannel.get(v.channel_id) || 1),
       packaging_percentile: null,
       packaging_score: null,
     }));
@@ -233,7 +266,6 @@ async function discoverNiche(
       if (res) {
         toScore[i].packaging_percentile = res.percentile;
         toScore[i].packaging_score = res.score;
-        toScore[i].is_top = res.percentile >= 70;
         scored++;
       }
     });
