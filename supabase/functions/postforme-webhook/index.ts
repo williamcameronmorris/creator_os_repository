@@ -17,6 +17,16 @@ import { createClient } from "npm:@supabase/supabase-js@2";
  *      function will reject all requests once the secret is configured and
  *      a request arrives without a valid signature header.)
  *
+ * Signature scheme: PFM signs with a Svix-style scheme (secret has the
+ * `whsec_` prefix). The signed content is `${id}.${timestamp}.${rawBody}`,
+ * HMAC-SHA256, base64-encoded, delivered in a space-separated
+ * `webhook-signature: v1,<sig> v2,<sig>` header with `webhook-id` and
+ * `webhook-timestamp` companions. Because this secret isn't standard-length
+ * base64, we can't be sure PFM base64-decodes the key vs. uses it raw, so we
+ * accept a match under EITHER key interpretation — both are secret-gated, so
+ * neither is forgeable without the secret. Tighten to the confirmed scheme
+ * once a real event is observed in the logs.
+ *
  * Lookup strategy: PFM events identify posts by their PFM `post_id`. We
  * stored that on every row at create time as `postforme_post_id`, so we
  * update by that key (one or many platform-mirror rows may exist per PFM
@@ -30,45 +40,85 @@ const WEBHOOK_SECRET = Deno.env.get("Post_For_Me_Webhook_Secret");
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, X-PostForMe-Signature, X-Webhook-Signature",
+  "Access-Control-Allow-Headers":
+    "Content-Type, X-PostForMe-Signature, X-Webhook-Signature, Webhook-Id, Webhook-Timestamp, Webhook-Signature, Svix-Id, Svix-Timestamp, Svix-Signature",
 };
 
-async function verifySignature(rawBody: string, signature: string | null): Promise<boolean> {
-  // Fail CLOSED: without a configured secret we cannot verify the sender, so we
-  // reject. (Previously this returned true, letting anyone POST forged PFM
-  // events to flip post status.) postforme-sync reconciles status on its 6h
-  // poll, so real events aren't lost — but set Post_For_Me_Webhook_Secret for
-  // real-time updates.
-  if (!WEBHOOK_SECRET) return false;
-  if (!signature) return false;
+function firstHeader(req: Request, names: string[]): string | null {
+  for (const n of names) {
+    const v = req.headers.get(n);
+    if (v) return v;
+  }
+  return null;
+}
 
-  // PFM's exact signature scheme isn't documented in the public OpenAPI
-  // spec, so we accept either a plain HMAC-SHA256 hex digest or the common
-  // "sha256=<digest>" prefix form. Update this when PFM publishes their
-  // signature spec.
-  const provided = signature.startsWith("sha256=") ? signature.slice(7) : signature;
+function constantTimeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
 
-  const enc = new TextEncoder();
-  const keyData = enc.encode(WEBHOOK_SECRET);
+async function hmacBase64(keyBytes: Uint8Array, message: string): Promise<string> {
   const key = await crypto.subtle.importKey(
     "raw",
-    keyData,
+    keyBytes,
     { name: "HMAC", hash: "SHA-256" },
     false,
     ["sign"],
   );
-  const sigBytes = await crypto.subtle.sign("HMAC", key, enc.encode(rawBody));
-  const expected = Array.from(new Uint8Array(sigBytes))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
+  const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(message));
+  return btoa(String.fromCharCode(...new Uint8Array(sig)));
+}
 
-  // Constant-time compare
-  if (provided.length !== expected.length) return false;
-  let diff = 0;
-  for (let i = 0; i < expected.length; i++) {
-    diff |= provided.charCodeAt(i) ^ expected.charCodeAt(i);
+/**
+ * Verify a Svix-style signature. Returns true when the computed HMAC matches
+ * any `v*,<sig>` entry in the signature header, under either key
+ * interpretation (base64-decoded or raw). Fails CLOSED when the secret or any
+ * required header is missing — postforme-sync reconciles status on its 6h
+ * poll, so real events aren't lost, but set Post_For_Me_Webhook_Secret for
+ * real-time updates.
+ */
+async function verifySignature(
+  rawBody: string,
+  id: string | null,
+  timestamp: string | null,
+  signatureHeader: string | null,
+): Promise<boolean> {
+  if (!WEBHOOK_SECRET || !id || !timestamp || !signatureHeader) return false;
+
+  const signedContent = `${id}.${timestamp}.${rawBody}`;
+
+  // Candidate signing keys. Standard Svix base64-decodes the part after
+  // `whsec_`; some implementations sign with the raw string. Try both.
+  const rawSecret = WEBHOOK_SECRET.startsWith("whsec_")
+    ? WEBHOOK_SECRET.slice(6)
+    : WEBHOOK_SECRET;
+  const keyCandidates: Uint8Array[] = [];
+  try {
+    keyCandidates.push(Uint8Array.from(atob(rawSecret), (c) => c.charCodeAt(0)));
+  } catch {
+    // rawSecret isn't valid base64 — skip this interpretation
   }
-  return diff === 0;
+  keyCandidates.push(new TextEncoder().encode(rawSecret));
+
+  const expected: string[] = [];
+  for (const keyBytes of keyCandidates) {
+    expected.push(await hmacBase64(keyBytes, signedContent));
+  }
+
+  // Header is a space-separated list of "<version>,<base64sig>" entries.
+  const provided = signatureHeader.split(" ").map((part) => {
+    const comma = part.indexOf(",");
+    return comma >= 0 ? part.slice(comma + 1) : part;
+  });
+
+  for (const sig of provided) {
+    for (const exp of expected) {
+      if (constantTimeEqual(sig, exp)) return true;
+    }
+  }
+  return false;
 }
 
 function deriveStatus(eventType: string, payloadStatus?: string): string | null {
@@ -97,11 +147,33 @@ Deno.serve(async (req) => {
   }
 
   const rawBody = await req.text();
-  const signature = req.headers.get("X-PostForMe-Signature")
-    || req.headers.get("X-Webhook-Signature")
-    || req.headers.get("Webhook-Signature");
+  const webhookId = firstHeader(req, ["webhook-id", "svix-id", "Webhook-Id", "Svix-Id"]);
+  const webhookTimestamp = firstHeader(req, [
+    "webhook-timestamp",
+    "svix-timestamp",
+    "Webhook-Timestamp",
+    "Svix-Timestamp",
+  ]);
+  const signature = firstHeader(req, [
+    "webhook-signature",
+    "svix-signature",
+    "Webhook-Signature",
+    "Svix-Signature",
+    "X-PostForMe-Signature",
+    "X-Webhook-Signature",
+  ]);
 
-  if (!(await verifySignature(rawBody, signature))) {
+  const ok = await verifySignature(rawBody, webhookId, webhookTimestamp, signature);
+  if (!ok) {
+    // One-line diagnostic (no secret logged) so a real event's actual header
+    // shape can be confirmed from the logs if verification ever misses.
+    console.warn("postforme-webhook: signature rejected", {
+      hasSecret: !!WEBHOOK_SECRET,
+      haveId: !!webhookId,
+      haveTs: !!webhookTimestamp,
+      haveSig: !!signature,
+      headerNames: [...req.headers.keys()],
+    });
     return new Response(JSON.stringify({ error: "Invalid signature" }), {
       status: 401,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
