@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase, type AIContentSuggestion } from '../../lib/supabase';
-import { Sparkles, Bot, ThumbsDown, RefreshCw, ArrowRight, PenTool, Lightbulb, Zap } from 'lucide-react';
+import { Sparkles, Bot, ThumbsDown, ArrowRight, PenTool, Lightbulb, Zap } from 'lucide-react';
 
 interface IdeationStageProps {
   onIdeaSelected: (idea: AIContentSuggestion) => void;
@@ -91,73 +91,74 @@ export function IdeationStage({ onIdeaSelected, prefilledIdea }: IdeationStagePr
     finally { setSelectingId(null); }
   };
 
-  const platformColor = (platform: string) => {
-    if (platform === 'instagram') return 'bg-pink-500/10 text-pink-600';
-    if (platform === 'tiktok') return 'bg-foreground/10 text-foreground';
-    return 'bg-red-500/10 text-red-600';
-  };
-
   return (
     <div className="max-w-4xl mx-auto">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
-        <div>
-          <h2 className="text-2xl font-bold text-foreground">Ideation</h2>
-          <p className="text-muted-foreground text-sm">Choose a concept to start your production line.</p>
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-8">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 border border-border flex items-center justify-center flex-shrink-0">
+            <Lightbulb className="w-5 h-5 text-foreground" />
+          </div>
+          <div>
+            <h2 className="text-foreground" style={{ fontSize: '1.5rem', fontWeight: 500, letterSpacing: '-0.01em', lineHeight: 1.15 }}>
+              Ideation
+            </h2>
+            <p className="t-body">Choose a concept to start your production line.</p>
+          </div>
         </div>
         <div className="flex gap-2">
           <button
             onClick={() => setMode('ai')}
-            className="font-mono text-[10px] font-medium uppercase tracking-widest px-3 py-2 border transition-colors flex items-center gap-2"
+            className="t-micro px-3 py-2 border transition-colors flex items-center gap-2"
             style={{
               borderColor: mode === 'ai' ? 'var(--accent)' : 'var(--border)',
               color: mode === 'ai' ? 'var(--accent)' : 'var(--foreground)',
             }}
           >
-            <Sparkles className="w-3.5 h-3.5" /> AI SUGGESTIONS
+            <Sparkles className="w-3.5 h-3.5" /> AI suggestions
           </button>
           <button
             onClick={() => setMode('manual')}
-            className="font-mono text-[10px] font-medium uppercase tracking-widest px-3 py-2 border transition-colors flex items-center gap-2"
+            className="t-micro px-3 py-2 border transition-colors flex items-center gap-2"
             style={{
               borderColor: mode === 'manual' ? 'var(--accent)' : 'var(--border)',
               color: mode === 'manual' ? 'var(--accent)' : 'var(--foreground)',
             }}
           >
-            <PenTool className="w-3.5 h-3.5" /> MANUAL ENTRY
+            <PenTool className="w-3.5 h-3.5" /> Manual entry
           </button>
         </div>
       </div>
 
       {mode === 'manual' ? (
-        <div className="bg-card border border-border rounded-2xl p-6 sm:p-8 shadow-sm">
-          <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center mb-6">
-            <Lightbulb className="w-6 h-6 text-primary" />
+        <div className="bg-card border border-border p-6 sm:p-8">
+          <div className="w-12 h-12 border border-border flex items-center justify-center mb-6">
+            <Lightbulb className="w-5 h-5 text-foreground" />
           </div>
-          <h3 className="text-xl font-bold text-foreground mb-6">What's on your mind?</h3>
+          <h3 className="text-foreground mb-6" style={{ fontSize: '1.25rem', fontWeight: 500 }}>What's on your mind?</h3>
           <div className="space-y-6">
             <div>
-              <label className="block text-sm font-semibold text-foreground mb-2">Concept / Topic</label>
+              <label className="t-micro text-foreground block mb-2">Concept / Topic</label>
               <input
                 type="text"
                 value={manualTopic}
                 onChange={(e) => setManualTopic(e.target.value)}
-                placeholder="e.g., Day in the life, Q&A, Product Review..."
-                className="w-full px-4 py-3 rounded-xl border border-border focus:ring-2 focus:ring-primary outline-none bg-background text-foreground placeholder:text-muted-foreground"
+                placeholder="e.g. Day in the life, Q&A, product review…"
+                className="w-full px-4 py-3 border border-border bg-background text-foreground outline-none transition-colors focus:border-foreground placeholder:text-muted-foreground"
                 autoFocus
               />
             </div>
             <div>
-              <label className="block text-sm font-semibold text-foreground mb-2">Intended Format</label>
+              <label className="t-micro text-foreground block mb-2">Intended format</label>
               <div className="grid grid-cols-2 sm:flex gap-3">
                 {['reel', 'story', 'post', 'video'].map(fmt => (
                   <button
                     key={fmt}
                     onClick={() => setManualFormat(fmt)}
-                    className={`px-4 py-2 rounded-lg border text-sm font-medium capitalize transition-colors ${
-                      manualFormat === fmt
-                        ? 'bg-primary/10 border-primary/30 text-primary'
-                        : 'border-border hover:bg-accent text-foreground'
-                    }`}
+                    className="px-4 py-2 border text-sm capitalize transition-colors"
+                    style={{
+                      borderColor: manualFormat === fmt ? 'var(--accent)' : 'var(--border)',
+                      color: manualFormat === fmt ? 'var(--accent)' : 'var(--foreground)',
+                    }}
                   >
                     {fmt}
                   </button>
@@ -167,13 +168,13 @@ export function IdeationStage({ onIdeaSelected, prefilledIdea }: IdeationStagePr
             <button
               onClick={handleManualSubmit}
               disabled={!manualTopic || submitting}
-              className="w-full py-4 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="btn-ie btn-ie-solid w-full disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              {submitting ? (
-                <><RefreshCw className="w-5 h-5 animate-spin" /> Starting...</>
-              ) : (
-                <><ArrowRight className="w-5 h-5" /> Start Project</>
-              )}
+              <span className="btn-ie-text flex items-center gap-2">
+                {submitting
+                  ? <><span className="w-4 h-4 border-2 border-background border-t-transparent rounded-full animate-spin" /> Starting…</>
+                  : <><ArrowRight className="w-4 h-4" /> Start project</>}
+              </span>
             </button>
           </div>
         </div>
@@ -183,43 +184,39 @@ export function IdeationStage({ onIdeaSelected, prefilledIdea }: IdeationStagePr
           {prefilledIdea && (
             <div className="mb-6">
               <div className="flex items-center gap-2 mb-3">
-                <Zap className="w-3.5 h-3.5 text-primary" />
-                <span className="text-xs font-semibold text-primary uppercase tracking-widest">From Your Daily Brief</span>
+                <Zap className="w-3.5 h-3.5" style={{ color: 'var(--accent)' }} />
+                <span className="t-micro" style={{ color: 'var(--accent)' }}>From your daily brief</span>
               </div>
               <div
-                className="bg-primary/5 border-2 border-primary/25 rounded-2xl p-4 sm:p-6 shadow-sm hover:shadow-md hover:border-primary/40 transition-all group cursor-pointer"
+                className="bg-card border p-4 sm:p-6 transition-colors group cursor-pointer"
+                style={{ borderColor: 'var(--accent)' }}
                 onClick={() => handleSelectIdea(prefilledIdea)}
               >
                 <div className="flex items-start justify-between gap-3 sm:gap-4">
                   <div className="flex-1 min-w-0">
                     {prefilledIdea.suggested_format && prefilledIdea.suggested_format !== prefilledIdea.suggested_topic && (
-                      <p className="text-sm italic text-foreground/60 mb-3 leading-relaxed border-l-2 border-primary/30 pl-3">
+                      <p className="text-sm italic text-muted-foreground mb-3 leading-relaxed pl-3" style={{ borderLeft: '2px solid var(--accent)' }}>
                         "{prefilledIdea.suggested_format}"
                       </p>
                     )}
                     <div className="flex items-center gap-2 sm:gap-3 mb-2 flex-wrap">
-                      <span className={`px-2 sm:px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wide ${platformColor(prefilledIdea.platform)}`}>
-                        {prefilledIdea.platform}
-                      </span>
-                      <span className="text-xs font-medium text-muted-foreground capitalize">{prefilledIdea.content_type}</span>
+                      <span className="t-micro px-2 py-1 border border-border">{prefilledIdea.platform}</span>
+                      <span className="t-micro capitalize">{prefilledIdea.content_type}</span>
                     </div>
-                    <h3 className="text-base sm:text-lg font-bold text-foreground mb-1 break-words">{prefilledIdea.suggested_topic}</h3>
+                    <h3 className="text-foreground mb-1 break-words" style={{ fontSize: '1.05rem', fontWeight: 500 }}>{prefilledIdea.suggested_topic}</h3>
                     <p className="text-sm text-muted-foreground line-clamp-2">{prefilledIdea.reasoning}</p>
                   </div>
-                  <div className="flex-shrink-0">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleSelectIdea(prefilledIdea); }}
-                      disabled={selectingId === '__prefilled__'}
-                      className="p-2 sm:p-3 bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-colors shadow-sm group-hover:scale-105 transform disabled:opacity-70 disabled:cursor-not-allowed"
-                      title="Start Project"
-                    >
-                      {selectingId === '__prefilled__' ? (
-                        <RefreshCw className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" />
-                      ) : (
-                        <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5" />
-                      )}
-                    </button>
-                  </div>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleSelectIdea(prefilledIdea); }}
+                    disabled={selectingId === '__prefilled__'}
+                    className="flex-shrink-0 w-10 h-10 flex items-center justify-center border transition-colors disabled:opacity-60"
+                    style={{ borderColor: 'var(--accent)', color: 'var(--accent)' }}
+                    title="Start project"
+                  >
+                    {selectingId === '__prefilled__'
+                      ? <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                      : <ArrowRight className="w-4 h-4" />}
+                  </button>
                 </div>
               </div>
             </div>
@@ -229,60 +226,57 @@ export function IdeationStage({ onIdeaSelected, prefilledIdea }: IdeationStagePr
             <button
               onClick={generateIdeas}
               disabled={generating}
-              className="px-8 py-4 bg-primary text-primary-foreground rounded-xl font-medium hover:bg-primary/90 transition-all shadow-lg hover:shadow-xl flex items-center gap-2 mx-auto disabled:opacity-70 disabled:cursor-not-allowed"
+              className="btn-ie btn-ie-solid mx-auto disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              {generating ? (
-                <><RefreshCw className="w-5 h-5 animate-spin" /> Analyzing Performance...</>
-              ) : (
-                <><Bot className="w-5 h-5" /> Generate New Ideas</>
-              )}
+              <span className="btn-ie-text flex items-center gap-2">
+                {generating
+                  ? <><span className="w-4 h-4 border-2 border-background border-t-transparent rounded-full animate-spin" /> Analyzing performance…</>
+                  : <><Bot className="w-4 h-4" /> Generate new ideas</>}
+              </span>
             </button>
           </div>
 
           <div className="grid gap-4">
             {loading ? (
-              <div className="text-center text-muted-foreground py-10">Loading suggestions...</div>
+              <div className="text-center t-body py-10">Loading suggestions…</div>
             ) : suggestions.length === 0 && !generating ? (
-              <div className="text-center text-muted-foreground py-10 border-2 border-dashed border-border rounded-2xl">
-                No active ideas. Click generate to start.
+              <div className="text-center t-body py-10 border border-dashed border-border">
+                No active ideas. Generate to start.
               </div>
             ) : (
               suggestions.map((idea) => (
-                <div key={idea.id} className="bg-card border border-border rounded-2xl p-4 sm:p-6 shadow-sm hover:shadow-md transition-all group">
+                <div key={idea.id} className="bg-card border border-border p-4 sm:p-6 transition-colors hover:border-foreground/50 group">
                   <div className="flex items-start justify-between gap-3 sm:gap-4">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 sm:gap-3 mb-2 flex-wrap">
-                        <span className={`px-2 sm:px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wide ${platformColor(idea.platform)}`}>
-                          {idea.platform}
-                        </span>
-                        <span className="text-xs font-medium text-green-600 flex items-center gap-1">
+                        <span className="t-micro px-2 py-1 border border-border">{idea.platform}</span>
+                        <span className="t-micro flex items-center gap-1" style={{ color: 'var(--accent)' }}>
                           <Sparkles className="w-3 h-3" />
-                          {idea.confidence_score}% Match
+                          {idea.confidence_score}% match
                         </span>
                       </div>
-                      <h3 className="text-base sm:text-lg font-bold text-foreground mb-1 break-words">{idea.suggested_topic}</h3>
+                      <h3 className="text-foreground mb-1 break-words" style={{ fontSize: '1.05rem', fontWeight: 500 }}>{idea.suggested_topic}</h3>
                       <p className="text-sm text-muted-foreground line-clamp-2">{idea.reasoning}</p>
                     </div>
                     <div className="flex flex-col gap-2 flex-shrink-0">
                       <button
                         onClick={() => handleSelectIdea(idea)}
                         disabled={selectingId === idea.id}
-                        className="p-2 sm:p-3 bg-accent text-accent-foreground rounded-xl hover:bg-accent/90 transition-colors shadow-sm group-hover:scale-105 transform disabled:opacity-70 disabled:cursor-not-allowed"
-                        title="Start Project"
+                        className="w-10 h-10 flex items-center justify-center border transition-colors disabled:opacity-60"
+                        style={{ borderColor: 'var(--accent)', color: 'var(--accent)' }}
+                        title="Start project"
                       >
-                        {selectingId === idea.id ? (
-                          <RefreshCw className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" />
-                        ) : (
-                          <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5" />
-                        )}
+                        {selectingId === idea.id
+                          ? <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                          : <ArrowRight className="w-4 h-4" />}
                       </button>
                       <button
                         onClick={() => handleAction(idea.id, 'rejected')}
                         disabled={!!selectingId}
-                        className="p-2 sm:p-3 bg-background border border-border text-muted-foreground rounded-xl hover:bg-card hover:text-foreground transition-colors disabled:opacity-50"
+                        className="w-10 h-10 flex items-center justify-center border border-border text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
                         title="Dismiss"
                       >
-                        <ThumbsDown className="w-4 h-4 sm:w-5 sm:h-5" />
+                        <ThumbsDown className="w-4 h-4" />
                       </button>
                     </div>
                   </div>

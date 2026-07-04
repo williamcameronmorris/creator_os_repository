@@ -219,7 +219,7 @@ export function Studio() {
             <div className="p-4 border-b border-border flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Bot className="w-5 h-5 text-foreground" />
-                <span className="font-mono text-[10px] font-bold tracking-[0.08em] uppercase text-foreground">AI Assistant</span>
+                <span className="font-mono text-[10px] font-medium tracking-[0.08em] uppercase text-foreground">AI Assistant</span>
               </div>
               <div className={`text-xs px-2 py-1 font-medium border ${
                 aiQuota
