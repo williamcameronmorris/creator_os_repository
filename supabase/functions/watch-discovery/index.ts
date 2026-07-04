@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { canonicalNiche } from "../_shared/niche.ts";
 
 /**
  * watch-discovery Edge Function
@@ -348,10 +349,12 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // Resolve niches.
+    // Resolve niches. Canonicalize the same way watch-ensure-niche does, so the
+    // cron writes creators under the SAME slug the app reads (otherwise the
+    // cron's output is orphaned and the feed goes stale).
     let niches: string[];
     if (body.niche) {
-      niches = [String(body.niche).trim().toLowerCase()];
+      niches = [canonicalNiche(String(body.niche))].filter(Boolean);
     } else {
       const { data: profs } = await supabase
         .from("profiles")
@@ -360,7 +363,7 @@ Deno.serve(async (req: Request) => {
       niches = [
         ...new Set(
           (profs || [])
-            .map((p: any) => String(p.niche_preference || "").trim().toLowerCase())
+            .map((p: any) => canonicalNiche(String(p.niche_preference || "")))
             .filter(Boolean),
         ),
       ].slice(0, MAX_NICHES_PER_RUN);

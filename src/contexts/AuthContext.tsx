@@ -64,8 +64,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
-    setUser(null);
+    // Clear local auth state even if the network call fails (offline), so the
+    // UI doesn't stay stuck on the authed screens with a half-cleared session.
+    try {
+      await supabase.auth.signOut();
+    } catch {
+      /* ignore network errors — we still sign out locally */
+    } finally {
+      setUser(null);
+    }
   };
 
   const resetPassword = async (email: string) => {

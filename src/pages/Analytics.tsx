@@ -54,6 +54,7 @@ interface ContentPostRow {
   saves: number | null;
   shares: number | null;
   published_date: string | null;
+  published_at: string | null;
   scheduled_date: string | null;
   instagram_post_id: string | null;
   youtube_video_id: string | null;
@@ -103,11 +104,15 @@ export function Analytics() {
           .order('date', { ascending: true }),
         supabase
           .from('content_posts')
-          .select('id, platform, caption, published_date, likes, comments, views, saves, shares, media_type, thumbnail_url, instagram_post_id, youtube_video_id, tiktok_post_id')
+          .select('id, platform, caption, published_date, published_at, likes, comments, views, saves, shares, media_type, thumbnail_url, instagram_post_id, youtube_video_id, tiktok_post_id')
           .eq('user_id', user.id)
           .eq('status', 'published')
-          .gte('published_date', isoDate(dateValue.range.start))
-          .lte('published_date', isoDate(dateValue.range.end))
+          // App-published posts set published_at (not published_date), so filter
+          // on either column — otherwise the user's own content is excluded.
+          .or(
+            `and(published_at.gte.${isoDate(dateValue.range.start)},published_at.lte.${isoDate(dateValue.range.end)}),` +
+            `and(published_date.gte.${isoDate(dateValue.range.start)},published_date.lte.${isoDate(dateValue.range.end)})`
+          )
           .order('likes', { ascending: false })
           .limit(20),
         supabase
@@ -683,9 +688,10 @@ function perPlatformDelta(
 function buildHeatmap(posts: ContentPostRow[], timezone: string): number[][] {
   const grid: number[][] = Array.from({ length: 7 }, () => Array(24).fill(0));
   for (const p of posts) {
-    if (!p.published_date) continue;
+    const pub = p.published_at ?? p.published_date;
+    if (!pub) continue;
     try {
-      const { day, hour } = getLocalDayAndHour(p.published_date, timezone);
+      const { day, hour } = getLocalDayAndHour(pub, timezone);
       const eng = (p.likes ?? 0) + (p.comments ?? 0);
       grid[day][hour] += eng;
     } catch (_) {
@@ -728,7 +734,7 @@ function buildTopPosts(posts: ContentPostRow[], limit: number): TopPost[] {
     engagement: (p.likes ?? 0) + (p.comments ?? 0),
     engagement_rate:
       (p.views ?? 0) > 0 ? (((p.likes ?? 0) + (p.comments ?? 0)) / (p.views ?? 1)) * 100 : 0,
-    published_at: p.published_date ?? '',
+    published_at: p.published_at ?? p.published_date ?? '',
   }));
 }
 

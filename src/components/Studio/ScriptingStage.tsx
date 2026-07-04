@@ -112,6 +112,7 @@ export function ScriptingStage({ workflowId, contentType, onComplete, onSkip }: 
 
   const handleSave = async (completeStage = false) => {
     setLoading(true);
+    setAiError(null);
     const updateData: any = {
       script_content: {
         ...script,
@@ -124,9 +125,20 @@ export function ScriptingStage({ workflowId, contentType, onComplete, onSkip }: 
       updateData.current_stage = 'creation';
       updateData.script_completed_at = new Date().toISOString();
     }
-    await supabase.from('content_workflow_stages').update(updateData).eq('id', workflowId);
-    if (completeStage) { onComplete(); }
-    setLoading(false);
+    try {
+      const { error } = await supabase
+        .from('content_workflow_stages')
+        .update(updateData)
+        .eq('id', workflowId);
+      // Only advance the workflow if the save actually persisted — otherwise the
+      // script is lost and the user is moved on thinking it was saved.
+      if (error) throw error;
+      if (completeStage) onComplete();
+    } catch (err) {
+      setAiError('Could not save your script. Check your connection and try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

@@ -74,7 +74,11 @@ export function YoutubeCallback() {
         const redirectUri = `${window.location.origin}/auth/youtube/callback`;
 
         const { data: { session } } = await supabase.auth.getSession();
-        const token = session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY;
+        const token = session?.access_token;
+        // Fail closed: youtube-auth derives the user from this token, so the
+        // anon-key fallback would send an unauthenticated request that can't
+        // bind the connection. If the session was lost, ask them to sign in.
+        if (!token) throw new Error('Your session expired. Sign in again, then reconnect YouTube.');
 
         const response = await fetch(
           `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/youtube-auth`,

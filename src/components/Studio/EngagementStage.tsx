@@ -127,15 +127,18 @@ export function EngagementStage({ workflowId, contentType: _contentType, onCompl
     const updated = checklist.map(item =>
       item.id === id ? { ...item, checked: !item.checked } : item
     );
+    const previous = checklist;
     setChecklist(updated);
 
-    await supabase
+    const { error } = await supabase
       .from('content_workflow_stages')
       .update({
         engagement_notes: JSON.stringify({ checklist: updated }),
         updated_at: new Date().toISOString()
       })
       .eq('id', workflowId);
+    // Revert the optimistic toggle if the save didn't persist.
+    if (error) setChecklist(previous);
   };
 
   const handleFinish = async () => {
