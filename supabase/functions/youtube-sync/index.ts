@@ -52,21 +52,14 @@ Deno.serve(async (req: Request) => {
     let body: { userId?: string } = {};
     try { body = await req.json(); } catch { /* empty body ok for user mode */ }
 
-    function isServiceRoleJwt(tok: string): boolean {
-      try {
-        const parts = tok.split(".");
-        if (parts.length !== 3) return false;
-        const payload = JSON.parse(
-          atob(parts[1].replace(/-/g, "+").replace(/_/g, "/"))
-        );
-        return payload?.role === "service_role";
-      } catch {
-        return false;
-      }
-    }
+    // Service-role / cron path authenticated by a real key comparison (the
+    // nightly cron sends the vault service-role key, trimmed). The previous
+    // decode-only role check was FORGEABLE — any unsigned token with a
+    // {"role":"service_role"} payload passed, allowing cross-tenant writes.
+    const isServiceRole = jwt.trim() !== "" && jwt.trim() === supabaseKey.trim();
 
     let userId: string;
-    if (isServiceRoleJwt(jwt)) {
+    if (isServiceRole) {
       if (!body.userId) {
         return new Response(JSON.stringify({ error: "userId required in body for service-role calls" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }

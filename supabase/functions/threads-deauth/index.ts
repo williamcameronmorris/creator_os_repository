@@ -20,6 +20,37 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+/**
+ * Verify Meta's signed_request ("<base64url sig>.<base64url payload>") by
+ * recomputing HMAC-SHA256(payload, app_secret). Returns the decoded payload
+ * only if the signature is valid, else null. This is the ONLY trusted source
+ * of the threads_user_id — a plain JSON body is unauthenticated and must not
+ * be trusted (it let anyone wipe any user's Threads data).
+ */
+async function verifySignedRequest(
+  signedRequest: string,
+  appSecret: string,
+): Promise<Record<string, unknown> | null> {
+  const [sig, payload] = signedRequest.split(".");
+  if (!sig || !payload) return null;
+  try {
+    const key = await crypto.subtle.importKey(
+      "raw",
+      new TextEncoder().encode(appSecret),
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["sign"],
+    );
+    const mac = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(payload));
+    const expected = btoa(String.fromCharCode(...new Uint8Array(mac)))
+      .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    if (expected !== sig.replace(/=+$/, "")) return null;
+    return JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/")));
+  } catch {
+    return null;
+  }
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -33,29 +64,25 @@ Deno.serve(async (req: Request) => {
     const url = new URL(req.url);
     const isDeletion = url.searchParams.get("type") === "delete";
 
-    // Meta sends a signed_request param for deauth callbacks
-    // We parse the payload to get the threads_user_id
-    let threadsUserId: string | null = null;
-
-    const contentType = req.headers.get("content-type") || "";
-    if (contentType.includes("application/json")) {
-      const body = await req.json();
-      threadsUserId = body.threads_user_id || body.user_id || null;
-    } else {
-      // form-encoded
-      const text = await req.text();
-      const params = new URLSearchParams(text);
-      const signedRequest = params.get("signed_request");
-      if (signedRequest) {
-        // Decode the payload portion (second part after the dot)
-        const [, payload] = signedRequest.split(".");
-        if (payload) {
-          const decoded = atob(payload.replace(/-/g, "+").replace(/_/g, "/"));
-          const data = JSON.parse(decoded);
-          threadsUserId = data.user_id || data.threads_user_id || null;
-        }
-      }
+    const appSecret =
+      Deno.env.get("THREADS_APP_SECRET") || Deno.env.get("META_APP_SECRET");
+    if (!appSecret) {
+      // Fail closed: without the secret we cannot verify Meta's signature, so
+      // we must not act on any request.
+      console.error("threads-deauth: no THREADS_APP_SECRET/META_APP_SECRET configured");
+      return new Response(JSON.stringify({ status: "ok" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
+
+    // Only a signature-verified signed_request is trusted. A plain JSON body
+    // (or a signed_request with a bad signature) is ignored.
+    const text = await req.text();
+    const signedRequest = new URLSearchParams(text).get("signed_request");
+    const data = signedRequest ? await verifySignedRequest(signedRequest, appSecret) : null;
+    const threadsUserId = data
+      ? ((data.user_id as string) || (data.threads_user_id as string) || null)
+      : null;
 
     if (!threadsUserId) {
       // Still return 200 — Meta will retry if we return an error

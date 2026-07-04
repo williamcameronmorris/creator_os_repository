@@ -57,21 +57,15 @@ Deno.serve(async (req: Request) => {
     // claim. Comparing against SUPABASE_SERVICE_ROLE_KEY directly is brittle
     // because callers may pass a separately-stored copy of the key (e.g. the
     // value stored in vault for cron use), which can differ by whitespace.
-    function isServiceRoleJwt(tok: string): boolean {
-      try {
-        const parts = tok.split(".");
-        if (parts.length !== 3) return false;
-        const payload = JSON.parse(
-          atob(parts[1].replace(/-/g, "+").replace(/_/g, "/"))
-        );
-        return payload?.role === "service_role";
-      } catch {
-        return false;
-      }
-    }
+    // Service-role / cron path is authenticated by a real key comparison. The
+    // nightly cron sends the vault-stored service-role key (trimmed) as bearer;
+    // .trim() on both sides absorbs any whitespace from the Vault paste. The
+    // previous decode-only role check was FORGEABLE — any unsigned token with a
+    // {"role":"service_role"} payload passed, allowing cross-tenant writes.
+    const isServiceRole = jwt.trim() !== "" && jwt.trim() === supabaseKey.trim();
 
     let userId: string;
-    if (isServiceRoleJwt(jwt)) {
+    if (isServiceRole) {
       // Service-role / cron path
       if (!body.userId) {
         return new Response(
