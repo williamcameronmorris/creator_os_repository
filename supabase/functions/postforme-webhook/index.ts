@@ -34,7 +34,12 @@ const corsHeaders = {
 };
 
 async function verifySignature(rawBody: string, signature: string | null): Promise<boolean> {
-  if (!WEBHOOK_SECRET) return true; // No secret configured — accept (TODO: tighten once registered)
+  // Fail CLOSED: without a configured secret we cannot verify the sender, so we
+  // reject. (Previously this returned true, letting anyone POST forged PFM
+  // events to flip post status.) postforme-sync reconciles status on its 6h
+  // poll, so real events aren't lost — but set Post_For_Me_Webhook_Secret for
+  // real-time updates.
+  if (!WEBHOOK_SECRET) return false;
   if (!signature) return false;
 
   // PFM's exact signature scheme isn't documented in the public OpenAPI
