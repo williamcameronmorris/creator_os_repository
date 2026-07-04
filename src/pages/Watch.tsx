@@ -5,6 +5,7 @@ import {
   getSuggestedCreators,
   getWatchFeed,
   getMyInstagramPosts,
+  ensureWatchNiche,
   formatCount,
   clioParams,
   WATCH_NICHE,
@@ -35,6 +36,8 @@ export function Watch() {
   const [creators, setCreators] = useState<SuggestedCreator[]>([]);
   const [feed, setFeed] = useState<WatchVideo[]>([]);
   const [myPosts, setMyPosts] = useState<MyPost[]>([]);
+  const [niche, setNiche] = useState<string | null>(null);
+  const [needsNiche, setNeedsNiche] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [playing, setPlaying] = useState<WatchVideo | null>(null);
@@ -43,12 +46,23 @@ export function Watch() {
     let active = true;
     setLoading(true);
     setError('');
+    setNeedsNiche(false);
     (async () => {
       try {
         if (platform === 'youtube') {
+          // Resolve the user's niche (runs discovery on demand for a cold niche).
+          const resolved = await ensureWatchNiche();
+          if (!active) return;
+          setNiche(resolved.niche);
+          if (resolved.needsNiche || !resolved.niche) {
+            setNeedsNiche(true);
+            setCreators([]);
+            setFeed([]);
+            return;
+          }
           const [c, f] = await Promise.all([
-            getSuggestedCreators('youtube'),
-            getWatchFeed('youtube'),
+            getSuggestedCreators('youtube', resolved.niche),
+            getWatchFeed('youtube', resolved.niche),
           ]);
           if (!active) return;
           setCreators(c);
@@ -90,12 +104,12 @@ export function Watch() {
         <span className="font-mono text-[10px] tracking-widest uppercase text-muted-foreground">
           Watching
         </span>
-        {platform !== 'instagram' && (
+        {platform !== 'instagram' && (niche || !needsNiche) && (
           <span
             className="font-mono text-[9px] tracking-widest uppercase px-2 py-1 border"
             style={{ borderColor: GOLD, color: '#8a6d22' }}
           >
-            {WATCH_NICHE}
+            {niche ?? WATCH_NICHE}
           </span>
         )}
       </div>
@@ -122,13 +136,29 @@ export function Watch() {
 
       {loading && (
         <div className="py-16 text-center font-mono text-[11px] tracking-wide text-muted-foreground">
-          Loading…
+          {platform === 'youtube' ? 'Finding creators in your niche…' : 'Loading…'}
         </div>
       )}
 
       {error && !loading && (
         <div className="py-16 text-center text-sm text-muted-foreground">
           Couldn't load the feed. {error}
+        </div>
+      )}
+
+      {!loading && !error && platform === 'youtube' && needsNiche && (
+        <div className="py-16 text-center">
+          <p className="text-sm text-foreground mb-1">Set your niche to see creators</p>
+          <p className="text-xs text-muted-foreground mb-4">
+            Watch uses your niche to find creators worth studying.
+          </p>
+          <Link
+            to="/profile"
+            className="inline-block font-mono text-[10px] tracking-widest uppercase px-3 py-2 border"
+            style={{ borderColor: GOLD, color: '#8a6d22' }}
+          >
+            Set niche in profile
+          </Link>
         </div>
       )}
 
@@ -220,7 +250,14 @@ export function Watch() {
         </>
       )}
 
-      {!loading && !error && platform === 'youtube' && (
+      {!loading && !error && platform === 'youtube' && !needsNiche && creators.length === 0 && (
+        <div className="py-16 text-center">
+          <p className="text-sm text-foreground mb-1">No creators for {niche ?? 'your niche'} yet</p>
+          <p className="text-xs text-muted-foreground">We're still gathering them. Check back soon.</p>
+        </div>
+      )}
+
+      {!loading && !error && platform === 'youtube' && !needsNiche && creators.length > 0 && (
         <>
           {/* suggested creators rail */}
           <div className="flex items-center justify-between mb-3">
@@ -309,7 +346,7 @@ export function Watch() {
                   </button>
                 </div>
                 <div className="mt-1.5 text-[11px] text-muted-foreground">{v.creatorTitle}</div>
-                <WatchVideoStats video={v} niche={WATCH_NICHE} />
+                <WatchVideoStats video={v} niche={niche ?? WATCH_NICHE} />
               </div>
             ))}
           </div>
