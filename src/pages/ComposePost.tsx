@@ -63,6 +63,10 @@ export function ComposePost() {
   const { timezone } = useTimezone();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Synchronous in-flight guard: the disabled state only updates after a
+  // re-render, so a fast double-tap can enter submit() twice before then and
+  // publish the post twice to the user's real accounts.
+  const inFlight = useRef(false);
 
   const [accounts, setAccounts] = useState<PostForMeAccount[]>([]);
   const [loadingAccounts, setLoadingAccounts] = useState(true);
@@ -185,6 +189,7 @@ export function ComposePost() {
   };
 
   const submit = async () => {
+    if (inFlight.current) return;
     if (!user || isEmpty || overLimit || noPlatformSelected) return;
     if (missingRequiredMedia) {
       setPublishState('error');
@@ -202,6 +207,7 @@ export function ComposePost() {
       return;
     }
 
+    inFlight.current = true;
     setPublishState('uploading');
     setErrorMsg('');
 
@@ -274,6 +280,8 @@ export function ComposePost() {
     } catch (err) {
       setPublishState('error');
       setErrorMsg((err as Error).message);
+    } finally {
+      inFlight.current = false;
     }
   };
 

@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Image as ImageIcon, Sparkles, Clock, AlertTriangle } from 'lucide-react';
 import { DateTimePicker } from '../DateTimePicker';
+import { useTimezone } from '../../hooks/useTimezone';
+import { localInputToUtc } from '../../lib/timezone';
 
 interface TimeSlot {
   label: string;
@@ -17,7 +19,9 @@ interface SchedulingStageProps {
 }
 
 export function SchedulingStage({ workflowId, contentType, onComplete }: SchedulingStageProps) {
+  const { timezone } = useTimezone();
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const [mediaUrl, setMediaUrl] = useState<string | null>(null);
   const [scheduledDate, setScheduledDate] = useState('');
   const [caption, setCaption] = useState('');
@@ -142,44 +146,54 @@ export function SchedulingStage({ workflowId, contentType, onComplete }: Schedul
   };
 
   const handleSchedule = async () => {
-    if (!scheduledDate) return;
+    if (!scheduledDate || loading) return;
     setLoading(true);
+    setError('');
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('You must be signed in to schedule.');
 
-    const { data: post, error } = await supabase
-      .from('content_posts')
-      .insert({
-        user_id: user.id,
-        platform: 'instagram',
-        content_type: contentType,
-        caption: caption,
-        media_urls: mediaUrl ? [mediaUrl] : [],
-        scheduled_date: new Date(scheduledDate).toISOString(),
-        status: 'scheduled'
-      })
-      .select()
-      .maybeSingle();
+      // Convert the picker's wall-clock value in the user's profile timezone,
+      // and set BOTH scheduled_for (what the publisher claims by) and
+      // scheduled_date — previously only scheduled_date was set, so the post
+      // was never picked up and silently never published.
+      const utc = localInputToUtc(scheduledDate, timezone);
 
-    if (error || !post) {
-      console.error('Error scheduling:', error);
+      const { data: post, error: insertError } = await supabase
+        .from('content_posts')
+        .insert({
+          user_id: user.id,
+          platform: 'instagram',
+          content_type: contentType,
+          caption: caption,
+          media_urls: mediaUrl ? [mediaUrl] : [],
+          scheduled_date: utc,
+          scheduled_for: utc,
+          status: 'scheduled',
+        })
+        .select()
+        .maybeSingle();
+
+      if (insertError || !post) throw insertError || new Error('Could not schedule the post.');
+
+      const { error: stageError } = await supabase
+        .from('content_workflow_stages')
+        .update({
+          current_stage: 'engagement',
+          published_post_id: post.id,
+          schedule_date: utc,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', workflowId);
+      if (stageError) throw stageError;
+
+      onComplete();
+    } catch (err) {
+      setError((err as Error).message || 'Could not schedule the post.');
+    } finally {
       setLoading(false);
-      return;
     }
-
-    await supabase
-      .from('content_workflow_stages')
-      .update({
-        current_stage: 'engagement',
-        published_post_id: post.id,
-        schedule_date: scheduledDate,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', workflowId);
-
-    onComplete();
-    setLoading(false);
   };
 
   return (
@@ -263,6 +277,12 @@ export function SchedulingStage({ workflowId, contentType, onComplete }: Schedul
               <DateTimePicker value={scheduledDate} onChange={(v) => setScheduledDate(v)} />
             </div>
           </div>
+
+          {error && (
+            <p className="mt-4 text-sm text-terracotta" style={{ color: '#B07050' }}>
+              {error}
+            </p>
+          )}
 
           <button
             onClick={handleSchedule}
