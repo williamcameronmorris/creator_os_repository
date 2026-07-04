@@ -20,6 +20,8 @@ import { Profile } from './pages/Profile';
 import { SettingsPage } from './pages/SettingsPage';
 import { PostComposerPage } from './pages/PostComposerPage';
 import { ComposePost } from './pages/ComposePost';
+import { Watch } from './pages/Watch';
+import { WatchCreator } from './pages/WatchCreator';
 import { StudioChallenge } from './pages/StudioChallenge';
 import { Templates } from './pages/Templates';
 import { MetaCallback } from './components/MetaCallback';
@@ -131,6 +133,8 @@ function AppContent() {
       <Route path="/saved-ideas" element={<ProtectedRoute><Layout><SavedIdeasPage /></Layout></ProtectedRoute>} />
 
       {/* Ã¢ÂÂÃ¢ÂÂ Office Ã¢ÂÂÃ¢ÂÂ */}
+      <Route path="/watch" element={<ProtectedRoute><Layout><Watch /></Layout></ProtectedRoute>} />
+      <Route path="/watch/creator/:id" element={<ProtectedRoute><Layout><WatchCreator /></Layout></ProtectedRoute>} />
       <Route path="/office" element={<ProtectedRoute><Layout><OfficeHub /></Layout></ProtectedRoute>} />
       <Route path="/office/connections" element={<ProtectedRoute><Layout><Connections /></Layout></ProtectedRoute>} />
       <Route path="/schedule" element={<ProtectedRoute><Layout><Schedule /></Layout></ProtectedRoute>} />
