@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { exchangeThreadsCode } from '../lib/meta';
@@ -24,6 +24,9 @@ export function ThreadsCallback() {
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [message, setMessage] = useState('Connecting your Threads account...');
   const [handle, setHandle] = useState('');
+  // One-time exchange guard (StrictMode double-run / re-render would hit an
+  // already-consumed OAuth state and show a false "security check failed").
+  const ranOnce = useRef(false);
 
   const code = searchParams.get('code');
   const stateParam = searchParams.get('state');
@@ -46,6 +49,9 @@ export function ThreadsCallback() {
     }
 
     if (!user) return;
+
+    if (ranOnce.current) return;
+    ranOnce.current = true;
 
     const handleExchange = async () => {
       // CSRF defense: refuse callbacks whose state we didn't issue.

@@ -77,6 +77,19 @@ export function CalendarView({ posts, timezone, onPostClick, granularity = 'mont
     } catch (_) { /* skip */ }
   }
 
+  // "Today" resolved in the SAME timezone posts are bucketed by, so the
+  // highlight lands on the day today's posts actually appear on (they can
+  // differ from the browser's local date when the profile tz differs).
+  const todayKeyTz = (() => {
+    try {
+      return new Intl.DateTimeFormat('en-CA', {
+        timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit',
+      }).format(today);
+    } catch (_) {
+      return todayKeyTz;
+    }
+  })();
+
   // ── MONTHLY ────────────────────────────────────────────────────────────────
   if (granularity === 'monthly') {
     const prevMonth = () => {
@@ -95,10 +108,9 @@ export function CalendarView({ posts, timezone, onPostClick, granularity = 'mont
       ...Array(startWeekday).fill(null),
       ...Array.from({ length: totalDays }, (_, i) => i + 1),
     ];
-    const isToday = (day: number) =>
-      day === today.getDate() && viewMonth === today.getMonth() && viewYear === today.getFullYear();
     const dayKey = (day: number) =>
       `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    const isToday = (day: number) => dayKey(day) === todayKeyTz;
 
     return (
       <div className="bg-card border border-border rounded-xl overflow-hidden">
@@ -184,7 +196,7 @@ export function CalendarView({ posts, timezone, onPostClick, granularity = 'mont
         {/* 7-column week grid */}
         <div className="grid grid-cols-7 border-b border-border">
           {days.map(d => {
-            const isToday = toLocalDateKey(d) === toLocalDateKey(today);
+            const isToday = toLocalDateKey(d) === todayKeyTz;
             return (
               <div key={d.toISOString()} className={`py-2 flex flex-col items-center gap-0.5 ${isToday ? 'bg-primary/5' : ''}`}>
                 <span className="text-[10px] font-semibold text-muted-foreground uppercase">{DAY_NAMES_SHORT[d.getDay()]}</span>
@@ -200,7 +212,7 @@ export function CalendarView({ posts, timezone, onPostClick, granularity = 'mont
           {days.map(d => {
             const key = toLocalDateKey(d);
             const dayPosts = postsByDay[key] || [];
-            const isToday = key === toLocalDateKey(today);
+            const isToday = key === todayKeyTz;
             return (
               <div key={key} className={`min-h-[160px] p-1.5 ${isToday ? 'bg-primary/5' : 'bg-card'}`}>
                 {dayPosts.length === 0 ? (
@@ -244,7 +256,7 @@ export function CalendarView({ posts, timezone, onPostClick, granularity = 'mont
   viewDate.setHours(0, 0, 0, 0);
 
   const dayKey = toLocalDateKey(viewDate);
-  const todayKey = toLocalDateKey(today);
+  const todayKey = todayKeyTz;
   const isViewingToday = dayKey === todayKey;
   const dayPosts = (postsByDay[dayKey] || []).sort((a, b) => {
     const aDate = a.scheduled_for || a.scheduled_date;

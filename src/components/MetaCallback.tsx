@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { exchangeMetaCode, type MetaPage } from '../lib/meta';
@@ -24,6 +24,10 @@ export function MetaCallback() {
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [message, setMessage] = useState('Connecting your Meta account...');
   const [pages, setPages] = useState<MetaPage[]>([]);
+  // Guard the one-time code→token exchange: React StrictMode (dev) double-runs
+  // effects, and any re-render that re-fires this effect would hit an
+  // already-consumed OAuth state and show a false "security check failed".
+  const ranOnce = useRef(false);
 
   // Pull params at component level so they can be used in dep array
   const code = searchParams.get('code');
@@ -47,9 +51,13 @@ export function MetaCallback() {
     }
 
     if (!user) {
-      // Auth not loaded yet — wait for useEffect to re-run
+      // Auth not loaded yet — wait for useEffect to re-run (don't set ranOnce
+      // here, so the exchange still runs once the session loads).
       return;
     }
+
+    if (ranOnce.current) return;
+    ranOnce.current = true;
 
     const handleExchange = async () => {
       // CSRF defense: refuse callbacks whose state we didn't issue. Consumes
