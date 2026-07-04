@@ -86,7 +86,7 @@ export function CalendarView({ posts, timezone, onPostClick, granularity = 'mont
         timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit',
       }).format(today);
     } catch (_) {
-      return todayKeyTz;
+      return toLocalDateKey(today);
     }
   })();
 
