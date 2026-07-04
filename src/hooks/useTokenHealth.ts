@@ -63,7 +63,12 @@ export function useTokenHealth(): { platformHealth: PlatformHealth[]; loading: b
 
       const health: PlatformHealth[] = [
         check('instagram', 'Instagram', profile?.instagram_connected, profile?.instagram_token_expires_at),
-        check('youtube', 'YouTube', profile?.youtube_connected, profile?.youtube_token_expires_at),
+        // YouTube stores a short-lived (1h) ACCESS-token expiry that is refreshed
+        // on demand from the long-lived refresh token, so a past value is normal
+        // and not a sign the connection is broken. Judge YouTube by the refresh
+        // token's presence (youtube_connected), not that expiry — otherwise the
+        // banner false-flags "expired" for every healthy YouTube connection.
+        check('youtube', 'YouTube', profile?.youtube_connected, null),
         check('tiktok', 'TikTok', profile?.tiktok_connected, profile?.tiktok_token_expires_at),
         check('threads', 'Threads', profile?.threads_connected, profile?.threads_token_expires_at),
       ].filter((h) => h.status !== 'missing'); // only show platforms that were at some point connected
