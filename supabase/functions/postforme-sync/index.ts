@@ -24,7 +24,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
  *   - Set Supabase secret `Default_PFM_User_Id` = <your auth.users.id>
  *   - Set Supabase secret `Cron_Secret` = <random>
  *   - Schedule via Supabase Dashboard:
- *       Functions > postforme-sync > Schedule > "0 *\/6 * * *"  (every 6h)
+ *       Functions > postforme-sync > Schedule > every 6 hours (cron 0 0,6,12,18)
  *       Body: {"cronSecret":"<your secret>"}
  *
  * What it writes:
@@ -180,41 +180,90 @@ interface PostResult {
   raw: unknown;
 }
 
-async function listPostResults(externalId?: string, limit = 200): Promise<PostResult[]> {
-  const params = new URLSearchParams({ limit: String(limit), page_size: String(limit) });
-  if (externalId) params.set("external_id", externalId);
-  const res = await pfmFetch(`/v1/social-post-results?${params.toString()}`);
-  if (!res.ok) return [];
-  const body = await res.json();
-  const arr = Array.isArray(body) ? body : (body?.data || []);
+function mapPostResult(r: Record<string, unknown>): PostResult {
+  const platform = String(r.platform || (r.account as Record<string, unknown> | undefined)?.platform || "").toLowerCase();
+  const postId = String(
+    r.post_id
+      ?? r.social_post_id
+      ?? (r.post as Record<string, unknown> | undefined)?.id
+      ?? r.id
+      ?? "",
+  );
+  const platformPostId = (r.platform_post_id as string)
+    ?? ((r.result as Record<string, unknown> | undefined)?.platform_post_id as string)
+    ?? null;
+  const publishedAt = (r.published_at as string)
+    ?? (r.posted_at as string)
+    ?? ((r.result as Record<string, unknown> | undefined)?.published_at as string)
+    ?? null;
+  const status = String(r.status || (r.result as Record<string, unknown> | undefined)?.status || "");
 
-  return arr.map((r: Record<string, unknown>): PostResult => {
-    const platform = String(r.platform || (r.account as Record<string, unknown> | undefined)?.platform || "").toLowerCase();
-    const postId = String(
-      r.post_id
-        ?? r.social_post_id
-        ?? (r.post as Record<string, unknown> | undefined)?.id
-        ?? r.id
-        ?? "",
-    );
-    const platformPostId = (r.platform_post_id as string)
-      ?? ((r.result as Record<string, unknown> | undefined)?.platform_post_id as string)
-      ?? null;
-    const publishedAt = (r.published_at as string)
-      ?? (r.posted_at as string)
-      ?? ((r.result as Record<string, unknown> | undefined)?.published_at as string)
-      ?? null;
-    const status = String(r.status || (r.result as Record<string, unknown> | undefined)?.status || "");
+  // Per-platform metrics may live under r.metrics, r.result.metrics, or
+  // directly on r — we try each.
+  const metricsBlob = r.metrics
+    ?? (r.result as Record<string, unknown> | undefined)?.metrics
+    ?? r;
+  const metrics = normalizeMetrics(platform, metricsBlob);
 
-    // Per-platform metrics may live under r.metrics, r.result.metrics, or
-    // directly on r — we try each.
-    const metricsBlob = r.metrics
-      ?? (r.result as Record<string, unknown> | undefined)?.metrics
-      ?? r;
-    const metrics = normalizeMetrics(platform, metricsBlob);
+  return { postId, platform, publishedAt, platformPostId, status, metrics, raw: r };
+}
 
-    return { postId, platform, publishedAt, platformPostId, status, metrics, raw: r };
-  }).filter((r: PostResult) => r.postId && r.platform);
+/**
+ * Fetch ALL post results, paginating through PFM's offset/limit envelope
+ * ({ data: [...], meta: { total, offset, limit, next } }). The previous
+ * implementation grabbed a single 200-row page, so any user with more than
+ * 200 lifetime post-results silently lost metrics on the older ones.
+ *
+ * Guards: a MAX_PAGES cap bounds runaway, and a per-page "added 0 new rows"
+ * check stops the loop if PFM ever ignores `offset` (which would otherwise
+ * refetch page 0 forever). Dedup is by post_id+platform.
+ */
+async function listPostResults(externalId?: string): Promise<PostResult[]> {
+  const PAGE = 100;
+  const MAX_PAGES = 30; // hard safety cap → up to 3000 results/user/run
+  const all: PostResult[] = [];
+  const seen = new Set<string>();
+  let offset = 0;
+
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const params = new URLSearchParams({
+      limit: String(PAGE),
+      page_size: String(PAGE),
+      offset: String(offset),
+    });
+    if (externalId) params.set("external_id", externalId);
+
+    const res = await pfmFetch(`/v1/social-post-results?${params.toString()}`);
+    if (!res.ok) break;
+    const body = await res.json();
+    const arr: Record<string, unknown>[] = Array.isArray(body)
+      ? body
+      : (Array.isArray(body?.data) ? body.data : []);
+    if (arr.length === 0) break;
+
+    let added = 0;
+    for (const r of arr) {
+      const mapped = mapPostResult(r);
+      if (!mapped.postId || !mapped.platform) continue;
+      const key = `${mapped.postId}::${mapped.platform}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      all.push(mapped);
+      added++;
+    }
+
+    const meta = (body && typeof body === "object" ? (body as Record<string, unknown>).meta : null) as
+      | { total?: number; next?: unknown }
+      | null;
+
+    if (added === 0) break;                                     // offset ignored / all dupes → stop
+    if (arr.length < PAGE) break;                               // last (partial) page
+    if (meta && "next" in meta && meta.next == null) break;     // PFM signals no more pages
+    if (meta && typeof meta.total === "number" && all.length >= meta.total) break;
+    offset += arr.length;
+  }
+
+  return all;
 }
 
 interface SyncSummary {
@@ -310,8 +359,13 @@ async function syncForUser(userId: string): Promise<SyncSummary> {
     const existingIds = new Set(
       (existing || []).map((r) => r.platform_post_id).filter((id): id is string => Boolean(id)),
     );
-    const existingTimes = new Set(
+    // Timestamp matching is ONLY a fallback for legacy rows that have no
+    // platform_post_id (the old provider='direct' importer). Applying it to
+    // id-bearing rows would drop a genuinely different post that merely shares
+    // a publish second with an existing one — so restrict it to legacy rows.
+    const legacyTimes = new Set(
       (existing || [])
+        .filter((r) => !r.platform_post_id)
         .map((r) => (r.published_at ? new Date(r.published_at).getTime() : NaN))
         .filter((t) => !Number.isNaN(t)),
     );
@@ -322,7 +376,7 @@ async function syncForUser(userId: string): Promise<SyncSummary> {
         if (existingIds.has(p.platform_post_id)) return false;
         if (p.posted_at) {
           const t = new Date(p.posted_at).getTime();
-          if (!Number.isNaN(t) && existingTimes.has(t)) return false;
+          if (!Number.isNaN(t) && legacyTimes.has(t)) return false;
         }
         return true;
       })
