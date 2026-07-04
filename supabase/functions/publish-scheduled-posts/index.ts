@@ -207,21 +207,13 @@ Deno.serve(async (req: Request) => {
 
   try {
     // ── Atomically claim due posts ────────────────────────────────────────────
-    // Only pick up posts that are:
-    //   • status = 'scheduled'
-    //   • scheduled_for <= now()
-    //   • publish_status IS NULL  (never attempted) or 'failed' (retry once after 30 min)
-    // We immediately flip publish_status → 'publishing' so concurrent runs skip them.
-    const now = new Date().toISOString();
-    const retryWindow = new Date(Date.now() - 30 * 60 * 1000).toISOString();
-
+    // claim_due_posts() does a single UPDATE ... WHERE ... FOR UPDATE SKIP LOCKED
+    // RETURNING, so two concurrent cron runs claim disjoint sets (no
+    // double-publish), and it EXCLUDES provider='postforme' rows — those are
+    // published by Post for Me, and the native cron claiming them was publishing
+    // every Compose-scheduled post twice. See migration claim_due_posts_atomic.
     const { data: duePosts, error: fetchError } = await supabase
-      .from("content_posts")
-      .select("id, user_id, platform, caption, media_urls, publish_status, published_at, content_type")
-      .eq("status", "scheduled")
-      .lte("scheduled_for", now)
-      .or(`publish_status.is.null,and(publish_status.eq.failed,published_at.lte.${retryWindow})`)
-      .limit(20); // process max 20 per run to stay within Edge Function timeout
+      .rpc("claim_due_posts", { p_limit: 20 });
 
     if (fetchError) throw fetchError;
     if (!duePosts || duePosts.length === 0) {
@@ -231,14 +223,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    console.log(`Found ${duePosts.length} post(s) due for publishing`);
-
-    // ── Mark all as 'publishing' before dispatching (prevents duplicate runs) ─
-    const postIds = duePosts.map((p) => p.id);
-    await supabase
-      .from("content_posts")
-      .update({ publish_status: "publishing" })
-      .in("id", postIds);
+    console.log(`Claimed ${duePosts.length} post(s) for publishing`);
 
     // ── Dispatch each post to its platform publisher ─────────────────────────
     const results: PublishResult[] = [];
