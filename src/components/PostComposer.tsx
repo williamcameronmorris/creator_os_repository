@@ -127,9 +127,12 @@ function generateVideoThumbnail(file: File): Promise<string> {
  * Returns true if the datetime-local string is at least MIN_SCHEDULE_MINUTES
  * from now (in the user's local time).
  */
-function isScheduleDateValid(localDatetimeValue: string): boolean {
+function isScheduleDateValid(localDatetimeValue: string, timezone: string): boolean {
   if (!localDatetimeValue) return false;
-  const selected = new Date(localDatetimeValue).getTime();
+  // Interpret the picker value in the user's profile timezone (same as storage),
+  // not the browser's — otherwise a valid future time can be wrongly rejected,
+  // or a past time wrongly accepted, whenever the two timezones differ.
+  const selected = new Date(localInputToUtc(localDatetimeValue, timezone)).getTime();
   const minAllowed = Date.now() + MIN_SCHEDULE_MINUTES * 60 * 1000;
   return selected >= minAllowed;
 }
@@ -222,7 +225,7 @@ export function PostComposer({ onClose, onSuccess, asPage = false, editPost }: P
   const charactersRemaining = lowestCaptionLimit - caption.length;
 
   // ── Schedule date validation ──────────────────────────────────────────────
-  const scheduleDateTooSoon = scheduledDate !== '' && !isScheduleDateValid(scheduledDate);
+  const scheduleDateTooSoon = scheduledDate !== '' && !isScheduleDateValid(scheduledDate, timezone);
 
   // Compute the minimum allowed datetime-local string for the input's min= attribute
   const minScheduleDatetime = (() => {
@@ -318,7 +321,7 @@ export function PostComposer({ onClose, onSuccess, asPage = false, editPost }: P
     if (!caption.trim()) { setErrorMessage('Please add a caption before saving.'); return; }
     if (status === 'scheduled') {
       if (!scheduledDate) { setErrorMessage('Please select a date and time to schedule this post.'); return; }
-      if (!isScheduleDateValid(scheduledDate)) {
+      if (!isScheduleDateValid(scheduledDate, timezone)) {
         setErrorMessage(`Posts must be scheduled at least ${MIN_SCHEDULE_MINUTES} minutes from now. Use "Publish Now" to post immediately.`);
         return;
       }

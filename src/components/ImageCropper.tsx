@@ -151,7 +151,8 @@ export function ImageCropper({ file, platform, onCrop, onCancel }: ImageCropperP
   const handleCrop = () => {
     const img = imgRef.current;
     if (!img) return;
-    const canvas = canvasRef.current!;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
 
     let outW: number, outH: number;
     if (isOriginal) {
@@ -166,7 +167,8 @@ export function ImageCropper({ file, platform, onCrop, onCancel }: ImageCropperP
 
     canvas.width = outW;
     canvas.height = outH;
-    const ctx = canvas.getContext('2d')!;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return; // memory-pressured webviews can return null; bail instead of crashing
 
     if (isOriginal) {
       ctx.drawImage(img, 0, 0, outW, outH);

@@ -251,11 +251,19 @@ export function ComposePost() {
         scheduledAt,
       });
 
+      // Classify media so Analytics/format rendering don't mislabel videos as images.
+      const mediaType = media.some((m) => m.kind === 'video')
+        ? 'video'
+        : media.length > 1
+          ? 'carousel'
+          : 'image';
+
       const rows = platforms.map((platform) => ({
         user_id: user.id,
         platform,
         caption: caption.trim(),
         media_urls: mediaUrls,
+        media_type: mediaType,
         scheduled_date: scheduledForRow,
         scheduled_for: scheduledForRow,
         status: mode === 'now' ? 'publishing' : 'scheduled',

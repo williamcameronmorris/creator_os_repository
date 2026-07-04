@@ -47,6 +47,11 @@ export function Watch() {
     setLoading(true);
     setError('');
     setNeedsNiche(false);
+    // Clear the previous tab's data so stale posts/creators don't flash while
+    // the new tab loads (or persist if the new fetch returns nothing).
+    setCreators([]);
+    setFeed([]);
+    setMyPosts([]);
     (async () => {
       try {
         if (platform === 'youtube') {

@@ -195,8 +195,9 @@ function AppContent() {
       <Route path="/analytics/youtube" element={<ProtectedRoute><Layout><AnalyticsPlatform platform="youtube" /></Layout></ProtectedRoute>} />
       <Route path="/analytics/instagram" element={<ProtectedRoute><Layout><AnalyticsPlatform platform="instagram" /></Layout></ProtectedRoute>} />
       <Route path="/analytics/tiktok" element={<ProtectedRoute><Layout><AnalyticsPlatform platform="tiktok" /></Layout></ProtectedRoute>} />
-      <Route path="/revenue" element={<ProtectedRoute><Layout><Schedule /></Layout></ProtectedRoute>} />
-      <Route path="/pipeline" element={<ProtectedRoute><Layout><Schedule /></Layout></ProtectedRoute>} />
+      {/* Legacy brand-deals routes — redirect home instead of silently showing Schedule. */}
+      <Route path="/revenue" element={<Navigate to="/" replace />} />
+      <Route path="/pipeline" element={<Navigate to="/" replace />} />
 
       {/* Ã¢ÂÂÃ¢ÂÂ Settings Ã¢ÂÂÃ¢ÂÂ */}
       <Route path="/profile" element={<ProtectedRoute><Layout><Profile /></Layout></ProtectedRoute>} />
