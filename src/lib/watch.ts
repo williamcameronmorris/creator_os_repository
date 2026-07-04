@@ -37,10 +37,25 @@ export interface WatchVideo {
   creator_subscriber_count: number | null;
 }
 
-// Page 1 ships YouTube for a single seeded niche. Deriving the niche per user
-// from profiles.niche_preference (and running discovery per niche) is the next
-// increment.
+// Fallback niche if the user hasn't set one and resolution fails.
 export const WATCH_NICHE = 'guitar';
+
+export interface EnsureNicheResult {
+  niche: string | null;
+  ready: boolean;
+  needsNiche?: boolean;
+}
+
+/**
+ * Resolve the user's Watch niche (from their profile) and guarantee it has
+ * discovered creators — running discovery on demand the first time a niche is
+ * seen. May take a while on a cold niche while discovery runs.
+ */
+export async function ensureWatchNiche(): Promise<EnsureNicheResult> {
+  const { data, error } = await supabase.functions.invoke('watch-ensure-niche');
+  if (error) throw error;
+  return (data || { niche: null, ready: false }) as EnsureNicheResult;
+}
 
 export async function getSuggestedCreators(
   platform: string,
