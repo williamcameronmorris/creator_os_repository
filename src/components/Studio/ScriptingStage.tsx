@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
 import { getAIQuota } from '../../lib/aiQuota';
-import { Bot, Save, Wand2, FileText, Hash, Layout, AlignLeft, ChevronRight, AlertCircle, Sparkles } from 'lucide-react';
+import { FileText, Hash, Layout, AlignLeft, ChevronRight, AlertCircle, Sparkles } from 'lucide-react';
 
 interface ScriptingStageProps {
   workflowId: string;
@@ -144,34 +144,36 @@ export function ScriptingStage({ workflowId, contentType, onComplete, onSkip }: 
   return (
     <div className="max-w-5xl mx-auto">
       {ideaTopic && (
-        <div className="mb-6 p-4 bg-primary/10 border border-primary/20 rounded-xl">
-          <p className="text-sm font-medium text-muted-foreground mb-1">Selected Idea:</p>
-          <p className="text-lg font-bold text-foreground">{ideaTopic}</p>
+        <div className="mb-6 p-4 bg-card border border-border">
+          <p className="t-micro mb-1">Selected idea</p>
+          <p className="text-foreground" style={{ fontSize: '1.05rem', fontWeight: 500 }}>{ideaTopic}</p>
         </div>
       )}
 
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-        <h2 className="text-2xl font-bold text-foreground">Scripting</h2>
-        <div className="flex bg-accent p-1 rounded-xl">
+        <h2 className="text-foreground" style={{ fontSize: '1.5rem', fontWeight: 500, letterSpacing: '-0.01em', lineHeight: 1.15 }}>
+          Scripting
+        </h2>
+        <div className="flex gap-2">
           <button
             onClick={() => setMode('simple')}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
-              mode === 'simple'
-                ? 'bg-background shadow text-foreground'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
+            className="t-micro px-3 py-2 border transition-colors flex items-center gap-2"
+            style={{
+              borderColor: mode === 'simple' ? 'var(--accent)' : 'var(--border)',
+              color: mode === 'simple' ? 'var(--accent)' : 'var(--foreground)',
+            }}
           >
-            <AlignLeft className="w-4 h-4" /> Quick Notes
+            <AlignLeft className="w-3.5 h-3.5" /> Quick notes
           </button>
           <button
             onClick={() => setMode('structured')}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
-              mode === 'structured'
-                ? 'bg-background shadow text-foreground'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
+            className="t-micro px-3 py-2 border transition-colors flex items-center gap-2"
+            style={{
+              borderColor: mode === 'structured' ? 'var(--accent)' : 'var(--border)',
+              color: mode === 'structured' ? 'var(--accent)' : 'var(--foreground)',
+            }}
           >
-            <Layout className="w-4 h-4" /> Structured
+            <Layout className="w-3.5 h-3.5" /> Structured
           </button>
         </div>
       </div>
@@ -183,23 +185,23 @@ export function ScriptingStage({ workflowId, contentType, onComplete, onSkip }: 
           <button
             onClick={() => generateScript()}
             disabled={generating || !ideaTopic}
-            className="w-full py-3 px-4 bg-primary/10 hover:bg-primary/20 border border-primary/25 hover:border-primary/40 text-primary font-semibold rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="btn-ie w-full disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            {generating ? (
-              <><Wand2 className="w-4 h-4 animate-spin" /> Generating...</>
-            ) : (
-              <><Sparkles className="w-4 h-4" /> {mode === 'simple' ? 'Generate Outline' : 'Auto-Draft Script'}</>
-            )}
+            <span className="btn-ie-text flex items-center gap-2">
+              {generating
+                ? <><span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" /> Generating…</>
+                : <><Sparkles className="w-4 h-4" /> {mode === 'simple' ? 'Generate outline' : 'Auto-draft script'}</>}
+            </span>
           </button>
 
           {generating && (
-            <p className="text-xs text-center text-muted-foreground animate-pulse">
-              AI is writing your script based on the idea...
+            <p className="t-body text-center animate-pulse">
+              Writing your script based on the idea…
             </p>
           )}
 
           {aiError && (
-            <div className="flex items-start gap-2 p-3 bg-destructive/10 border border-destructive/20 rounded-xl text-sm text-destructive">
+            <div className="flex items-start gap-2 p-3 border border-border text-sm" style={{ color: '#B07050' }}>
               <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
               {aiError}
             </div>
@@ -209,37 +211,37 @@ export function ScriptingStage({ workflowId, contentType, onComplete, onSkip }: 
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="Jot down your concept, bullet points, or rough ideas here..."
-              className="w-full p-6 rounded-2xl border border-border focus:ring-2 focus:ring-primary outline-none min-h-[400px] text-lg leading-relaxed bg-background text-foreground shadow-sm placeholder:text-muted-foreground resize-none"
+              placeholder="Jot down your concept, bullet points, or rough ideas here…"
+              className="w-full p-6 border border-border bg-background text-foreground outline-none transition-colors focus:border-foreground min-h-[400px] text-lg leading-relaxed placeholder:text-muted-foreground resize-none"
             />
           ) : (
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-semibold text-foreground mb-1">Visual Hook (0–3s)</label>
+                <label className="t-micro text-foreground block mb-1">Visual hook (0–3s)</label>
                 <textarea
                   value={script.hook}
                   onChange={(e) => setScript({ ...script, hook: e.target.value })}
-                  placeholder="The 'Stop the Scroll' moment..."
-                  className="w-full p-4 rounded-xl border border-border focus:ring-2 focus:ring-primary outline-none min-h-[80px] bg-background text-foreground placeholder:text-muted-foreground"
+                  placeholder="The stop-the-scroll moment…"
+                  className="w-full p-4 border border-border bg-background text-foreground outline-none transition-colors focus:border-foreground min-h-[80px] placeholder:text-muted-foreground"
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-foreground mb-1">Body</label>
+                <label className="t-micro text-foreground block mb-1">Body</label>
                 <textarea
                   value={script.body}
                   onChange={(e) => setScript({ ...script, body: e.target.value })}
-                  placeholder="The core value or story..."
-                  className="w-full p-4 rounded-xl border border-border focus:ring-2 focus:ring-primary outline-none min-h-[200px] bg-background text-foreground placeholder:text-muted-foreground"
+                  placeholder="The core value or story…"
+                  className="w-full p-4 border border-border bg-background text-foreground outline-none transition-colors focus:border-foreground min-h-[200px] placeholder:text-muted-foreground"
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-foreground mb-1">CTA</label>
+                <label className="t-micro text-foreground block mb-1">CTA</label>
                 <input
                   type="text"
                   value={script.cta}
                   onChange={(e) => setScript({ ...script, cta: e.target.value })}
                   placeholder="What should they do next?"
-                  className="w-full p-4 rounded-xl border border-border focus:ring-2 focus:ring-primary outline-none bg-background text-foreground placeholder:text-muted-foreground"
+                  className="w-full p-4 border border-border bg-background text-foreground outline-none transition-colors focus:border-foreground placeholder:text-muted-foreground"
                 />
               </div>
             </div>
@@ -247,26 +249,26 @@ export function ScriptingStage({ workflowId, contentType, onComplete, onSkip }: 
         </div>
 
         <div className="space-y-6">
-          <div className="bg-card border border-border p-6 rounded-2xl h-full">
-            <h3 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2">
+          <div className="bg-card border border-border p-6 h-full">
+            <h3 className="text-foreground mb-4 flex items-center gap-2" style={{ fontSize: '1.05rem', fontWeight: 500 }}>
               <FileText className="w-5 h-5 text-muted-foreground" />
-              Caption & Tags
+              Caption &amp; tags
             </h3>
             <div className="space-y-4">
               <textarea
                 value={script.caption}
                 onChange={(e) => setScript({ ...script, caption: e.target.value })}
-                placeholder="Write your caption here (optional)..."
-                className="w-full p-4 rounded-xl border border-border focus:ring-2 focus:ring-primary outline-none min-h-[200px] bg-background text-foreground placeholder:text-muted-foreground"
+                placeholder="Write your caption here (optional)…"
+                className="w-full p-4 border border-border bg-background text-foreground outline-none transition-colors focus:border-foreground min-h-[200px] placeholder:text-muted-foreground"
               />
-              <div className="flex items-center gap-2 bg-background p-3 rounded-xl border border-border">
+              <div className="flex items-center gap-2 bg-background p-3 border border-border">
                 <Hash className="w-4 h-4 text-muted-foreground" />
                 <input
                   type="text"
                   value={script.hashtags}
                   onChange={(e) => setScript({ ...script, hashtags: e.target.value })}
-                  placeholder="Add tags..."
-                  className="flex-1 outline-none bg-transparent text-primary placeholder:text-muted-foreground"
+                  placeholder="Add tags…"
+                  className="flex-1 outline-none bg-transparent text-foreground placeholder:text-muted-foreground"
                 />
               </div>
             </div>
@@ -274,15 +276,17 @@ export function ScriptingStage({ workflowId, contentType, onComplete, onSkip }: 
               <button
                 onClick={() => handleSave(true)}
                 disabled={loading}
-                className="w-full py-3 px-4 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 shadow-lg"
+                className="btn-ie btn-ie-solid w-full disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                Save & Continue <ChevronRight className="w-4 h-4" />
+                <span className="btn-ie-text flex items-center gap-2">
+                  Save &amp; continue <ChevronRight className="w-4 h-4" />
+                </span>
               </button>
               <button
                 onClick={onSkip}
-                className="w-full py-2 text-muted-foreground hover:text-foreground text-sm font-medium transition-colors"
+                className="w-full py-2 t-micro text-muted-foreground hover:text-foreground transition-colors"
               >
-                Skip Scripting
+                Skip scripting
               </button>
             </div>
           </div>
