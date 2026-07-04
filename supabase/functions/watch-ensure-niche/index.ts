@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { requireUser, corsHeaders } from "../_shared/auth.ts";
+import { canonicalNiche } from "../_shared/niche.ts";
 
 /**
  * watch-ensure-niche Edge Function
@@ -22,17 +23,6 @@ function json(body: unknown, status = 200) {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
-}
-
-function canonicalNiche(raw: string): string {
-  const s = (raw || "").toLowerCase().trim();
-  if (!s) return "";
-  // Collapse the common variants so they share one cached niche.
-  if (s.includes("guitar")) return "guitar";
-  if (s.includes("real estate") || s.includes("realtor")) return "real estate";
-  // Fallback: first few significant words as the niche/search query.
-  const words = s.split(/[\s,.;/|_-]+/).filter(Boolean);
-  return words.slice(0, 3).join(" ");
 }
 
 Deno.serve(async (req: Request) => {
@@ -67,16 +57,28 @@ Deno.serve(async (req: Request) => {
     if ((count || 0) > 0) return json({ niche, ready: true });
 
     // No creators cached for this niche yet — discover them now (inline, so the
-    // client can show a "finding creators" state and then load the feed).
-    const res = await fetch(`${supabaseUrl}/functions/v1/watch-discovery`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
-      body: JSON.stringify({ niche }),
-    });
-    const result = await res.json();
-    const first = Array.isArray(result?.niches) ? result.niches[0] : null;
-    const ready = !!first && (first.creators || 0) > 0;
-    return json({ niche, ready, discovered: first ?? null });
+    // client can show a "finding creators" state and then load the feed). Bound
+    // it with a timeout so a slow discovery returns a clear "not ready" instead
+    // of hanging the request (and the client's spinner) indefinitely.
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 90_000);
+    try {
+      const res = await fetch(`${supabaseUrl}/functions/v1/watch-discovery`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
+        body: JSON.stringify({ niche }),
+        signal: ctrl.signal,
+      });
+      const result = await res.json();
+      const first = Array.isArray(result?.niches) ? result.niches[0] : null;
+      const ready = !!first && (first.creators || 0) > 0;
+      return json({ niche, ready, discovered: first ?? null });
+    } catch {
+      // Timed out or discovery failed — the cron will fill this niche later.
+      return json({ niche, ready: false, discovering: true });
+    } finally {
+      clearTimeout(timer);
+    }
   } catch (error) {
     return json({ niche: null, ready: false, error: (error as Error).message }, 500);
   }

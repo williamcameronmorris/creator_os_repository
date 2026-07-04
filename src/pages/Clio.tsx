@@ -192,13 +192,27 @@ export function Clio() {
     setResponse('');
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
+      if (!session) {
+        setResponse('Your session expired. Please refresh and sign in again.');
+        return;
+      }
       const res = await supabase.functions.invoke('ask-copilot', {
         body: { userId: user!.id, question: query },
         headers: { Authorization: `Bearer ${session.access_token}` },
       });
       if (res.error) {
-        setResponse(res.error.message || 'Something went wrong. Try again.');
+        // On a non-2xx, supabase-js sets error.message to a generic string and
+        // puts the function's JSON body ({ error: "Daily AI quota exceeded." })
+        // on error.context. Read it so the user sees the real message.
+        let msg = 'Something went wrong. Try again.';
+        try {
+          const ctx = (res.error as { context?: Response }).context;
+          if (ctx && typeof ctx.json === 'function') {
+            const body = await ctx.json();
+            if (body?.error) msg = body.error;
+          }
+        } catch { /* keep default */ }
+        setResponse(msg);
       } else if (res.data?.answer) {
         setResponse(res.data.answer);
       } else {

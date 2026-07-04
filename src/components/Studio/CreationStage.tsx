@@ -11,6 +11,7 @@ interface CreationStageProps {
 
 export function CreationStage({ workflowId, contentType, onComplete, onSkip }: CreationStageProps) {
   const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState('');
   const [mediaUrl, setMediaUrl] = useState<string | null>(null);
 
   const isMobileFormat = ['reel', 'story', 'short', 'tiktok'].includes(contentType);
@@ -54,14 +55,18 @@ export function CreationStage({ workflowId, contentType, onComplete, onSkip }: C
       .getPublicUrl(fileName);
 
     setMediaUrl(publicUrl);
-    setUploading(false);
+    setError('');
 
-    await supabase
+    // Persist the media link — if this write fails, the upload isn't saved and
+    // would be lost on reload, so surface it instead of showing false success.
+    const { error: saveError } = await supabase
       .from('content_workflow_stages')
       .update({
         creation_notes: { media_url: publicUrl, checklist_completed: checklist.filter(i => i.checked).map(i => i.id) }
       })
       .eq('id', workflowId);
+    if (saveError) setError('Uploaded, but saving it to your workflow failed. Try again before continuing.');
+    setUploading(false);
   };
 
   const toggleCheck = (id: string) => {
@@ -74,6 +79,9 @@ export function CreationStage({ workflowId, contentType, onComplete, onSkip }: C
 
   return (
     <div className="max-w-4xl mx-auto">
+      {error && (
+        <p className="mb-4 text-sm" style={{ color: '#B07050' }}>{error}</p>
+      )}
       <div className="flex items-start justify-between mb-8 gap-4">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 border border-border flex items-center justify-center flex-shrink-0">

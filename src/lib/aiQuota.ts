@@ -21,7 +21,17 @@ export async function getAIQuota(userId: string): Promise<AIQuotaInfo> {
     };
   }
 
-  const quotaData = data[0];
+  // The RPC can return an empty set (e.g. a user whose quota row isn't created
+  // yet); data[0] would then be undefined and crash. Fall back to a fresh quota.
+  const quotaData = data?.[0];
+  if (!quotaData) {
+    return {
+      requestsUsed: 0,
+      requestsRemaining: 15,
+      dailyLimit: 15,
+      resetAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+    };
+  }
   return {
     requestsUsed: quotaData.requests_used,
     requestsRemaining: quotaData.requests_remaining,
