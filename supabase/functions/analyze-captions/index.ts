@@ -153,7 +153,17 @@ Return ONLY a valid JSON object with this exact shape:
   "content_gaps": [
     "Topic or format this creator hasn't tried but their audience would likely respond to (based on their niche)"
   ],
-  "voice_signature": "One sentence capturing the creator's unique voice/personality as expressed through their captions"
+  "voice_signature": "One sentence capturing the creator's unique voice/personality as expressed through their captions",
+  "voice_profile": {
+    "tone": "2-4 words for their tone (e.g. 'warm, direct, a little cheeky')",
+    "formality": "casual | conversational | polished | formal",
+    "emoji_use": "how they use emojis (e.g. 'rare, only for emphasis' or 'frequent and playful')",
+    "sentence_shapes": ["2-4 short descriptions of their sentence rhythm (e.g. 'short punchy fragments', 'one long build then a payoff')"],
+    "signature_phrases": ["3-6 exact words or phrases they ACTUALLY reuse across posts"],
+    "hook_openers": ["2-4 ways they ACTUALLY start a post or hook"],
+    "cta_style": "how they ask for action (e.g. 'soft, curiosity-led' or 'direct: comment a word')",
+    "avoid": ["2-3 things that would read as OFF their voice (e.g. 'corporate jargon', 'hashtag stuffing')"]
+  }
 }
 
 Rules:
@@ -161,9 +171,14 @@ Rules:
 - dominant_topics: list 2-5 actual topic clusters
 - top_patterns: identify exactly 3 patterns tied to the best-performing posts
 - content_gaps: suggest 2-3 specific gaps
+- voice_profile: fill every field from what you ACTUALLY observe — quote their real phrases in signature_phrases, never invent them
 - Be specific to THIS creator — no generic advice`;
 
-    // ── Call Claude Haiku ─────────────────────────────────────────────────────
+    // ── Call Claude ───────────────────────────────────────────────────────────
+    // Sonnet 5 for the extractor: the voice profile is foundational — a richer
+    // read of the creator's voice improves every downstream generation — and it
+    // runs rarely (on rebuild, rate-limited to once/24h). thinking is disabled
+    // to keep cost and latency predictable; the task is extraction, not reasoning.
     const claudeRes = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -172,8 +187,9 @@ Rules:
         "content-type": "application/json",
       },
       body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 1500,
+        model: "claude-sonnet-5",
+        max_tokens: 2200,
+        thinking: { type: "disabled" },
         system: systemPrompt,
         messages: [{ role: "user", content: userPrompt }],
       }),
@@ -194,6 +210,7 @@ Rules:
       top_patterns: Array<{ pattern: string; example_caption: string; why_it_works: string }>;
       content_gaps: string[];
       voice_signature: string;
+      voice_profile?: Record<string, unknown>;
     };
 
     try {
@@ -214,10 +231,12 @@ Rules:
       caption_style: analysis.caption_style || "",
       avg_caption_length: avgLen,
       top_patterns: analysis.top_patterns || [],
+      // The voice fingerprint the generators write in (see _shared/voice.ts).
+      voice_profile: analysis.voice_profile || null,
       raw_analysis: {
         content_gaps: analysis.content_gaps || [],
         voice_signature: analysis.voice_signature || "",
-        model: "claude-haiku-4-5-20251001",
+        model: "claude-sonnet-5",
         post_ids_analyzed: validPosts.map((p) => p.id),
       },
       posts_analyzed: validPosts.length,

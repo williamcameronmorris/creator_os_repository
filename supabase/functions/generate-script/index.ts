@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { requireUser, corsHeaders } from "../_shared/auth.ts";
+import { loadVoiceContext } from "../_shared/voice.ts";
 
 /**
  * generate-script Edge Function
@@ -46,7 +47,7 @@ Deno.serve(async (req: Request) => {
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
     const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split("T")[0];
 
-    const [topPostsResult, profileResult] = await Promise.all([
+    const [topPostsResult, profileResult, voiceContext] = await Promise.all([
       supabase
         .from("content_posts")
         .select("platform, title, content_type, engagement_rate")
@@ -60,6 +61,8 @@ Deno.serve(async (req: Request) => {
         .select("display_name, first_name")
         .eq("id", userId)
         .maybeSingle(),
+      // The creator's own voice fingerprint (null until they've built one).
+      loadVoiceContext(supabase, userId),
     ]);
 
     const topPosts = (topPostsResult.data || []).map((p) =>
@@ -118,6 +121,22 @@ No markdown. No explanation. Just the JSON object.`;
     }
 
     // ── Call Claude ──────────────────────────────────────────────────────────
+    // Sonnet 5 for the published-facing output. When the creator has a Voice
+    // profile we inject it as a second system block and mark THAT block with
+    // cache_control: the base instructions + voice fingerprint form a stable
+    // per-user prefix, so a creator's repeat generations within 5 minutes read
+    // the voice from cache. The varying topic stays in the user message (the
+    // volatile suffix, after the cached prefix). thinking is disabled to keep
+    // latency and token spend predictable for the tiered quota system.
+    const baseSystem =
+      "You are an expert content strategist and script writer. Be direct, specific, and practical.";
+    const system = voiceContext
+      ? [
+          { type: "text", text: baseSystem },
+          { type: "text", text: voiceContext, cache_control: { type: "ephemeral" } },
+        ]
+      : `${baseSystem} Match the creator's voice.`;
+
     const claudeRes = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -126,9 +145,10 @@ No markdown. No explanation. Just the JSON object.`;
         "content-type": "application/json",
       },
       body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
+        model: "claude-sonnet-5",
         max_tokens: 1024,
-        system: "You are an expert content strategist and script writer. Be direct, specific, and practical. Match the creator's voice.",
+        thinking: { type: "disabled" },
+        system,
         messages: [{ role: "user", content: userPrompt }],
       }),
     });
