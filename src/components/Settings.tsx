@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { Save, TrendingUp, DollarSign, AlertCircle, CheckCircle, Link2, Palette, Sun, Moon, User, ArrowRight } from 'lucide-react';
 import { PostForMeConnections } from './PostForMeConnections';
+import { VoiceCard } from './VoiceCard';
 
 export function Settings() {
   const { user } = useAuth();
@@ -88,6 +89,9 @@ export function Settings() {
         </div>
         <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:translate-x-1 transition-transform flex-shrink-0" />
       </button>
+
+      {/* Your Voice — the AI voice fingerprint built from the creator's own posts */}
+      <VoiceCard />
 
       {error && (
         <div className="p-3 border border-destructive text-sm flex items-start gap-2 bg-destructive/10 text-destructive">
