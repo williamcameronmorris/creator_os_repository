@@ -91,13 +91,13 @@ export function Watch() {
   const sendToClio = (v: WatchVideo) => navigate(`/studio/script?${clioParams(v)}`);
 
   const remixToClio = (p: MyPost) => {
-    const firstLine = (p.caption || '').split('\n')[0].trim().slice(0, 120) || 'One of my past posts';
+    const firstLine = (p.caption || '').split('\n')[0].trim().slice(0, 120) || 'one of my past posts';
     const params = new URLSearchParams({
       autostart: '1',
-      idea: firstLine,
+      idea: `Make a fresh version of my past post: "${firstLine}"`,
       platform: 'instagram',
       type: 'reel',
-      reasoning: 'Remix of one of your past posts',
+      reasoning: 'A new take on your own post — written in your voice.',
     });
     navigate(`/studio/script?${params.toString()}`);
   };
@@ -244,7 +244,7 @@ export function Watch() {
                         style={{ color: '#8a6d22' }}
                       >
                         <Sparkles className="w-3 h-3" />
-                        Remix
+                        My version
                       </button>
                     </div>
                   </div>
@@ -347,7 +347,7 @@ export function Watch() {
                     style={{ borderColor: GOLD, color: '#8a6d22' }}
                   >
                     <Sparkles className="w-3 h-3" />
-                    Clio
+                    My version
                   </button>
                 </div>
                 <div className="mt-1.5 text-[11px] text-muted-foreground">{v.creatorTitle}</div>

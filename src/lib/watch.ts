@@ -187,14 +187,20 @@ export async function getMyInstagramPosts(): Promise<MyPost[]> {
   }));
 }
 
-/** Query string that hands a watched video to Studio scripting as an idea seed. */
+/** Query string that hands a watched video to Studio scripting as a "make my
+ * version" seed. The topic is a directive so the generator writes the creator's
+ * OWN version of the proven piece — which, with the Voice feature, comes out in
+ * their voice. (reasoning is UI-only; the model reads the topic + hook.) */
 export function clioParams(v: WatchVideo): string {
+  const creator = v.creatorTitle ?? 'a top creator';
+  const views = v.view_count ? ` (${formatCount(v.view_count)} views)` : '';
   return new URLSearchParams({
     autostart: '1',
-    idea: v.title,
+    idea: `Make my own version of this proven short: "${v.title}"`,
     platform: 'youtube',
     type: 'short',
-    reasoning: `Modeled from ${v.creatorTitle ?? 'a top creator'}'s top-performing short`,
+    hook: v.title,
+    reasoning: `Your take on ${creator}'s top-performing short${views} — written in your voice.`,
   }).toString();
 }
 
