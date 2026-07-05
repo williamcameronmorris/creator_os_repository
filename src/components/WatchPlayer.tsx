@@ -44,7 +44,7 @@ export function WatchPlayer({ video, onClose, onSendToClio }: Props) {
           style={{ background: GOLD, color: '#43340c' }}
         >
           <Sparkles className="w-3.5 h-3.5" />
-          Turn into a Clio idea
+          Make my version — in my voice
         </button>
       </div>
     </div>
