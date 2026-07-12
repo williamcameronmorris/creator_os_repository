@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useAccount } from '../contexts/AccountContext';
+import { PlaybookPanel } from '../components/PlaybookPanel';
 import {
   Send,
   TrendingUp,
@@ -686,6 +687,13 @@ export function Clio() {
             </div>
           )}
         </>
+      )}
+
+      {/* Today's Plays — post-publish protocol tasks, directly below the brief */}
+      {conversation.length === 0 && !errorMsg && !briefLoading && (
+        <div className="animate-reveal-up delay-3">
+          <PlaybookPanel />
+        </div>
       )}
 
     </div>
