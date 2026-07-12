@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useSubscription } from '../contexts/SubscriptionContext';
 import { supabase } from '../lib/supabase';
-import { Calendar, Clock, Instagram, Youtube, Plus, Sparkles, Edit, Trash2, DollarSign, TrendingUp, Lock, Crown, CheckCircle2, XCircle, Loader2, ExternalLink, RefreshCw, AlertTriangle, AtSign, LayoutGrid, List, ChevronDown } from 'lucide-react';
+import { Calendar, Clock, Instagram, Youtube, Facebook, Twitter, Cloud, Plus, Sparkles, Edit, Trash2, DollarSign, TrendingUp, Lock, Crown, CheckCircle2, XCircle, Loader2, ExternalLink, RefreshCw, AlertTriangle, AtSign, LayoutGrid, List, ChevronDown } from 'lucide-react';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatInTz } from '../lib/timezone';
 import { CalendarView } from '../components/CalendarView';
@@ -118,6 +118,9 @@ export function Schedule() {
       case 'youtube':   return Youtube;
       case 'tiktok':    return Sparkles;
       case 'threads':   return AtSign;
+      case 'facebook':  return Facebook;
+      case 'x':         return Twitter;
+      case 'bluesky':   return Cloud;
       default:          return Calendar;
     }
   };
@@ -133,6 +136,10 @@ export function Schedule() {
       case 'youtube':  return `https://www.youtube.com/watch?v=${platformPostId}`;
       case 'instagram': return `https://www.instagram.com/p/${platformPostId}/`;
       case 'threads':  return `https://www.threads.net/post/${platformPostId}`;
+      case 'facebook': return `https://www.facebook.com/${platformPostId}`;
+      case 'x':        return `https://x.com/i/status/${platformPostId}`;
+      // bluesky: platform post ids are at:// URIs that need the author handle
+      // to build a web URL — no reliable link without another lookup.
       default: return null;
     }
   };

@@ -13,6 +13,8 @@ export interface PostForMeState {
   accounts: PostForMeAccount[];
 }
 
+// The full set of platforms Post for Me supports. linkedin was removed —
+// PFM does not support it, so its CONNECT button could never complete.
 export const POSTFORME_PLATFORMS = [
   { id: 'tiktok', name: 'TikTok' },
   { id: 'instagram', name: 'Instagram' },
@@ -20,7 +22,7 @@ export const POSTFORME_PLATFORMS = [
   { id: 'youtube', name: 'YouTube' },
   { id: 'x', name: 'X / Twitter' },
   { id: 'threads', name: 'Threads' },
-  { id: 'linkedin', name: 'LinkedIn' },
+  { id: 'bluesky', name: 'Bluesky' },
 ] as const;
 
 export type PostForMePlatformId = typeof POSTFORME_PLATFORMS[number]['id'];
@@ -152,4 +154,22 @@ export async function createPostForMePost(input: CreatePostInput): Promise<PostF
 
 export function findPostForMeAccount(accounts: PostForMeAccount[], platform: string): PostForMeAccount | undefined {
   return accounts.find((a) => a.platform === platform && a.status !== 'disconnected');
+}
+
+/** All connected (non-disconnected) accounts, in a stable platform-grouped order. */
+export function listConnectedAccounts(accounts: PostForMeAccount[]): PostForMeAccount[] {
+  const order = new Map(POSTFORME_PLATFORMS.map((p, i) => [p.id as string, i]));
+  return accounts
+    .filter((a) => a.status !== 'disconnected')
+    .sort((a, b) => {
+      const pa = order.get(a.platform) ?? 99;
+      const pb = order.get(b.platform) ?? 99;
+      if (pa !== pb) return pa - pb;
+      return (a.username || a.id).localeCompare(b.username || b.id);
+    });
+}
+
+/** Look up a connected account by its PFM account id. */
+export function findPostForMeAccountById(accounts: PostForMeAccount[], accountId: string): PostForMeAccount | undefined {
+  return accounts.find((a) => a.id === accountId && a.status !== 'disconnected');
 }

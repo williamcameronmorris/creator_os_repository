@@ -200,6 +200,11 @@ Deno.serve(async (req) => {
   const eventType = (payload.type as string) || (payload.event as string) || "";
   const status = (data.status as string) || ((data.result as { status?: string })?.status);
   const platform = (data.platform as string) || ((data.account as { platform?: string })?.platform);
+  // Social account id, when the event carries one — with multi-account
+  // support this pins the update to the exact per-account mirror row.
+  const socialAccountId = (data.social_account_id as string)
+    || ((data.account as { id?: string })?.id)
+    || null;
   const platformPostId = (data.platform_post_id as string)
     || ((data.result as { platform_post_id?: string })?.platform_post_id);
   // external_id should equal the Cliopatra user.id we stamped on the post.
@@ -234,21 +239,40 @@ Deno.serve(async (req) => {
     if (platformPostId) updates.platform_post_id = platformPostId;
   }
 
-  let query = supabase
-    .from("content_posts")
-    .update(updates)
-    .eq("postforme_post_id", postId);
+  const buildQuery = (narrowByAccount: boolean) => {
+    let query = supabase
+      .from("content_posts")
+      .update(updates)
+      .eq("postforme_post_id", postId);
 
-  // If the event is platform-scoped (e.g. one platform succeeded while another
-  // is still pending), narrow the update to that platform's mirror row.
-  if (platform) query = query.eq("platform", platform.toLowerCase());
+    // With multi-account support (postforme_post_id, platform) is no longer
+    // unique — narrow to the exact account's mirror row when the event
+    // identifies it.
+    if (narrowByAccount && socialAccountId) {
+      query = query.eq("social_account_id", socialAccountId);
+    }
 
-  // Defense-in-depth: scope the update to the tenant the event belongs to.
-  // Even though postforme_post_id is unique, this prevents a malformed or
-  // spoofed event from ever updating another user's row.
-  if (externalId) query = query.eq("user_id", externalId);
+    // If the event is platform-scoped (e.g. one platform succeeded while another
+    // is still pending), narrow the update to that platform's mirror row(s).
+    if (platform) query = query.eq("platform", platform.toLowerCase());
 
-  const { error, count } = await query.select("id", { count: "exact" });
+    // Defense-in-depth: scope the update to the tenant the event belongs to.
+    // Even though postforme_post_id is unique, this prevents a malformed or
+    // spoofed event from ever updating another user's row.
+    if (externalId) query = query.eq("user_id", externalId);
+
+    return query;
+  };
+
+  let { error, count } = await buildQuery(true).select("id", { count: "exact" });
+
+  // Legacy rows (created before multi-account) have social_account_id = null,
+  // so an account-narrowed update matches nothing — fall back to the original
+  // platform + external_id narrowing.
+  if (!error && (count ?? 0) === 0 && socialAccountId) {
+    ({ error, count } = await buildQuery(false).select("id", { count: "exact" }));
+  }
+
   if (error) {
     console.error("postforme-webhook update failed:", error.message);
     return new Response(JSON.stringify({ error: error.message }), {

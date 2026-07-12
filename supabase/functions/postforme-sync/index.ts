@@ -141,6 +141,12 @@ interface FeedPost {
   thumbnail_url: string | null;
 }
 
+/** FeedPost stamped with the PFM account it came from (multi-account support). */
+type AccountFeedPost = FeedPost & {
+  social_account_id: string;
+  account_username: string | null;
+};
+
 interface FeedResult {
   followers: number; // PFM doesn't expose follower counts in public API; always 0 today
   posts: FeedPost[];
@@ -173,6 +179,8 @@ async function getAccountFeed(accountId: string): Promise<FeedResult | null> {
 interface PostResult {
   postId: string;
   platform: string;
+  /** PFM social account id the result belongs to, when the payload carries one. */
+  socialAccountId: string | null;
   publishedAt: string | null;
   platformPostId: string | null;
   status: string;
@@ -181,7 +189,11 @@ interface PostResult {
 }
 
 function mapPostResult(r: Record<string, unknown>): PostResult {
-  const platform = String(r.platform || (r.account as Record<string, unknown> | undefined)?.platform || "").toLowerCase();
+  const account = r.account as Record<string, unknown> | undefined;
+  const platform = String(r.platform || account?.platform || "").toLowerCase();
+  const socialAccountId = (r.social_account_id as string)
+    ?? (account?.id != null ? String(account.id) : null)
+    ?? null;
   const postId = String(
     r.post_id
       ?? r.social_post_id
@@ -205,7 +217,7 @@ function mapPostResult(r: Record<string, unknown>): PostResult {
     ?? r;
   const metrics = normalizeMetrics(platform, metricsBlob);
 
-  return { postId, platform, publishedAt, platformPostId, status, metrics, raw: r };
+  return { postId, platform, socialAccountId, publishedAt, platformPostId, status, metrics, raw: r };
 }
 
 /**
@@ -304,7 +316,7 @@ async function syncForUser(userId: string): Promise<SyncSummary> {
 
   const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
   const snapshotRows: Record<string, unknown>[] = [];
-  const feedPostsByPlatform: Record<string, FeedPost[]> = {};
+  const feedPostsByPlatform: Record<string, AccountFeedPost[]> = {};
 
   await Promise.all(
     accounts.map(async (account) => {
@@ -320,7 +332,15 @@ async function syncForUser(userId: string): Promise<SyncSummary> {
           raw: feed.raw,
         });
         if (!feedPostsByPlatform[account.platform]) feedPostsByPlatform[account.platform] = [];
-        feedPostsByPlatform[account.platform].push(...feed.posts);
+        // Stamp each feed post with the account it came from so the
+        // content_posts mirror carries per-account attribution.
+        feedPostsByPlatform[account.platform].push(
+          ...feed.posts.map((p) => ({
+            ...p,
+            social_account_id: account.id,
+            account_username: account.username || null,
+          })),
+        );
       } catch (err) {
         summary.errors.push(`feed ${account.platform}/${account.id}: ${(err as Error).message}`);
       }
@@ -384,6 +404,8 @@ async function syncForUser(userId: string): Promise<SyncSummary> {
         user_id: userId,
         platform: p.platform,
         platform_post_id: p.platform_post_id,
+        social_account_id: p.social_account_id,
+        account_username: p.account_username,
         caption: p.caption || "",
         media_urls: p.media_urls,
         thumbnail_url: p.thumbnail_url,
@@ -468,15 +490,44 @@ async function syncForUser(userId: string): Promise<SyncSummary> {
     }
     if (result.platformPostId) updates.platform_post_id = result.platformPostId;
 
-    const { error, count } = await supabase
-      .from("content_posts")
-      .update(updates, { count: "exact" })
-      .eq("postforme_post_id", result.postId)
-      .eq("platform", result.platform)
-      .eq("user_id", userId)
-      .select("id");
-    if (error) summary.errors.push(`content_posts update ${result.postId}: ${error.message}`);
-    else summary.postsMatched += count || 0;
+    // Prefer matching on (postforme_post_id, social_account_id) when the
+    // result identifies its account — with multiple accounts per platform the
+    // (postforme_post_id, platform) pair is no longer unique. Fall back to the
+    // legacy (postforme_post_id, platform, user_id) match for rows created
+    // before multi-account support (social_account_id is null there).
+    let matched = 0;
+    let matchErr: string | null = null;
+
+    if (result.socialAccountId) {
+      const { error, count } = await supabase
+        .from("content_posts")
+        .update(updates, { count: "exact" })
+        .eq("postforme_post_id", result.postId)
+        .eq("social_account_id", result.socialAccountId)
+        .eq("user_id", userId)
+        .select("id");
+      if (error) matchErr = error.message;
+      else matched = count || 0;
+    }
+
+    if (matched === 0 && !matchErr) {
+      let fallback = supabase
+        .from("content_posts")
+        .update(updates, { count: "exact" })
+        .eq("postforme_post_id", result.postId)
+        .eq("platform", result.platform)
+        .eq("user_id", userId);
+      // When the result names an account, only legacy rows (no account id)
+      // may absorb the fallback — otherwise we'd clobber a sibling account's
+      // row on the same platform.
+      if (result.socialAccountId) fallback = fallback.is("social_account_id", null);
+      const { error, count } = await fallback.select("id");
+      if (error) matchErr = error.message;
+      else matched = count || 0;
+    }
+
+    if (matchErr) summary.errors.push(`content_posts update ${result.postId}: ${matchErr}`);
+    else summary.postsMatched += matched;
   }
 
   // Finalize avg_engagement_rate (we summed; divide by total_posts)
