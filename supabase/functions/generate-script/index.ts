@@ -53,12 +53,13 @@ Deno.serve(async (req: Request) => {
         .select("platform, title, content_type, engagement_rate")
         .eq("user_id", userId)
         .eq("status", "published")
-        .gte("published_date", thirtyDaysAgoStr)
+        // published_at is what the sync writes; published_date is a dead column.
+        .gte("published_at", thirtyDaysAgoStr)
         .order("engagement_rate", { ascending: false })
         .limit(5),
       supabase
         .from("profiles")
-        .select("display_name, first_name")
+        .select("display_name, first_name, niche_preference")
         .eq("id", userId)
         .maybeSingle(),
       // The creator's own voice fingerprint (null until they've built one).
@@ -70,6 +71,8 @@ Deno.serve(async (req: Request) => {
     );
 
     const creatorName = profileResult.data?.first_name || profileResult.data?.display_name || "creator";
+    const niche = (profileResult.data?.niche_preference || "").trim();
+    const nicheLine = niche ? `\nNiche: ${niche} — keep the script specific to this niche.` : "";
     const isLongForm = ["video", "blog"].includes(contentType || "");
     const isStructured = mode === "structured";
 
@@ -90,7 +93,7 @@ Deno.serve(async (req: Request) => {
       userPrompt = `You are a content script writer for ${formatContext}.
 
 Topic: "${topic || "Creator content best practices"}"
-Creator: ${creatorName}
+Creator: ${creatorName}${nicheLine}
 ${topPostsBlock}
 
 Write a concise content outline in plain text (not JSON). Include:
@@ -105,7 +108,7 @@ Keep it punchy and practical. Max 200 words. No markdown headers, just plain tex
       userPrompt = `You are a content script writer for ${formatContext}.
 
 Topic: "${topic || "Creator content best practices"}"
-Creator: ${creatorName}
+Creator: ${creatorName}${nicheLine}
 ${topPostsBlock}
 
 Write a complete structured script. Return ONLY a valid JSON object with this exact shape:
@@ -146,7 +149,7 @@ No markdown. No explanation. Just the JSON object.`;
       },
       body: JSON.stringify({
         model: "claude-sonnet-5",
-        max_tokens: 1024,
+        max_tokens: 2048,
         thinking: { type: "disabled" },
         system,
         messages: [{ role: "user", content: userPrompt }],
@@ -160,6 +163,13 @@ No markdown. No explanation. Just the JSON object.`;
 
     const claudeData = await claudeRes.json();
     const rawText = (claudeData.content?.[0]?.text || "").trim();
+
+    // In structured mode a max_tokens cutoff means the JSON is incomplete —
+    // failing the parse below would silently dump half-JSON into notes.
+    // Surface a clear error instead so the user can just retry.
+    if (isStructured && claudeData.stop_reason === "max_tokens") {
+      throw new Error("Script generation was cut off before it finished. Please try again.");
+    }
 
     // ── Parse response based on mode ─────────────────────────────────────────
     let result: { mode: string; notes?: string; script?: Record<string, string> };
@@ -195,7 +205,8 @@ No markdown. No explanation. Just the JSON object.`;
       await supabase
         .from("content_workflow_stages")
         .update({ script_content: scriptContent, updated_at: new Date().toISOString() })
-        .eq("id", workflowId);
+        .eq("id", workflowId)
+        .eq("user_id", userId); // never write another user's workflow row
     }
 
     // ── Decrement quota ──────────────────────────────────────────────────────

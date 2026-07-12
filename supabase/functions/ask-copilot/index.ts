@@ -1,5 +1,8 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "jsr:@supabase/supabase-js@2";
+// npm: specifier (not jsr:) so the client type matches _shared/voice.ts,
+// same as generate-script and the other AI functions.
+import { createClient } from "npm:@supabase/supabase-js@2";
+import { loadVoiceContext } from "../_shared/voice.ts";
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -108,8 +111,22 @@ Deno.serve(async (req: Request) => {
     }
     const userId = userData.user.id;
 
-    const { question } = await req.json();
+    const { question, messages: rawHistory } = await req.json();
     if (!question?.trim()) return new Response(JSON.stringify({ error: "question is required" }), { status: 400, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
+
+    // Optional conversation history: [{ role: "user"|"assistant", content: string }].
+    // Validated strictly (roles + string content only) and capped at the last
+    // 12 turns. Old callers that send only { question } behave exactly as before.
+    const history: Array<{ role: "user" | "assistant"; content: string }> = Array.isArray(rawHistory)
+      ? rawHistory
+          .filter((m: unknown): m is { role: "user" | "assistant"; content: string } =>
+            !!m && typeof m === "object" &&
+            ((m as { role?: unknown }).role === "user" || (m as { role?: unknown }).role === "assistant") &&
+            typeof (m as { content?: unknown }).content === "string" &&
+            (m as { content: string }).content.trim().length > 0)
+          .map((m) => ({ role: m.role, content: m.content }))
+          .slice(-12)
+      : [];
 
     const { data: quotaData, error: quotaError } = await supabase.rpc("check_and_reset_ai_quota", { p_user_id: userId });
     if (quotaError || !quotaData || quotaData.length === 0) return new Response(JSON.stringify({ error: "Could not check AI quota." }), { status: 500, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
@@ -132,8 +149,8 @@ Deno.serve(async (req: Request) => {
       } catch { return []; }
     }
 
-    const [profileResult, metricsResult, postsResult, recentPostsResult, deals, pfmContext, inspirationResult, inspirationCountsResult] = await Promise.all([
-      supabase.from("profiles").select("full_name, display_name, instagram_avg_views, tiktok_avg_views, youtube_avg_views, instagram_access_token, instagram_business_account_id, tiktok_access_token, youtube_access_token").eq("id", userId).maybeSingle(),
+    const [profileResult, metricsResult, postsResult, recentPostsResult, deals, pfmContext, inspirationResult, inspirationCountsResult, voiceContext] = await Promise.all([
+      supabase.from("profiles").select("full_name, display_name, niche_preference, instagram_avg_views, tiktok_avg_views, youtube_avg_views, instagram_access_token, instagram_business_account_id, tiktok_access_token, youtube_access_token").eq("id", userId).maybeSingle(),
       supabase.from("platform_metrics").select("platform, date, followers_count, avg_engagement_rate").eq("user_id", userId).gte("date", sevenDaysAgo).order("date", { ascending: false }),
       supabase.from("content_posts").select("title, caption, platform, media_type, views, likes, comments, engagement_rate, published_at").eq("user_id", userId).eq("status", "published").gte("published_at", thirtyDaysAgo).order("likes", { ascending: false, nullsFirst: false }).limit(10),
       supabase.from("content_posts").select("title, caption, platform, media_type, views, likes, comments, saves, shares, engagement_rate, published_at").eq("user_id", userId).eq("status", "published").gte("published_at", sevenDaysAgo).order("published_at", { ascending: false }).limit(15),
@@ -141,10 +158,13 @@ Deno.serve(async (req: Request) => {
       fetchPostForMeContext(userId),
       supabase.from("inspiration_entries").select("post_title, platform, content_format, hook_framework, hook_text, topic_tags, tactical_notes, creator, likes, views").eq("performance_tier", "Outlier").order("likes", { ascending: false, nullsFirst: false }).limit(15),
       supabase.from("inspiration_entries").select("performance_tier, hook_framework"),
+      // The creator's own voice fingerprint (null until they've built one).
+      loadVoiceContext(supabase, userId),
     ]);
 
     const profile = profileResult.data;
     const creatorName = profile?.display_name || profile?.full_name?.split(" ")[0] || "Creator";
+    const niche = (profile?.niche_preference || "").trim();
 
     const connectedSet = new Set<string>();
     if (profile?.instagram_access_token || profile?.instagram_business_account_id) connectedSet.add("Instagram");
@@ -351,6 +371,7 @@ Deno.serve(async (req: Request) => {
 
 CREATOR PROFILE:
 Name: ${creatorName}
+Niche: ${niche || "Not set yet"}
 Connected platforms: ${connectedPlatforms.length > 0 ? connectedPlatforms.join(", ") : "None connected yet"}
 
 ═══ THIS WEEK'S POSTS (last 7 days, newest first) ═══
@@ -372,21 +393,14 @@ ${platformLines || "  No platform data available"}
 ─── ACTIVE DEAL PIPELINE ───
 ${dealLines}${deals.length > 0 ? `\nTotal pipeline value: $${totalDealValue.toLocaleString()}` : ""}`.trim();
 
-    const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "x-api-key": ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json",
-        // Deno's default User-Agent ("Deno/x.x.x") triggers Anthropic's
-        // Cloudflare bot challenge on /v1/messages. Pinning a friendly UA
-        // bypasses the challenge.
-        "User-Agent": "cliopatra-ask-copilot/1.0",
-      },
-      body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 2000,
-        system: `You are Clio, the creator's personal analytics + inspiration copilot inside Cliopatra Social. The DATA block below has two grounded sources: (a) their real per-post performance, (b) their curated Inspiration Library of Outlier posts.
+    // System is an array of blocks so prompt caching works:
+    //   [ static instructions ] [ voice block (if built) | cache_control ] [ volatile data ]
+    // The static instructions + per-user voice form a STABLE prefix, so the
+    // cache breakpoint sits on the last stable block (the voice block when
+    // present, else the instructions). The per-request DATA block (posts,
+    // deals, metrics — changes every call) comes AFTER the breakpoint so it
+    // never invalidates the cached prefix.
+    const staticInstructions = `You are Clio, the creator's personal analytics + inspiration copilot inside Cliopatra Social. The DATA block below has two grounded sources: (a) their real per-post performance, (b) their curated Inspiration Library of Outlier posts.
 
 YOUR JOB: reason at the POST level, not the platform level. Find patterns across specific posts. Pair what they're already doing well with a concrete saved Outlier example. Avoid kitchen-sink platform summaries.
 
@@ -415,10 +429,35 @@ GOOD ANSWER SHAPE:
 - One specific pattern call-out: "Three of your last 7 posts use How-To framing. They average 2.5x your typical engagement."
 - One concrete recommendation tied to a saved Outlier: "@myrongolden's Outlier ('Break it down: What to do, when to do it, why...') maps perfectly to your tone-mod content. Try a 60-sec Reel framed that way on out-of-phase wiring."
 
-Style: direct, post-level, under 250 words. No filler, no preamble, no platform-aggregate openers.
+Style: direct, post-level, under 250 words. No filler, no preamble, no platform-aggregate openers.`;
 
-${context}`,
-        messages: [{ role: "user", content: question.trim() }],
+    type SystemBlock = { type: "text"; text: string; cache_control?: { type: "ephemeral" } };
+    const systemBlocks: SystemBlock[] = [{ type: "text", text: staticInstructions }];
+    if (voiceContext) systemBlocks.push({ type: "text", text: voiceContext });
+    // Cache breakpoint on the LAST stable block.
+    systemBlocks[systemBlocks.length - 1].cache_control = { type: "ephemeral" };
+    // Volatile per-request data goes after the breakpoint.
+    systemBlocks.push({ type: "text", text: context });
+
+    const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+        // Deno's default User-Agent ("Deno/x.x.x") triggers Anthropic's
+        // Cloudflare bot challenge on /v1/messages. Pinning a friendly UA
+        // bypasses the challenge.
+        "User-Agent": "cliopatra-ask-copilot/1.0",
+      },
+      body: JSON.stringify({
+        // Sonnet 5 with thinking disabled: flagship answer quality at chat
+        // latency (thinking would add seconds per turn Clio doesn't need).
+        model: "claude-sonnet-5",
+        max_tokens: 2000,
+        thinking: { type: "disabled" },
+        system: systemBlocks,
+        messages: [...history, { role: "user", content: question.trim() }],
       }),
     });
 
@@ -433,7 +472,7 @@ ${context}`,
 
     await supabase.rpc("increment_ai_request", { p_user_id: userId });
 
-    return new Response(JSON.stringify({ answer, success: true }), {
+    return new Response(JSON.stringify({ answer, success: true, voiceActive: !!voiceContext }), {
       headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
     });
   } catch (err: unknown) {

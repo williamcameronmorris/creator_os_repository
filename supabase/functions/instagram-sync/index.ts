@@ -276,6 +276,10 @@ Deno.serve(async (req: Request) => {
     // ── Trigger caption analysis (fire-and-forget) ────────────────────────────
     // Runs in the background after a successful sync. Skips if analysis is
     // already fresh (< 24 hours old). Does not block the sync response.
+    // Cron-mode call: the service-role key is NOT a user session token, so
+    // sending it as a user Bearer made analyze-captions 401 on every sync.
+    // Auth now rides in the body as { cronSecret, userId } (requireUserOrCron);
+    // the service-role Bearer stays only to satisfy the platform JWT gate.
     const analysisUrl = `${supabaseUrl}/functions/v1/analyze-captions`;
     fetch(analysisUrl, {
       method: "POST",
@@ -283,7 +287,7 @@ Deno.serve(async (req: Request) => {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${supabaseKey}`,
       },
-      body: JSON.stringify({ userId }),
+      body: JSON.stringify({ cronSecret: Deno.env.get("Cron_Secret"), userId, force: false }),
     }).then(async (res) => {
       if (!res.ok) {
         const text = await res.text();

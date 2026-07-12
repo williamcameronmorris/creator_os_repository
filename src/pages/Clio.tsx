@@ -10,7 +10,12 @@ import {
   ArrowRight,
   RefreshCw,
   Pencil,
+  Check,
 } from 'lucide-react';
+
+// One turn in the Clio conversation thread. Prior turns are sent back to
+// ask-copilot as `messages` so Clio keeps context across follow-ups.
+type ChatTurn = { role: 'user' | 'assistant'; content: string };
 
 // Inline markdown: convert **bold** to <strong>
 function inlineMarkdown(text: string, lineKey: number) {
@@ -132,7 +137,9 @@ export function Clio() {
   const navigate = useNavigate();
   const [query, setQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [response, setResponse] = useState('');
+  const [conversation, setConversation] = useState<ChatTurn[]>([]);
+  const [errorMsg, setErrorMsg] = useState('');
+  const [voiceActive, setVoiceActive] = useState(false);
   const [placeholderIdx, setPlaceholderIdx] = useState(0);
   const [hasDailyBrief, setHasDailyBrief] = useState(false);
   const [briefData, setBriefData] = useState<any>(null);
@@ -154,18 +161,30 @@ export function Clio() {
       if (!user) { setBriefLoading(false); return; }
       try {
         const today = new Date().toISOString().split('T')[0];
-        const [profileRes, briefRes] = await Promise.all([
+        // ai_daily_briefs ships next sprint — until the table exists this
+        // query fails on every page load. Fetch it in isolation and swallow
+        // ANY failure (missing table, RLS, network) as "no brief today".
+        // The Daily Brief UI below lights up automatically once it's live.
+        const fetchBrief = async () => {
+          try {
+            const { data, error } = await supabase
+              .from('ai_daily_briefs')
+              .select('*')
+              .eq('user_id', user.id)
+              .eq('brief_date', today)
+              .maybeSingle();
+            return error ? null : data;
+          } catch {
+            return null;
+          }
+        };
+        const [profileRes, brief] = await Promise.all([
           supabase
             .from('profiles')
             .select('display_name, full_name')
             .eq('id', user.id)
             .maybeSingle(),
-          supabase
-            .from('ai_daily_briefs')
-            .select('*')
-            .eq('user_id', user.id)
-            .eq('brief_date', today)
-            .maybeSingle(),
+          fetchBrief(),
         ]);
         if (profileRes.data) {
           const name = profileRes.data.display_name
@@ -173,9 +192,9 @@ export function Clio() {
             || '';
           if (name) setProfileName(name);
         }
-        if (briefRes.data) {
+        if (brief) {
           setHasDailyBrief(true);
-          setBriefData(briefRes.data);
+          setBriefData(brief);
         }
       } catch {
         // non-critical
@@ -188,16 +207,23 @@ export function Clio() {
 
   const handleSubmit = async () => {
     if (!query.trim() || isLoading) return;
+    const question = query.trim();
     setIsLoading(true);
-    setResponse('');
+    setErrorMsg('');
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
-        setResponse('Your session expired. Please refresh and sign in again.');
+        setErrorMsg('Your session expired. Please refresh and sign in again.');
         return;
       }
       const res = await supabase.functions.invoke('ask-copilot', {
-        body: { userId: user!.id, question: query },
+        body: {
+          userId: user!.id,
+          question,
+          // Prior turns so Clio keeps context across follow-ups. The edge
+          // function validates + caps this at the last 12 turns anyway.
+          messages: conversation.slice(-12),
+        },
         headers: { Authorization: `Bearer ${session.access_token}` },
       });
       if (res.error) {
@@ -212,14 +238,20 @@ export function Clio() {
             if (body?.error) msg = body.error;
           }
         } catch { /* keep default */ }
-        setResponse(msg);
+        setErrorMsg(msg);
       } else if (res.data?.answer) {
-        setResponse(res.data.answer);
+        setConversation((prev) => [
+          ...prev,
+          { role: 'user', content: question },
+          { role: 'assistant', content: res.data.answer },
+        ]);
+        setVoiceActive(!!res.data.voiceActive);
+        setQuery('');
       } else {
-        setResponse('No response received. Try again.');
+        setErrorMsg('No response received. Try again.');
       }
     } catch {
-      setResponse('Something went wrong. Try again.');
+      setErrorMsg('Something went wrong. Try again.');
     } finally {
       setIsLoading(false);
     }
@@ -305,16 +337,42 @@ export function Clio() {
         </div>
       </div>
 
-      {/* Response area */}
-      {response && (() => {
-        const parsed = parseActionableIdeas(response);
+      {/* Conversation thread */}
+      {conversation.map((turn, turnIdx) => {
+        if (turn.role === 'user') {
+          return (
+            <div key={turnIdx} className="mb-6 animate-reveal-up">
+              <span className="t-micro mb-2 block">You</span>
+              <p
+                className="text-foreground leading-relaxed whitespace-pre-wrap"
+                style={{ fontWeight: 500, fontSize: '0.95rem', letterSpacing: '-0.01em' }}
+              >
+                {turn.content}
+              </p>
+            </div>
+          );
+        }
+
+        const clioLabel = (
+          <div className="flex items-baseline gap-3 mb-4">
+            <span className="t-micro accent-dot">Clio</span>
+            {voiceActive && (
+              <span className="t-micro inline-flex items-center gap-1" style={{ color: 'var(--accent)' }}>
+                <Check className="w-3 h-3" /> In your voice
+              </span>
+            )}
+          </div>
+        );
+
+        const parsed = parseActionableIdeas(turn.content);
         if (parsed) {
           // If the user asked for a specific count and we got fewer, flag it.
-          const m = query.match(/\b(\d+)\s+(?:content\s+)?(?:ideas?|suggestions?|posts?)\b/i);
+          const askedQuestion = conversation[turnIdx - 1]?.role === 'user' ? conversation[turnIdx - 1].content : '';
+          const m = askedQuestion.match(/\b(\d+)\s+(?:content\s+)?(?:ideas?|suggestions?|posts?)\b/i);
           const requested = m ? parseInt(m[1], 10) : 0;
           return (
-            <div className="pb-6 mb-10 animate-reveal-up">
-              <span className="t-micro accent-dot mb-4 block">Clio</span>
+            <div key={turnIdx} className="border-b border-border pb-6 mb-10 animate-reveal-up">
+              {clioLabel}
               {parsed.preamble && (
                 <div className="t-body text-foreground leading-relaxed whitespace-pre-wrap mb-5">
                   {renderMarkdown(parsed.preamble)}
@@ -368,17 +426,25 @@ export function Clio() {
           );
         }
         return (
-          <div className="pb-6 mb-10 animate-reveal-up">
-            <span className="t-micro accent-dot mb-4 block">Clio</span>
+          <div key={turnIdx} className="border-b border-border pb-6 mb-10 animate-reveal-up">
+            {clioLabel}
             <div className="t-body text-foreground leading-relaxed whitespace-pre-wrap">
-              {renderMarkdown(response)}
+              {renderMarkdown(turn.content)}
             </div>
           </div>
         );
-      })()}
+      })}
+
+      {/* Transient error — kept out of the thread so it's never replayed as history */}
+      {errorMsg && (
+        <div className="pb-6 mb-10 animate-reveal-up">
+          <span className="t-micro accent-dot mb-4 block">Clio</span>
+          <div className="t-body text-foreground leading-relaxed whitespace-pre-wrap">{errorMsg}</div>
+        </div>
+      )}
 
       {/* Adaptive content */}
-      {!response && !briefLoading && (
+      {conversation.length === 0 && !errorMsg && !briefLoading && (
         <>
           {hasDailyBrief && briefData ? (
             <div className="animate-reveal-up delay-2">

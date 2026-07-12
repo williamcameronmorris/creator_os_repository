@@ -58,12 +58,13 @@ Deno.serve(async (req: Request) => {
         .select("platform, title, content_type, views, likes, comments, engagement_rate")
         .eq("user_id", userId)
         .eq("status", "published")
-        .gte("published_date", thirtyDaysAgoStr)
+        // published_at is what the sync writes; published_date is a dead column.
+        .gte("published_at", thirtyDaysAgoStr)
         .order("engagement_rate", { ascending: false })
         .limit(10),
       supabase
         .from("profiles")
-        .select("display_name, first_name")
+        .select("display_name, first_name, niche_preference")
         .eq("id", userId)
         .maybeSingle(),
     ]);
@@ -84,6 +85,9 @@ Deno.serve(async (req: Request) => {
       engagementRate: Math.round((p.engagement_rate || 0) * 10) / 10,
     }));
 
+    const creatorName = profileResult.data?.first_name || profileResult.data?.display_name || "creator";
+    const niche = (profileResult.data?.niche_preference || "").trim();
+
     const platforms = Object.keys(platformSummary);
     const hasPlatformData = platforms.length > 0;
 
@@ -100,8 +104,12 @@ ${topPosts.slice(0, 5).map((p) => `- [${p.platform}] "${p.topic}" (${p.type}, ${
 
 Always respond with a valid JSON array. No markdown, no explanation, just the array.`;
 
-    const userPrompt = `${contextBlock}
+    const userPrompt = `Creator: ${creatorName}
+${niche ? `Niche: ${niche}` : "Niche: not set — infer it from the performance data below."}
 
+${contextBlock}
+
+Every idea must be specific to this creator's niche — no generic "post more reels" advice.
 Generate exactly 4 content ideas. Return ONLY a JSON array with this exact shape:
 [
   {
