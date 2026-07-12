@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { requireUser, corsHeaders } from "../_shared/auth.ts";
+import { requireUserOrCron, corsHeaders } from "../_shared/auth.ts";
 
 /**
  * analyze-captions Edge Function
@@ -45,10 +45,13 @@ Deno.serve(async (req: Request) => {
     }
 
     const supabase = createClient(supabaseUrl, supabaseKey);
-    const auth = await requireUser(req, supabase);
+    // Accept EITHER a user JWT (settings-page trigger — unchanged behavior)
+    // OR { cronSecret, userId } in the body, so sync functions and cron can
+    // fire the voice/caption analysis for any user server-side.
+    const body = await req.json().catch(() => ({}));
+    const auth = await requireUserOrCron(req, supabase, body, "Cron_Secret");
     if (!auth.ok) return auth.response;
     const userId = auth.userId;
-    const body = await req.json().catch(() => ({}));
     const { force = false } = body;
 
     if (!userId) throw new Error("Missing required field: userId");
@@ -129,6 +132,16 @@ Your job is to identify patterns in their captions that explain why their conten
 You understand hook frameworks, content structure, and what makes captions scroll-stopping.
 Always respond with a single valid JSON object. No markdown, no explanation outside the JSON.`;
 
+    // CANONICAL hook-framework taxonomy — must match inspiration_entries.hook_framework
+    // (see migration 20260323000002_add_inspiration_entries.sql) and the framework
+    // list in generate-recommendations. Free-form names here would never join
+    // against the Outlier library, silently breaking the recommendation engine.
+    const CANONICAL_FRAMEWORKS = [
+      "Proof-First", "Curiosity Gap", "Pain Point", "Challenge",
+      "Question + Proof", "Bold Claim", "Storytelling", "Contrarian",
+      "How-To", "List/Ranking",
+    ];
+
     const userPrompt = `Analyze these ${validPosts.length} posts from a creator (sorted by performance, top performers first).
 Identify the patterns that make their content work.
 
@@ -137,7 +150,7 @@ ${postSummaries}
 Return ONLY a valid JSON object with this exact shape:
 {
   "hook_frameworks": [
-    "Framework name (e.g. 'Question Hook', 'Bold Claim', 'Story Opener', 'How-To', 'Contrarian Take', 'Behind The Scenes', 'Social Proof', 'Scarcity/FOMO')"
+    "Framework name — choose ONLY from this list, exactly as written: ${CANONICAL_FRAMEWORKS.map((f) => `'${f}'`).join(", ")}"
   ],
   "dominant_topics": [
     "Topic cluster (e.g. 'guitar gear reviews', 'music production tips', 'studio life', 'songwriting process')"
@@ -167,7 +180,7 @@ Return ONLY a valid JSON object with this exact shape:
 }
 
 Rules:
-- hook_frameworks: list 3-6 frameworks you actually see in the posts (not invented)
+- hook_frameworks: list 3-6 frameworks you actually see in the posts. Choose ONLY from the canonical list above — never invent new framework names, never rephrase them
 - dominant_topics: list 2-5 actual topic clusters
 - top_patterns: identify exactly 3 patterns tied to the best-performing posts
 - content_gaps: suggest 2-3 specific gaps

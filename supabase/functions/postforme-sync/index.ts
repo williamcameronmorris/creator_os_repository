@@ -580,6 +580,22 @@ Deno.serve(async (req) => {
 
   try {
     const summary = await syncForUser(userId);
+
+    // ── Trigger caption/voice analysis (fire-and-forget) ────────────────────
+    // Same cron-mode trigger instagram-sync uses: auth rides in the body as
+    // { cronSecret, userId } (requireUserOrCron). analyze-captions' own 24h
+    // freshness check prevents churn; failures never block the sync response.
+    fetch(`${SUPABASE_URL}/functions/v1/analyze-captions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+      },
+      body: JSON.stringify({ cronSecret: CRON_SECRET, userId, force: false }),
+    }).catch((err) => {
+      console.warn("analyze-captions fire-and-forget failed:", (err as Error).message);
+    });
+
     return new Response(JSON.stringify(summary), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
