@@ -17,6 +17,30 @@ import {
 // ask-copilot as `messages` so Clio keeps context across follow-ups.
 type ChatTurn = { role: 'user' | 'assistant'; content: string };
 
+// Shape of ai_daily_briefs.content, produced by the generate-daily-brief
+// edge function (one Claude call per user per morning). Everything optional
+// on the client so a partial brief still renders what it has.
+type BriefIdea = {
+  topic: string;
+  hook?: string;
+  reasoning?: string;
+  platform?: string;
+  content_type?: string;
+};
+type BriefContent = {
+  headline?: string;
+  performance?: { summary?: string; highlight_post?: string | null };
+  niche_trend?: { summary?: string; example_title?: string | null };
+  ideas?: BriefIdea[];
+  best_time?: { hour_local?: string; note?: string };
+};
+type DailyBriefRow = {
+  id: string;
+  brief_date: string;
+  content: BriefContent;
+  model?: string | null;
+};
+
 // Inline markdown: convert **bold** to <strong>
 function inlineMarkdown(text: string, lineKey: number) {
   const parts: (string | JSX.Element)[] = [];
@@ -142,8 +166,9 @@ export function Clio() {
   const [voiceActive, setVoiceActive] = useState(false);
   const [placeholderIdx, setPlaceholderIdx] = useState(0);
   const [hasDailyBrief, setHasDailyBrief] = useState(false);
-  const [briefData, setBriefData] = useState<any>(null);
+  const [briefData, setBriefData] = useState<DailyBriefRow | null>(null);
   const [briefLoading, setBriefLoading] = useState(true);
+  const [generatingBrief, setGeneratingBrief] = useState(false);
   const [profileName, setProfileName] = useState('');
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -160,12 +185,13 @@ export function Clio() {
     const loadData = async () => {
       if (!user) { setBriefLoading(false); return; }
       try {
+        // The cron writes brief_date as the UTC calendar date, so read it
+        // back the same way (toISOString is UTC).
         const today = new Date().toISOString().split('T')[0];
-        // ai_daily_briefs ships next sprint — until the table exists this
-        // query fails on every page load. Fetch it in isolation and swallow
-        // ANY failure (missing table, RLS, network) as "no brief today".
-        // The Daily Brief UI below lights up automatically once it's live.
-        const fetchBrief = async () => {
+        // Today's Daily Brief, written each morning by generate-daily-brief.
+        // Fetch in isolation and swallow failures as "no brief today" — the
+        // empty state offers Generate now instead.
+        const fetchBrief = async (): Promise<DailyBriefRow | null> => {
           try {
             const { data, error } = await supabase
               .from('ai_daily_briefs')
@@ -173,7 +199,7 @@ export function Clio() {
               .eq('user_id', user.id)
               .eq('brief_date', today)
               .maybeSingle();
-            return error ? null : data;
+            return error ? null : (data as DailyBriefRow | null);
           } catch {
             return null;
           }
@@ -255,6 +281,63 @@ export function Clio() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // On-demand brief: invokes generate-daily-brief with the session bearer
+  // (same invoke pattern as ask-copilot above / IdeationStage). Counts
+  // against the user's daily AI quota, unlike the morning cron.
+  const handleGenerateBrief = async () => {
+    if (generatingBrief) return;
+    setGeneratingBrief(true);
+    setErrorMsg('');
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        setErrorMsg('Your session expired. Please refresh and sign in again.');
+        return;
+      }
+      const res = await supabase.functions.invoke('generate-daily-brief', {
+        body: {},
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (res.error) {
+        // Same non-2xx handling as handleSubmit: the real message (e.g. the
+        // quota error) lives in the JSON body on error.context.
+        let msg = 'Couldn\'t generate your brief. Try again.';
+        try {
+          const ctx = (res.error as { context?: Response }).context;
+          if (ctx && typeof ctx.json === 'function') {
+            const body = await ctx.json();
+            if (body?.error) msg = body.error;
+          }
+        } catch { /* keep default */ }
+        setErrorMsg(msg);
+      } else if (res.data?.brief) {
+        setBriefData(res.data.brief as DailyBriefRow);
+        setHasDailyBrief(true);
+      } else {
+        setErrorMsg('No brief received. Try again.');
+      }
+    } catch {
+      setErrorMsg('Couldn\'t generate your brief. Try again.');
+    } finally {
+      setGeneratingBrief(false);
+    }
+  };
+
+  // Hand a brief idea to Studio scripting — same deep-link contract as
+  // Watch's clioParams (src/lib/watch.ts): Studio reads idea/platform/type/
+  // hook/reasoning and autostarts the script.
+  const startBriefIdea = (idea: BriefIdea) => {
+    const params = new URLSearchParams({
+      autostart: '1',
+      idea: idea.topic,
+      platform: idea.platform || 'instagram',
+      type: idea.content_type || 'reel',
+      hook: idea.hook || idea.topic,
+      reasoning: idea.reasoning || 'From your Daily Brief',
+    });
+    navigate(`/studio/script?${params.toString()}`);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -446,44 +529,118 @@ export function Clio() {
       {/* Adaptive content */}
       {conversation.length === 0 && !errorMsg && !briefLoading && (
         <>
-          {hasDailyBrief && briefData ? (
+          {hasDailyBrief && briefData?.content ? (
             <div className="animate-reveal-up delay-2">
               <span className="t-micro accent-dot mb-5 block">Your Daily Brief</span>
 
-              {briefData.top_performer && (
+              {briefData.content.headline && (
+                <p
+                  className="text-foreground mb-5"
+                  style={{ fontWeight: 500, fontSize: '1.0625rem', letterSpacing: '-0.01em', lineHeight: 1.4 }}
+                >
+                  {briefData.content.headline}
+                </p>
+              )}
+
+              {briefData.content.performance?.summary && (
                 <div className="card-industrial p-5 mb-4">
-                  <span className="t-micro mb-2 block">TOP PERFORMER</span>
-                  <p className="text-sm font-medium text-foreground mb-1">
-                    {(briefData.top_performer.caption || '').substring(0, 80) || 'Your best recent post'}
-                    {(briefData.top_performer.caption || '').length > 80 ? '…' : ''}
+                  <span className="t-micro mb-2 block">YOUR WEEK</span>
+                  <p className="t-body text-foreground">
+                    {briefData.content.performance.summary}
                   </p>
-                  <p className="t-body">
-                    {briefData.top_performer.insight || 'Outperformed your average engagement rate.'}
-                  </p>
+                  {briefData.content.performance.highlight_post && (
+                    <p className="t-body mt-2">
+                      Top performer: <span className="text-foreground font-medium">{briefData.content.performance.highlight_post}</span>
+                    </p>
+                  )}
                 </div>
               )}
 
-              {briefData.recommended_action && (
+              {briefData.content.niche_trend?.summary && (
                 <div className="card-industrial p-5 mb-4">
-                  <span className="t-micro mb-2 block">RECOMMENDED TODAY</span>
-                  <p className="text-sm font-medium text-foreground">
-                    {briefData.recommended_action}
-                  </p>
-                </div>
-              )}
-
-              {briefData.trending_topic && (
-                <div className="card-industrial p-5">
                   <span className="t-micro mb-2 block">TRENDING IN YOUR NICHE</span>
+                  <p className="t-body text-foreground">
+                    {briefData.content.niche_trend.summary}
+                  </p>
+                  {briefData.content.niche_trend.example_title && (
+                    <p className="t-body mt-2">
+                      Example: <span className="text-foreground font-medium">"{briefData.content.niche_trend.example_title}"</span>
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {(briefData.content.ideas?.length ?? 0) > 0 && (
+                <div className="card-industrial p-5 mb-4">
+                  <span className="t-micro mb-1 block">TODAY'S IDEAS</span>
+                  <div className="t-body text-muted-foreground mb-2">Tap an idea to start a script in Studio.</div>
+                  <div>
+                    {briefData.content.ideas!.map((idea, i) => (
+                      <button
+                        key={i}
+                        onClick={() => startBriefIdea(idea)}
+                        className="w-full text-left group block border-b border-border last:border-b-0 py-4"
+                      >
+                        <div className="flex items-baseline gap-4">
+                          <span className="t-micro text-muted-foreground" style={{ minWidth: '1.5rem' }}>
+                            {String(i + 1).padStart(2, '0')}
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <span
+                              className="block text-foreground group-hover:text-accent transition-colors"
+                              style={{ fontWeight: 500, fontSize: '0.95rem', letterSpacing: '-0.01em' }}
+                            >
+                              {idea.topic}
+                            </span>
+                            {idea.hook && (
+                              <span className="t-body text-muted-foreground block mt-1">"{idea.hook}"</span>
+                            )}
+                            {idea.reasoning && (
+                              <span className="t-body text-muted-foreground block mt-1">{idea.reasoning}</span>
+                            )}
+                          </div>
+                          <span className="t-micro text-muted-foreground group-hover:text-accent transition-colors whitespace-nowrap">
+                            START →
+                          </span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {briefData.content.best_time?.hour_local && (
+                <div className="card-industrial p-5">
+                  <span className="t-micro mb-2 block">BEST TIME TO POST</span>
                   <p className="text-sm font-medium text-foreground">
-                    {briefData.trending_topic}
+                    {briefData.content.best_time.hour_local}
+                    {briefData.content.best_time.note && (
+                      <span className="t-body text-muted-foreground font-normal"> — {briefData.content.best_time.note}</span>
+                    )}
                   </p>
                 </div>
               )}
             </div>
           ) : (
-            /* New user: suggestion cards */
+            /* No brief yet: empty state + suggestion cards */
             <div className="animate-reveal-up delay-2">
+              <div className="ie-border-b pb-6 mb-8">
+                <span className="t-micro accent-dot mb-3 block">Your Daily Brief</span>
+                <div className="flex items-center justify-between gap-4 flex-wrap">
+                  <p className="t-body text-muted-foreground">Your brief arrives tomorrow morning.</p>
+                  <button
+                    onClick={handleGenerateBrief}
+                    disabled={generatingBrief}
+                    className="btn-ie disabled:opacity-40 disabled:cursor-not-allowed"
+                    style={{ fontSize: '10px', padding: '0.5rem 1.25rem' }}
+                  >
+                    <span className="btn-ie-text inline-flex items-center gap-2">
+                      {generatingBrief && <RefreshCw className="w-3 h-3 animate-spin" />}
+                      {generatingBrief ? 'GENERATING…' : 'GENERATE NOW'}
+                    </span>
+                  </button>
+                </div>
+              </div>
               <span className="t-micro accent-dot mb-5 block">Start here</span>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {suggestions.map((s) => {
