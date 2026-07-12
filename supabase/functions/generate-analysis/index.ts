@@ -52,6 +52,7 @@ Deno.serve(async (req: Request) => {
       .from("content_workflow_stages")
       .select("idea_content, script_content")
       .eq("id", workflowId)
+      .eq("user_id", userId)
       .maybeSingle();
 
     const ideaTopic = workflow?.idea_content || "Unknown topic";
@@ -59,10 +60,26 @@ Deno.serve(async (req: Request) => {
     const hook = scriptContent?.hook || "";
 
     // ── Build performance context ─────────────────────────────────────────────
-    const views = metrics?.views || 0;
-    const likes = metrics?.likes || 0;
-    const comments = metrics?.comments || 0;
-    const engRate = metrics?.engagementRate || 0;
+    // Don't trust client-supplied metrics when we can read the truth ourselves:
+    // if a postId is provided, pull views/likes/comments from content_posts
+    // (scoped to this user). Client metrics are the fallback for the no-postId
+    // path only. Averages (avgViews/avgEngagement) still come from the client.
+    let serverMetrics: { views?: number; likes?: number; comments?: number; engagement_rate?: number } | null = null;
+    if (postId) {
+      const { data: postRow, error: postError } = await supabase
+        .from("content_posts")
+        .select("views, likes, comments, engagement_rate")
+        .eq("id", postId)
+        .eq("user_id", userId)
+        .maybeSingle();
+      if (postError) console.error("content_posts fetch failed:", postError.message);
+      serverMetrics = postRow || null;
+    }
+
+    const views = serverMetrics ? (serverMetrics.views || 0) : (metrics?.views || 0);
+    const likes = serverMetrics ? (serverMetrics.likes || 0) : (metrics?.likes || 0);
+    const comments = serverMetrics ? (serverMetrics.comments || 0) : (metrics?.comments || 0);
+    const engRate = serverMetrics ? (Number(serverMetrics.engagement_rate) || 0) : (metrics?.engagementRate || 0);
     const avgViews = metrics?.avgViews || 0;
     const avgEng = metrics?.avgEngagement || 0;
 
@@ -158,7 +175,8 @@ No markdown. No explanation. Just the JSON.`,
           }),
           updated_at: new Date().toISOString(),
         })
-        .eq("id", workflowId);
+        .eq("id", workflowId)
+        .eq("user_id", userId); // never write another user's workflow row
     }
 
     // ── Decrement quota ──────────────────────────────────────────────────────

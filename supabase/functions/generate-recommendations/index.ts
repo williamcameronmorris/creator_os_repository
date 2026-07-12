@@ -129,14 +129,23 @@ Deno.serve(async (req: Request) => {
 
     // If we got fewer than 3 matches, pad with any Outliers
     if (outlierExamples.length < 3) {
-      const { data: anyOutliers } = await supabase
+      let padQuery = supabase
         .from("inspiration_entries")
         .select("post_title, hook_framework, hook_text, performance_tier, topic_tags, tactical_notes, likes, comments, content_format")
-        .eq("performance_tier", "Outlier")
-        .not("hook_framework", "in", `(${userFrameworks.map(f => `"${f}"`).join(",")})`)
+        .eq("performance_tier", "Outlier");
+
+      // Only exclude the user's frameworks when there ARE any. With an empty
+      // list the `.not(..., "in", "()")` clause is malformed PostgREST and the
+      // query silently returns zero rows, starving Claude of examples.
+      if (userFrameworks.length > 0) {
+        padQuery = padQuery.not("hook_framework", "in", `(${userFrameworks.map(f => `"${f}"`).join(",")})`);
+      }
+
+      const { data: anyOutliers, error: padError } = await padQuery
         .order("likes", { ascending: false })
         .limit(3);
 
+      if (padError) console.error("Outlier pad query failed:", padError.message);
       outlierExamples.push(...(anyOutliers || []));
     }
 
