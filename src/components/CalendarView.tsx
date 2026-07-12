@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronLeft, ChevronRight, Instagram, Youtube, Sparkles, AtSign, Calendar, Clock } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Instagram, Youtube, Facebook, Twitter, Cloud, Sparkles, AtSign, Calendar, Clock } from 'lucide-react';
 import { formatInTz } from '../lib/timezone';
 
 interface CalPost {
@@ -23,6 +23,9 @@ const PLATFORM_COLORS: Record<string, string> = {
   youtube: 'bg-red-500',
   tiktok: 'bg-gray-800',
   threads: 'bg-gray-600',
+  facebook: 'bg-blue-600',
+  x: 'bg-gray-900',
+  bluesky: 'bg-sky-500',
 };
 
 const PLATFORM_ICONS: Record<string, React.ElementType> = {
@@ -30,6 +33,9 @@ const PLATFORM_ICONS: Record<string, React.ElementType> = {
   youtube: Youtube,
   tiktok: Sparkles,
   threads: AtSign,
+  facebook: Facebook,
+  x: Twitter,
+  bluesky: Cloud,
 };
 
 const DAY_NAMES_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];

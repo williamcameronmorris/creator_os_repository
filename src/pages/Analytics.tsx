@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import {
   TrendingUp, Heart, MessageCircle, Instagram, Youtube,
+  Facebook, Twitter, Cloud,
   ExternalLink, Film, Image as ImageIcon, Layers,
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
@@ -25,6 +26,10 @@ const PLATFORM_LABELS: Record<string, string> = {
   instagram: 'Instagram',
   tiktok: 'TikTok',
   youtube: 'YouTube',
+  facebook: 'Facebook',
+  threads: 'Threads',
+  x: 'X / Twitter',
+  bluesky: 'Bluesky',
 };
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -751,6 +756,9 @@ function PlatformIcon({ platform, className }: { platform: string; className?: s
   if (platform === 'instagram') return <Instagram className={className} />;
   if (platform === 'youtube') return <Youtube className={className} />;
   if (platform === 'threads') return <ThreadsIcon className={className} />;
+  if (platform === 'facebook') return <Facebook className={className} />;
+  if (platform === 'x') return <Twitter className={className} />;
+  if (platform === 'bluesky') return <Cloud className={className} />;
   return <TrendingUp className={className} />;
 }
 

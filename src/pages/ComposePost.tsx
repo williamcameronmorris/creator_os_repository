@@ -2,10 +2,14 @@ import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
-import { ArrowLeft, ArrowRight, Check, Upload, X as XIcon } from 'lucide-react';
+import {
+  ArrowLeft, ArrowRight, Check, Upload, X as XIcon,
+  Instagram, Youtube, Facebook, Twitter, Sparkles, AtSign, Cloud, Globe,
+} from 'lucide-react';
 import {
   listPostForMeAccounts,
   createPostForMePost,
+  listConnectedAccounts,
   type PostForMeAccount,
   POSTFORME_PLATFORMS,
 } from '../lib/postforme';
@@ -21,13 +25,17 @@ import { localInputToUtc } from '../lib/timezone';
 /**
  * ComposePost — Post for Me-backed quick publisher.
  *
- * Multi-select across all connected platforms, with three modes:
+ * Multi-select across all connected ACCOUNTS (Sprout-style: a user can link
+ * several accounts per platform and checkbox exactly which ones a post goes
+ * to), with three modes:
  *   - NOW       : scheduled_at omitted so PFM publishes immediately
  *   - SCHEDULE  : datetime picker, optionally autofilled by Suggested Times chips
  *   - QUEUE     : +24h fallback (PFM has no native "next free slot" yet)
  *
  * Posts are created via PFM's /v1/social-posts and mirrored into
- * content_posts (one row per platform) so OfficeHub can render them.
+ * content_posts (one row per selected account, stamped with
+ * social_account_id + account_username) so OfficeHub can render them
+ * with per-account attribution.
  */
 
 type Mode = 'now' | 'schedule' | 'queue';
@@ -47,14 +55,31 @@ interface PlatformRule {
 }
 
 const PLATFORM_RULES: Record<string, PlatformRule> = {
-  twitter:   { captionLimit: 280,    mediaRequired: false, mediaMax: 4,  mediaTypes: 'both' },
+  // Keyed by PFM platform id ('x', not 'twitter' — the old 'twitter' key never
+  // matched, so X posts got the 2200-char fallback instead of 280).
+  x:         { captionLimit: 280,    mediaRequired: false, mediaMax: 4,  mediaTypes: 'both' },
   threads:   { captionLimit: 500,    mediaRequired: false, mediaMax: 10, mediaTypes: 'both' },
+  bluesky:   { captionLimit: 300,    mediaRequired: false, mediaMax: 4,  mediaTypes: 'both' },
   linkedin:  { captionLimit: 3000,   mediaRequired: false, mediaMax: 9,  mediaTypes: 'both' },
   instagram: { captionLimit: 2200,   mediaRequired: true,  mediaMax: 10, mediaTypes: 'both' },
   tiktok:    { captionLimit: 4000,   mediaRequired: true,  mediaMax: 1,  mediaTypes: 'video' },
   youtube:   { captionLimit: 100,    mediaRequired: true,  mediaMax: 1,  mediaTypes: 'video' },
   facebook:  { captionLimit: 63000,  mediaRequired: false, mediaMax: 10, mediaTypes: 'both' },
 };
+
+const PLATFORM_ICONS: Record<string, React.ElementType> = {
+  instagram: Instagram,
+  youtube: Youtube,
+  facebook: Facebook,
+  x: Twitter,
+  tiktok: Sparkles,
+  threads: AtSign,
+  bluesky: Cloud,
+};
+
+const PLATFORM_NAMES: Record<string, string> = Object.fromEntries(
+  POSTFORME_PLATFORMS.map((p) => [p.id, p.name]),
+);
 
 
 export function ComposePost() {
@@ -70,7 +95,9 @@ export function ComposePost() {
 
   const [accounts, setAccounts] = useState<PostForMeAccount[]>([]);
   const [loadingAccounts, setLoadingAccounts] = useState(true);
-  const [selectedPlatforms, setSelectedPlatforms] = useState<Set<string>>(new Set());
+  // Per-ACCOUNT selection (not per-platform): a user may have several accounts
+  // on the same platform and picks exactly which ones this post goes to.
+  const [selectedAccountIds, setSelectedAccountIds] = useState<string[]>([]);
 
   const [caption, setCaption] = useState('');
   const [media, setMedia] = useState<MediaItem[]>([]);
@@ -87,25 +114,33 @@ export function ComposePost() {
     listPostForMeAccounts(user.id, false)
       .then((s) => {
         setAccounts(s.accounts);
-        if (s.accounts.length > 0) {
-          setSelectedPlatforms(new Set([s.accounts[0].platform]));
+        const connected = listConnectedAccounts(s.accounts);
+        if (connected.length > 0) {
+          setSelectedAccountIds([connected[0].id]);
         }
       })
       .catch(() => setAccounts([]))
       .finally(() => setLoadingAccounts(false));
   }, [user]);
 
+  const connectedAccounts = listConnectedAccounts(accounts);
+  const selectedAccounts = connectedAccounts.filter((a) => selectedAccountIds.includes(a.id));
+  // Union of platforms across the selected accounts — validation rules derive
+  // from this (two accounts on the same platform contribute it once).
+  const selectedPlatforms = [...new Set(selectedAccounts.map((a) => a.platform))];
+
   useEffect(() => {
-    if (!user || selectedPlatforms.size === 0) {
+    if (!user || selectedPlatforms.length === 0) {
       setSuggestedTimes([]);
       return;
     }
-    const primary = [...selectedPlatforms][0];
+    const primary = selectedPlatforms[0];
     getSuggestedTimes(user.id, primary).then((r) => {
       setSuggestedTimes(r.times);
       setSuggestedSource(r.source);
     });
-  }, [user, selectedPlatforms]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, selectedPlatforms.join(',')]);
 
   useEffect(() => {
     return () => {
@@ -114,33 +149,40 @@ export function ComposePost() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const captionLimit = [...selectedPlatforms]
-    .map((p) => PLATFORM_RULES[p]?.captionLimit ?? 2200)
-    .reduce((min, n) => Math.min(min, n), Infinity);
+  // Strictest caption limit across selected platforms wins; remember WHICH
+  // platform imposes it so the helper text can name it.
+  const { limit: captionLimit, limitedBy } = selectedPlatforms.reduce(
+    (acc, p) => {
+      const lim = PLATFORM_RULES[p]?.captionLimit ?? 2200;
+      return lim < acc.limit ? { limit: lim, limitedBy: p } : acc;
+    },
+    { limit: Infinity, limitedBy: null as string | null },
+  );
 
   const effectiveLimit = captionLimit === Infinity ? 2200 : captionLimit;
   const remaining = effectiveLimit - caption.length;
   const overLimit = remaining < 0;
 
-  const mediaRequiredByAny = [...selectedPlatforms].some((p) => PLATFORM_RULES[p]?.mediaRequired);
-  const mediaMax = [...selectedPlatforms]
+  const platformsRequiringMedia = selectedPlatforms.filter((p) => PLATFORM_RULES[p]?.mediaRequired);
+  const mediaRequiredByAny = platformsRequiringMedia.length > 0;
+  const mediaMax = selectedPlatforms
     .map((p) => PLATFORM_RULES[p]?.mediaMax ?? 10)
     .reduce((min, n) => Math.min(min, n), Infinity);
-  const requiresVideoOnly = [...selectedPlatforms].some((p) => PLATFORM_RULES[p]?.mediaTypes === 'video');
+  const platformsRequiringVideo = selectedPlatforms.filter((p) => PLATFORM_RULES[p]?.mediaTypes === 'video');
+  const requiresVideoOnly = platformsRequiringVideo.length > 0;
+
+  const platformNames = (ids: string[]) => ids.map((p) => PLATFORM_NAMES[p] ?? p).join(', ');
 
   const isEmpty = caption.trim().length === 0;
-  const noPlatformSelected = selectedPlatforms.size === 0;
+  const noAccountSelected = selectedAccountIds.length === 0;
   const missingRequiredMedia = mediaRequiredByAny && media.length === 0;
   const tooMuchMedia = mediaMax !== Infinity && media.length > mediaMax;
   const wrongMediaType = requiresVideoOnly && media.some((m) => m.kind !== 'video');
 
-  const togglePlatform = (platform: string) => {
-    setSelectedPlatforms((prev) => {
-      const next = new Set(prev);
-      if (next.has(platform)) next.delete(platform);
-      else next.add(platform);
-      return next;
-    });
+  const toggleAccount = (accountId: string) => {
+    setSelectedAccountIds((prev) =>
+      prev.includes(accountId) ? prev.filter((id) => id !== accountId) : [...prev, accountId],
+    );
   };
 
   const onFilesPicked = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -190,10 +232,10 @@ export function ComposePost() {
 
   const submit = async () => {
     if (inFlight.current) return;
-    if (!user || isEmpty || overLimit || noPlatformSelected) return;
+    if (!user || isEmpty || overLimit || noAccountSelected) return;
     if (missingRequiredMedia) {
       setPublishState('error');
-      setErrorMsg('Instagram, TikTok, and YouTube require at least one media file.');
+      setErrorMsg(`${platformNames(platformsRequiringMedia)} require${platformsRequiringMedia.length === 1 ? 's' : ''} at least one media file.`);
       return;
     }
     if (tooMuchMedia) {
@@ -203,7 +245,7 @@ export function ComposePost() {
     }
     if (wrongMediaType) {
       setPublishState('error');
-      setErrorMsg('TikTok and YouTube require a video, not an image.');
+      setErrorMsg(`${platformNames(platformsRequiringVideo)} require${platformsRequiringVideo.length === 1 ? 's' : ''} a video, not an image.`);
       return;
     }
 
@@ -234,20 +276,19 @@ export function ComposePost() {
 
       setPublishState('submitting');
 
-      const platforms = [...selectedPlatforms];
-      const accountIds = platforms
-        .map((p) => accounts.find((a) => a.platform === p && a.status !== 'disconnected')?.id)
-        .filter((id): id is string => Boolean(id));
+      // Re-derive from live account state so a mid-compose disconnect can't
+      // send to a stale account id.
+      const targets = connectedAccounts.filter((a) => selectedAccountIds.includes(a.id));
 
-      if (accountIds.length === 0) {
-        throw new Error('No connected accounts found for the selected platforms.');
+      if (targets.length === 0) {
+        throw new Error('No connected accounts found for the selected accounts.');
       }
 
       const post = await createPostForMePost({
         userId: user.id,
         caption: caption.trim(),
         mediaUrls,
-        socialAccountIds: accountIds,
+        socialAccountIds: targets.map((a) => a.id),
         scheduledAt,
       });
 
@@ -258,9 +299,13 @@ export function ComposePost() {
           ? 'carousel'
           : 'image';
 
-      const rows = platforms.map((platform) => ({
+      // One mirror row PER SELECTED ACCOUNT (not per platform) so two accounts
+      // on the same platform each get their own attributable row.
+      const rows = targets.map((account) => ({
         user_id: user.id,
-        platform,
+        platform: account.platform,
+        social_account_id: account.id,
+        account_username: account.username || null,
         caption: caption.trim(),
         media_urls: mediaUrls,
         media_type: mediaType,
@@ -269,7 +314,7 @@ export function ComposePost() {
         status: mode === 'now' ? 'publishing' : 'scheduled',
         provider: 'postforme',
         postforme_post_id: post.id,
-        content_type: platform === 'youtube' ? 'short' : 'post',
+        content_type: account.platform === 'youtube' ? 'short' : 'post',
       }));
 
       const { error: insertErr } = await supabase.from('content_posts').insert(rows);
@@ -309,7 +354,7 @@ export function ComposePost() {
     );
   }
 
-  if (!loadingAccounts && accounts.length === 0) {
+  if (!loadingAccounts && connectedAccounts.length === 0) {
     return (
       <div className="max-w-2xl mx-auto px-4 sm:px-6 py-10 sm:py-14">
         <div className="t-micro mb-2">
@@ -334,8 +379,6 @@ export function ComposePost() {
     );
   }
 
-  const connectedPlatformIds = new Set(accounts.map((a) => a.platform));
-
   return (
     <div className="max-w-2xl mx-auto px-4 sm:px-6 py-10 sm:py-14">
 
@@ -355,28 +398,55 @@ export function ComposePost() {
         </div>
       </div>
 
-      {/* Platform multi-select */}
+      {/* Account multi-select — one checkbox row per connected account,
+          grouped by platform (multiple accounts per platform supported) */}
       <div className="mb-2">
-        <span className="t-micro">PLATFORMS · {String(selectedPlatforms.size).padStart(2,'0')}</span>
+        <span className="t-micro">ACCOUNTS · {String(selectedAccountIds.length).padStart(2,'0')}</span>
       </div>
-      <div className="flex gap-2 mb-6 flex-wrap">
+      <div className="border border-border mb-6">
         {POSTFORME_PLATFORMS.map((p) => {
-          const connected = connectedPlatformIds.has(p.id);
-          const selected = selectedPlatforms.has(p.id);
+          const platformAccounts = connectedAccounts.filter((a) => a.platform === p.id);
+          if (platformAccounts.length === 0) return null;
+          const Icon = PLATFORM_ICONS[p.id] ?? Globe;
           return (
-            <button
-              key={p.id}
-              onClick={() => connected && togglePlatform(p.id)}
-              disabled={!connected}
-              className="font-mono text-[10px] font-medium uppercase tracking-widest px-3 py-2 border transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-              style={{
-                borderColor: selected ? 'var(--accent)' : 'var(--border)',
-                color: selected ? 'var(--accent)' : connected ? 'var(--foreground)' : 'var(--muted-foreground)',
-              }}
-              title={connected ? '' : 'Connect this platform first in Office'}
-            >
-              {p.name}
-            </button>
+            <div key={p.id} className="border-b border-border last:border-b-0">
+              <div className="px-3 pt-3 pb-1 flex items-center gap-2">
+                <Icon className="w-3.5 h-3.5 text-muted-foreground" />
+                <span className="t-micro text-muted-foreground">{p.name.toUpperCase()} · {String(platformAccounts.length).padStart(2,'0')}</span>
+              </div>
+              {platformAccounts.map((account) => {
+                const selected = selectedAccountIds.includes(account.id);
+                return (
+                  <label
+                    key={account.id}
+                    className="flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-muted/20 transition-colors"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selected}
+                      onChange={() => toggleAccount(account.id)}
+                      className="sr-only"
+                    />
+                    <span
+                      aria-hidden
+                      className="w-4 h-4 border flex items-center justify-center flex-shrink-0 transition-colors"
+                      style={{
+                        borderColor: selected ? 'var(--accent)' : 'var(--border)',
+                        background: selected ? 'var(--accent)' : 'transparent',
+                      }}
+                    >
+                      {selected && <Check className="w-3 h-3" style={{ color: 'var(--background)' }} />}
+                    </span>
+                    <span
+                      className="font-mono text-[11px] uppercase tracking-widest truncate"
+                      style={{ color: selected ? 'var(--accent)' : 'var(--foreground)' }}
+                    >
+                      {account.username ? `@${account.username}` : account.id}
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
           );
         })}
       </div>
@@ -395,6 +465,7 @@ export function ComposePost() {
         <div className="flex justify-between mt-3 items-center">
           <span className="t-micro text-muted-foreground" style={{ fontSize: '9px' }}>
             CAP: {effectiveLimit}
+            {limitedBy && ` · LIMITED BY ${(PLATFORM_NAMES[limitedBy] ?? limitedBy).toUpperCase()}`}
           </span>
           <span
             className="font-mono text-[11px]"
@@ -551,7 +622,7 @@ export function ComposePost() {
       <button
         onClick={submit}
         disabled={
-          isEmpty || overLimit || noPlatformSelected ||
+          isEmpty || overLimit || noAccountSelected ||
           missingRequiredMedia || tooMuchMedia || wrongMediaType ||
           (mode === 'schedule' && !scheduleAt) ||
           publishState === 'uploading' || publishState === 'submitting'

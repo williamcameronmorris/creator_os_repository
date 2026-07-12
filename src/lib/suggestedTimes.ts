@@ -53,10 +53,16 @@ export const INDUSTRY_DEFAULT_TIMES: Record<string, SuggestedTime[]> = {
     { day: 'sun', hour: 10, score: 0.95 },
     { day: 'thu', hour: 15, score: 0.82 },
   ],
-  twitter: [
+  // Keyed by PFM platform id ('x', not 'twitter' — the old key never matched).
+  x: [
     { day: 'tue', hour: 9, score: 1.0 },
     { day: 'wed', hour: 12, score: 0.91 },
     { day: 'thu', hour: 17, score: 0.86 },
+  ],
+  bluesky: [
+    { day: 'tue', hour: 10, score: 1.0 },
+    { day: 'wed', hour: 14, score: 0.9 },
+    { day: 'thu', hour: 9, score: 0.85 },
   ],
   threads: [
     { day: 'tue', hour: 12, score: 1.0 },

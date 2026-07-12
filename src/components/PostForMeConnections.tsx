@@ -77,7 +77,10 @@ export function PostForMeConnections({ initialFlash }: Props) {
         return;
       }
 
-      const before = new Set(accounts.map((a) => a.platform));
+      // Detect completion by ACCOUNT ID, not platform: "a new platform
+      // appeared" never fires when connecting a SECOND account of an
+      // already-connected platform.
+      const before = new Set(accounts.map((a) => a.id));
       const startedAt = Date.now();
       const TIMEOUT_MS = 5 * 60 * 1000;
       const POLL_MS = 3000;
@@ -90,7 +93,7 @@ export function PostForMeConnections({ initialFlash }: Props) {
         try {
           const state = await listPostForMeAccounts(user.id, true);
           const newAccount = state.accounts.find(
-            (a) => a.platform === platform && !before.has(platform) && a.status !== 'disconnected'
+            (a) => a.platform === platform && !before.has(a.id) && a.status !== 'disconnected'
           );
           if (newAccount) {
             setAccounts(state.accounts);
@@ -138,8 +141,9 @@ export function PostForMeConnections({ initialFlash }: Props) {
   const supportedAccounts = accounts.filter(
     (a) => supportedIds.has(a.platform as PostForMePlatformId) && a.status !== 'disconnected'
   );
-  const connectedPlatformIds = new Set(supportedAccounts.map((a) => a.platform));
-  const availablePlatforms = POSTFORME_PLATFORMS.filter((p) => !connectedPlatformIds.has(p.id));
+  // Every PFM platform stays connectable — multi-account means you can add a
+  // second (third, …) account to a platform that already has one.
+  const availablePlatforms = POSTFORME_PLATFORMS;
 
   return (
     <div>
@@ -206,33 +210,29 @@ export function PostForMeConnections({ initialFlash }: Props) {
           <span className="t-micro">AVAILABLE · {String(availablePlatforms.length).padStart(2, '0')}</span>
         </div>
 
-        {availablePlatforms.length === 0 ? (
-          <div className="py-10 text-center t-micro">ALL PLATFORMS CONNECTED</div>
-        ) : (
-          <div>
-            {availablePlatforms.map((platform) => (
-              <div
-                key={platform.id}
-                className="grid gap-3 py-4 border-b border-border group"
-                style={{ gridTemplateColumns: '120px 1fr auto', alignItems: 'baseline' }}
+        <div>
+          {availablePlatforms.map((platform) => (
+            <div
+              key={platform.id}
+              className="grid gap-3 py-4 border-b border-border group"
+              style={{ gridTemplateColumns: '120px 1fr auto', alignItems: 'baseline' }}
+            >
+              <span className="t-micro">{platform.name.toUpperCase()}</span>
+              <div className="t-micro text-muted-foreground">VIA POST FOR ME</div>
+              <button
+                onClick={() => handleConnect(platform.id)}
+                disabled={busyPlatform === platform.id}
+                className="t-micro text-foreground hover:text-accent transition-colors flex items-center gap-2 disabled:opacity-50"
               >
-                <span className="t-micro">{platform.name.toUpperCase()}</span>
-                <div className="t-micro text-muted-foreground">VIA POST FOR ME</div>
-                <button
-                  onClick={() => handleConnect(platform.id)}
-                  disabled={busyPlatform === platform.id}
-                  className="t-micro text-foreground hover:text-accent transition-colors flex items-center gap-2 disabled:opacity-50"
-                >
-                  {busyPlatform === platform.id ? 'OPENING…' : (
-                    <>
-                      CONNECT <ArrowRight className="w-3 h-3" />
-                    </>
-                  )}
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
+                {busyPlatform === platform.id ? 'OPENING…' : (
+                  <>
+                    CONNECT <ArrowRight className="w-3 h-3" />
+                  </>
+                )}
+              </button>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
