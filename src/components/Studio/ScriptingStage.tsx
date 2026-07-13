@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
 import { getAIQuota } from '../../lib/aiQuota';
+import { useAccount } from '../../contexts/AccountContext';
 import { FileText, Hash, Layout, AlignLeft, ChevronRight, AlertCircle, Sparkles, Check } from 'lucide-react';
 
 interface ScriptingStageProps {
@@ -11,6 +12,7 @@ interface ScriptingStageProps {
 }
 
 export function ScriptingStage({ workflowId, contentType, onComplete, onSkip }: ScriptingStageProps) {
+  const { activeAccount } = useAccount();
   const [mode, setMode] = useState<'simple' | 'structured'>(
     ['video', 'blog'].includes(contentType) ? 'structured' : 'simple'
   );
@@ -32,15 +34,24 @@ export function ScriptingStage({ workflowId, contentType, onComplete, onSkip }: 
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      const { data } = await supabase
-        .from('user_content_profiles')
-        .select('voice_profile, raw_analysis')
-        .eq('user_id', user.id)
-        .maybeSingle();
-      const v = data as { voice_profile?: unknown; raw_analysis?: { voice_signature?: string } } | null;
-      setHasVoice(!!(v?.voice_profile || v?.raw_analysis?.voice_signature));
+      // Check the active account's voice first, then the user-level ("main")
+      // row — mirroring the server-side fallback in _shared/voice.ts. The
+      // account dimension must be pinned explicitly: with per-account rows in
+      // the table an unfiltered .maybeSingle() would error on >1 rows.
+      const hasUsableVoice = async (accountId: string | null) => {
+        let q = supabase
+          .from('user_content_profiles')
+          .select('voice_profile, raw_analysis')
+          .eq('user_id', user.id);
+        q = accountId ? q.eq('social_account_id', accountId) : q.is('social_account_id', null);
+        const { data } = await q.maybeSingle();
+        const v = data as { voice_profile?: unknown; raw_analysis?: { voice_signature?: string } } | null;
+        return !!(v?.voice_profile || v?.raw_analysis?.voice_signature);
+      };
+      const active = activeAccount ? await hasUsableVoice(activeAccount.id) : false;
+      setHasVoice(active || await hasUsableVoice(null));
     })();
-  }, []);
+  }, [activeAccount?.id]);
 
   const loadWorkflowData = async () => {
     setLoading(true);
@@ -98,7 +109,16 @@ export function ScriptingStage({ workflowId, contentType, onComplete, onSkip }: 
       }
 
       const { data: fnData, error: fnError } = await supabase.functions.invoke('generate-script', {
-        body: { userId: user.id, workflowId, topic, contentType, mode },
+        body: {
+          userId: user.id,
+          workflowId,
+          topic,
+          contentType,
+          mode,
+          // Account Switcher scope: script comes out in this account's voice
+          // and niche (main-voice fallback server-side).
+          ...(activeAccount ? { socialAccountId: activeAccount.id } : {}),
+        },
       });
 
       if (fnError) throw fnError;

@@ -1,14 +1,20 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { useAccount } from '../contexts/AccountContext';
 import { Mic2, RefreshCw, Sparkles, AlertCircle, Check } from 'lucide-react';
 
 /**
  * "Your Voice" — the self-serve surface for the In Your Voice feature.
  *
- * Shows the voice fingerprint Clio extracted from the creator's own posts
- * (analyze-captions → user_content_profiles) and lets them (re)build it. Once a
- * voice exists, every idea and script the AI writes is generated in it.
+ * Account-aware since the account-separation work: voice profiles are keyed
+ * (user_id, social_account_id) in user_content_profiles. The selector row
+ * switches between the user-level "Main" voice (social_account_id NULL — the
+ * pre-separation profile every legacy user already has) and each connected
+ * account's own voice. Build/rebuild passes socialAccountId so
+ * analyze-captions reads only that account's posts; until an account has its
+ * own voice, generation for it falls back to the main voice (see
+ * _shared/voice.ts).
  */
 
 interface VoiceProfile {
@@ -40,24 +46,37 @@ function relativeTime(iso: string | null): string {
 
 export function VoiceCard() {
   const { user } = useAuth();
+  const { accounts, activeAccount } = useAccount();
+  // null = the user-level "Main" voice; otherwise a PFM social account id.
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [touched, setTouched] = useState(false);
   const [row, setRow] = useState<VoiceRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [building, setBuilding] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
+  // Follow the app-wide Account Switcher until the user picks a tab here.
   useEffect(() => {
-    if (user) load();
-  }, [user]);
+    if (!touched) setSelectedId(activeAccount?.id ?? null);
+  }, [activeAccount?.id, touched]);
 
-  const load = async () => {
+  useEffect(() => {
+    if (user) load(selectedId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, selectedId]);
+
+  const load = async (accountId: string | null) => {
     if (!user) return;
     setLoading(true);
-    const { data } = await supabase
+    // Pin the account dimension explicitly — with per-account rows in the
+    // table, an unfiltered .maybeSingle() would error on >1 rows.
+    let query = supabase
       .from('user_content_profiles')
       .select('voice_profile, caption_style, raw_analysis, posts_analyzed, analyzed_at')
-      .eq('user_id', user.id)
-      .maybeSingle();
+      .eq('user_id', user.id);
+    query = accountId ? query.eq('social_account_id', accountId) : query.is('social_account_id', null);
+    const { data } = await query.maybeSingle();
     setRow((data as VoiceRow | null) ?? null);
     setLoading(false);
   };
@@ -71,7 +90,9 @@ export function VoiceCard() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Your session expired — please sign in again.');
       const { data, error: fnErr } = await supabase.functions.invoke('analyze-captions', {
-        body: { force: true },
+        // socialAccountId scopes the analysis to the selected account's posts
+        // and upserts that account's profile row. Omitted for the main voice.
+        body: { force: true, ...(selectedId ? { socialAccountId: selectedId } : {}) },
         headers: { Authorization: `Bearer ${session.access_token}` },
       });
       if (fnErr) throw fnErr;
@@ -80,8 +101,12 @@ export function VoiceCard() {
       if (data && data.success === false) {
         setNotice(data.reason || 'Not enough published posts with captions yet — publish or sync a few more, then try again.');
       } else {
-        await load();
-        setNotice('Your voice is ready. Every script and idea Clio writes now sounds like you.');
+        await load(selectedId);
+        setNotice(
+          selectedId
+            ? "This account's voice is ready. Everything Clio writes for it now sounds like it."
+            : 'Your voice is ready. Every script and idea Clio writes now sounds like you.'
+        );
       }
     } catch (e) {
       setError((e as Error).message || 'Could not build your voice. Check your connection and try again.');
@@ -89,6 +114,19 @@ export function VoiceCard() {
       setBuilding(false);
     }
   };
+
+  const selectVoice = (accountId: string | null) => {
+    if (accountId === selectedId) return;
+    setTouched(true);
+    setSelectedId(accountId);
+    setError(null);
+    setNotice(null);
+  };
+
+  const selectedAccount = selectedId ? accounts.find((a) => a.id === selectedId) ?? null : null;
+  const selectedLabel = selectedAccount
+    ? (selectedAccount.username ? `@${selectedAccount.username}` : selectedAccount.platform)
+    : 'Main';
 
   const signature = row?.raw_analysis?.voice_signature || '';
   const vp = row?.voice_profile || null;
@@ -113,9 +151,40 @@ export function VoiceCard() {
         )}
       </div>
 
-      <p className="text-muted-foreground text-sm mb-6 max-w-prose">
+      <p className="text-muted-foreground text-sm mb-4 max-w-prose">
         Clio learns how <em>you</em> write from your own posts, then writes every idea and script in your voice — not generic AI.
+        Each connected account can carry its own voice.
       </p>
+
+      {/* Account selector row — Main (user-level) + one tab per connected account. */}
+      {accounts.length > 0 && (
+        <div className="flex flex-wrap gap-2 mb-6">
+          <button
+            onClick={() => selectVoice(null)}
+            className={`t-micro px-2.5 py-1.5 border transition-colors ${
+              selectedId === null ? 'text-foreground' : 'border-border text-muted-foreground hover:text-foreground'
+            }`}
+            style={selectedId === null ? { borderColor: 'var(--accent)' } : undefined}
+          >
+            Main
+          </button>
+          {accounts.map((a) => {
+            const isSel = selectedId === a.id;
+            return (
+              <button
+                key={a.id}
+                onClick={() => selectVoice(a.id)}
+                className={`t-micro px-2.5 py-1.5 border transition-colors ${
+                  isSel ? 'text-foreground' : 'border-border text-muted-foreground hover:text-foreground'
+                }`}
+                style={isSel ? { borderColor: 'var(--accent)' } : undefined}
+              >
+                {a.username ? `@${a.username}` : a.platform}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {error && (
         <div className="p-3 border border-border text-sm flex items-start gap-2 mb-4" style={{ color: '#B07050' }}>
@@ -164,27 +233,34 @@ export function VoiceCard() {
 
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
             <span className="t-micro text-muted-foreground">
-              Built from {row?.posts_analyzed ?? 0} posts · updated {relativeTime(row?.analyzed_at ?? null)}
+              {selectedAccount ? `${selectedLabel} · ` : ''}Built from {row?.posts_analyzed ?? 0} posts · updated {relativeTime(row?.analyzed_at ?? null)}
             </span>
             <button onClick={build} disabled={building} className="btn-ie disabled:opacity-40 disabled:cursor-not-allowed">
               <span className="btn-ie-text flex items-center gap-2">
                 {building
                   ? <><span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" /> Rebuilding…</>
-                  : <><RefreshCw className="w-4 h-4" /> Rebuild from my posts</>}
+                  : <><RefreshCw className="w-4 h-4" /> Rebuild from {selectedAccount ? `${selectedLabel}'s` : 'my'} posts</>}
               </span>
             </button>
           </div>
         </div>
       ) : (
         <div className="border border-dashed border-border p-6 text-center">
-          <p className="t-body mb-4">
-            You don't have a voice yet. Clio will read your recent published posts and learn how you write.
-          </p>
+          {selectedAccount ? (
+            <p className="t-body mb-4">
+              {selectedLabel} doesn't have its own voice yet — Clio falls back to your main voice for it.
+              Build one from {selectedLabel}'s posts so this account sounds like itself.
+            </p>
+          ) : (
+            <p className="t-body mb-4">
+              You don't have a voice yet. Clio will read your recent published posts and learn how you write.
+            </p>
+          )}
           <button onClick={build} disabled={building} className="btn-ie btn-ie-solid mx-auto disabled:opacity-60 disabled:cursor-not-allowed">
             <span className="btn-ie-text flex items-center gap-2">
               {building
-                ? <><span className="w-4 h-4 border-2 border-background border-t-transparent rounded-full animate-spin" /> Reading your posts…</>
-                : <><Sparkles className="w-4 h-4" /> Build my voice</>}
+                ? <><span className="w-4 h-4 border-2 border-background border-t-transparent rounded-full animate-spin" /> Reading {selectedAccount ? `${selectedLabel}'s` : 'your'} posts…</>
+                : <><Sparkles className="w-4 h-4" /> Build {selectedAccount ? `${selectedLabel}'s` : 'my'} voice</>}
             </span>
           </button>
         </div>

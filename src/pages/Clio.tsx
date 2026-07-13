@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { useAccount } from '../contexts/AccountContext';
 import {
   Send,
   TrendingUp,
@@ -158,6 +159,7 @@ function getGreeting() {
 
 export function Clio() {
   const { user } = useAuth();
+  const { activeAccount } = useAccount();
   const navigate = useNavigate();
   const [query, setQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -249,6 +251,9 @@ export function Clio() {
           // Prior turns so Clio keeps context across follow-ups. The edge
           // function validates + caps this at the last 12 turns anyway.
           messages: conversation.slice(-12),
+          // Account Switcher scope: Clio answers as this account (its posts,
+          // its voice, its niche). Omitted under "All accounts".
+          ...(activeAccount ? { socialAccountId: activeAccount.id } : {}),
         },
         headers: { Authorization: `Bearer ${session.access_token}` },
       });
@@ -297,7 +302,11 @@ export function Clio() {
         return;
       }
       const res = await supabase.functions.invoke('generate-daily-brief', {
-        body: {},
+        // Account Switcher scope: an on-demand brief generated while pinned to
+        // an account is built from that account's posts/voice/niche. Brief
+        // storage stays one row per user per day (per-account briefs are a
+        // follow-up), so this regenerates today's brief in that flavor.
+        body: activeAccount ? { socialAccountId: activeAccount.id } : {},
         headers: { Authorization: `Bearer ${session.access_token}` },
       });
       if (res.error) {

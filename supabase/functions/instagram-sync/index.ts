@@ -280,6 +280,11 @@ Deno.serve(async (req: Request) => {
     // sending it as a user Bearer made analyze-captions 401 on every sync.
     // Auth now rides in the body as { cronSecret, userId } (requireUserOrCron);
     // the service-role Bearer stays only to satisfy the platform JWT gate.
+    //
+    // TODO(account-separation follow-up): this auto-build stays USER-LEVEL for
+    // now (no socialAccountId -> refreshes the main voice). Per-account
+    // auto-build would pass the synced account's socialAccountId here; until
+    // then account voices are built manually from the Voice card.
     const analysisUrl = `${supabaseUrl}/functions/v1/analyze-captions`;
     fetch(analysisUrl, {
       method: "POST",

@@ -15,6 +15,7 @@ import {
 } from '../lib/watch';
 import { WatchPlayer } from '../components/WatchPlayer';
 import { WatchVideoStats } from '../components/WatchVideoStats';
+import { useAccount } from '../contexts/AccountContext';
 
 const GOLD = '#C8A24B';
 const ACCENTS = ['#B07050', '#7A9E89', '#C8A24B', '#1A1816'];
@@ -32,6 +33,7 @@ function initials(title: string): string {
 
 export function Watch() {
   const navigate = useNavigate();
+  const { activeAccount } = useAccount();
   const [platform, setPlatform] = useState<Platform>('youtube');
   const [creators, setCreators] = useState<SuggestedCreator[]>([]);
   const [feed, setFeed] = useState<WatchVideo[]>([]);
@@ -55,8 +57,9 @@ export function Watch() {
     (async () => {
       try {
         if (platform === 'youtube') {
-          // Resolve the user's niche (runs discovery on demand for a cold niche).
-          const resolved = await ensureWatchNiche();
+          // Resolve the niche per active account (account profile.niche →
+          // profiles.niche_preference); discovery runs on demand for a cold niche.
+          const resolved = await ensureWatchNiche(activeAccount?.id ?? null);
           if (!active) return;
           setNiche(resolved.niche);
           if (resolved.needsNiche || !resolved.niche) {
@@ -86,7 +89,9 @@ export function Watch() {
     return () => {
       active = false;
     };
-  }, [platform]);
+    // Re-resolve when the Account Switcher changes accounts — each account
+    // can carry its own niche.
+  }, [platform, activeAccount?.id]);
 
   const sendToClio = (v: WatchVideo) => navigate(`/studio/script?${clioParams(v)}`);
 
@@ -110,11 +115,19 @@ export function Watch() {
           Watching
         </span>
         {platform !== 'instagram' && (niche || !needsNiche) && (
-          <span
-            className="font-mono text-[9px] tracking-widest uppercase px-2 py-1 border"
-            style={{ borderColor: GOLD, color: '#8a6d22' }}
-          >
-            {niche ?? WATCH_NICHE}
+          <span className="flex items-center gap-2 min-w-0">
+            {/* Whose niche this is — the Account Switcher's active account. */}
+            {activeAccount?.username && (
+              <span className="font-mono text-[9px] tracking-widest uppercase text-muted-foreground truncate">
+                @{activeAccount.username}
+              </span>
+            )}
+            <span
+              className="font-mono text-[9px] tracking-widest uppercase px-2 py-1 border flex-shrink-0"
+              style={{ borderColor: GOLD, color: '#8a6d22' }}
+            >
+              {niche ?? WATCH_NICHE}
+            </span>
           </span>
         )}
       </div>

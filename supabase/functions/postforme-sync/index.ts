@@ -540,10 +540,17 @@ async function syncForUser(userId: string): Promise<SyncSummary> {
   // outright so re-running converges to PFM's latest numbers rather than
   // double-counting. PFM doesn't expose follower counts via the public API
   // today, so followers_count stays null until we wire a different source.
+  //
+  // TODO(account-separation follow-up): aggregate per (platform, ACCOUNT, date)
+  // instead of per (platform, date) and stamp social_account_id on each row,
+  // so two accounts on the same platform stop sharing one daily roll-up. Until
+  // then these rows stay user-level (social_account_id null → key '') and
+  // surface under "All accounts" in Analytics.
   const metricRows = Object.values(dailyAgg).map((a) => ({
     user_id: a.user_id,
     platform: a.platform,
     date: a.date,
+    social_account_id: null,
     total_posts: a.total_posts,
     total_views: a.total_views,
     total_likes: a.total_likes,
@@ -560,9 +567,15 @@ async function syncForUser(userId: string): Promise<SyncSummary> {
   }));
 
   if (metricRows.length > 0) {
+    // Conflict target includes social_account_key (STORED generated column,
+    // coalesce(social_account_id,'')) — the account-separation migration
+    // replaced UNIQUE(user_id,platform,date) with this 4-column key so legacy
+    // roll-ups and future per-account rows coexist. Deploy this function
+    // right after that migration; the old 3-column target errors against the
+    // new schema.
     const { error } = await supabase
       .from("platform_metrics")
-      .upsert(metricRows, { onConflict: "user_id,platform,date" });
+      .upsert(metricRows, { onConflict: "user_id,platform,date,social_account_key" });
     if (error) summary.errors.push(`platform_metrics upsert: ${error.message}`);
     else summary.metricsUpserted = metricRows.length;
   }
@@ -636,6 +649,12 @@ Deno.serve(async (req) => {
     // Same cron-mode trigger instagram-sync uses: auth rides in the body as
     // { cronSecret, userId } (requireUserOrCron). analyze-captions' own 24h
     // freshness check prevents churn; failures never block the sync response.
+    //
+    // TODO(account-separation follow-up): this auto-build stays USER-LEVEL for
+    // now (no socialAccountId → refreshes the main voice). Per-account
+    // auto-build would fan out one analyze-captions call per connected account
+    // ({ ...body, socialAccountId: account.id }); until then account voices
+    // are built manually from the Voice card.
     fetch(`${SUPABASE_URL}/functions/v1/analyze-captions`, {
       method: "POST",
       headers: {

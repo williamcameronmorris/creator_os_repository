@@ -1,13 +1,18 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { requireUser, corsHeaders } from "../_shared/auth.ts";
-import { loadVoiceContext } from "../_shared/voice.ts";
+import { loadVoiceContext, loadAccountNiche } from "../_shared/voice.ts";
 
 /**
  * generate-script Edge Function
  *
  * Calls Claude to generate a content script (hook/body/CTA or freeform notes)
  * based on the selected idea topic and content type.
+ *
+ * Optional body.socialAccountId scopes the generation to one connected
+ * account: its voice profile (falling back to the main voice), its niche
+ * (falling back to profiles.niche_preference), and its own top posts as
+ * context. Absent → exactly the legacy user-level behavior.
  *
  * Caller must be authenticated; userId is taken from the verified bearer token
  * (any userId in the body is ignored). Deploy `--no-verify-jwt`.
@@ -31,7 +36,9 @@ Deno.serve(async (req: Request) => {
     const auth = await requireUser(req, supabase);
     if (!auth.ok) return auth.response;
     const userId = auth.userId;
-    const { workflowId, topic, contentType, mode } = await req.json();
+    const { workflowId, topic, contentType, mode, socialAccountId: rawAccountId } = await req.json();
+    const socialAccountId: string | null =
+      typeof rawAccountId === "string" && rawAccountId.trim() ? rawAccountId.trim() : null;
 
     // ── Check quota ──────────────────────────────────────────────────────────
     const { data: quotaData, error: quotaError } = await supabase
@@ -47,23 +54,28 @@ Deno.serve(async (req: Request) => {
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
     const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split("T")[0];
 
-    const [topPostsResult, profileResult, voiceContext] = await Promise.all([
-      supabase
-        .from("content_posts")
-        .select("platform, title, content_type, engagement_rate")
-        .eq("user_id", userId)
-        .eq("status", "published")
-        // published_at is what the sync writes; published_date is a dead column.
-        .gte("published_at", thirtyDaysAgoStr)
-        .order("engagement_rate", { ascending: false })
-        .limit(5),
+    let topPostsQuery = supabase
+      .from("content_posts")
+      .select("platform, title, content_type, engagement_rate")
+      .eq("user_id", userId)
+      .eq("status", "published")
+      // published_at is what the sync writes; published_date is a dead column.
+      .gte("published_at", thirtyDaysAgoStr);
+    // Account scope: only that account's performance informs the script.
+    if (socialAccountId) topPostsQuery = topPostsQuery.eq("social_account_id", socialAccountId);
+
+    const [topPostsResult, profileResult, voiceContext, accountNiche] = await Promise.all([
+      topPostsQuery.order("engagement_rate", { ascending: false }).limit(5),
       supabase
         .from("profiles")
         .select("display_name, first_name, niche_preference")
         .eq("id", userId)
         .maybeSingle(),
       // The creator's own voice fingerprint (null until they've built one).
-      loadVoiceContext(supabase, userId),
+      // Account-scoped when socialAccountId is set, falling back to the main voice.
+      loadVoiceContext(supabase, userId, socialAccountId),
+      // Account niche → profiles.niche_preference fallback (below).
+      loadAccountNiche(supabase, userId, socialAccountId),
     ]);
 
     const topPosts = (topPostsResult.data || []).map((p) =>
@@ -71,7 +83,8 @@ Deno.serve(async (req: Request) => {
     );
 
     const creatorName = profileResult.data?.first_name || profileResult.data?.display_name || "creator";
-    const niche = (profileResult.data?.niche_preference || "").trim();
+    // Niche resolution order: account profile.niche → profiles.niche_preference.
+    const niche = accountNiche || (profileResult.data?.niche_preference || "").trim();
     const nicheLine = niche ? `\nNiche: ${niche} — keep the script specific to this niche.` : "";
     const isLongForm = ["video", "blog"].includes(contentType || "");
     const isStructured = mode === "structured";
