@@ -398,6 +398,16 @@ export function ComposePost() {
         </div>
       </div>
 
+      {/* Drop Zone entry — hand the whole post off to Clio instead */}
+      <div className="mb-8 -mt-6">
+        <button
+          onClick={() => navigate('/drop')}
+          className="t-micro text-muted-foreground hover:text-foreground transition-colors"
+        >
+          OR LET CLIO TAKE OVER → <span style={{ color: 'var(--accent)' }}>DROP ZONE</span>
+        </button>
+      </div>
+
       {/* Account multi-select — one checkbox row per connected account,
           grouped by platform (multiple accounts per platform supported) */}
       <div className="mb-2">

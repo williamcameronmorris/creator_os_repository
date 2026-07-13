@@ -11,6 +11,7 @@ import {
   RefreshCw,
   Pencil,
   Check,
+  Upload,
 } from 'lucide-react';
 
 // One turn in the Clio conversation thread. Prior turns are sent back to
@@ -353,6 +354,13 @@ export function Clio() {
 
   // Suggestion cards for new users (no daily brief)
   const suggestions = [
+    {
+      icon: Upload,
+      label: 'DROP A VIDEO',
+      description: 'Clio preps every platform\'s post',
+      action: () => navigate('/drop'),
+      accent: 'var(--accent)', // gold — the headline move
+    },
     {
       icon: Lightbulb,
       label: 'GENERATE IDEAS',
