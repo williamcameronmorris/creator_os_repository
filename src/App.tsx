@@ -11,9 +11,6 @@ import { Layout } from './components/Layout';
 import { Clio } from './pages/Clio';
 import { StudioHub } from './pages/StudioHub';
 import { Studio } from './pages/Studio';
-// PLACEHOLDER — real Patra page ships in PR #26 (feat/patra-v1), which replaces
-// this import and the /patra route below with its own page.
-import { PatraPlaceholder } from './pages/PatraPlaceholder';
 import { Schedule } from './pages/Schedule';
 import { Media } from './pages/Media';
 import { Analytics } from './pages/Analytics';
@@ -33,6 +30,7 @@ import { ThreadsCallback } from './components/ThreadsCallback';
 import { YoutubeCallback } from './components/YoutubeCallback';
 import { PostForMeCallback } from './components/PostForMeCallback';
 import { Connections } from './pages/Connections';
+import { Patra } from './pages/Patra';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { supabase, type Profile as ProfileType } from './lib/supabase';
 
@@ -191,11 +189,9 @@ function AppContent() {
       <Route path="/watch/creator/:id" element={<ProtectedRoute><Layout><WatchCreator /></Layout></ProtectedRoute>} />
 
       {/* ── Patra (brand deals) ──
-          Office was absorbed: /office now redirects to /patra. The /patra route
-          renders a placeholder until PR #26 supplies the real page.
+          Office was absorbed: /office now redirects to /patra (real page below).
           /office/connections is kept so existing deep links + OAuth callbacks
           (PostForMeCallback, ConnectionGateBanner) keep working. */}
-      <Route path="/patra" element={<ProtectedRoute><Layout><PatraPlaceholder /></Layout></ProtectedRoute>} />
       <Route path="/office" element={<Navigate to="/patra" replace />} />
       <Route path="/office/connections" element={<ProtectedRoute><Layout><Connections /></Layout></ProtectedRoute>} />
       <Route path="/schedule" element={<ProtectedRoute><Layout><Schedule /></Layout></ProtectedRoute>} />
@@ -207,9 +203,10 @@ function AppContent() {
       <Route path="/analytics/youtube" element={<ProtectedRoute><Layout><AnalyticsPlatform platform="youtube" /></Layout></ProtectedRoute>} />
       <Route path="/analytics/instagram" element={<ProtectedRoute><Layout><AnalyticsPlatform platform="instagram" /></Layout></ProtectedRoute>} />
       <Route path="/analytics/tiktok" element={<ProtectedRoute><Layout><AnalyticsPlatform platform="tiktok" /></Layout></ProtectedRoute>} />
-      {/* Legacy brand-deals routes — redirect home instead of silently showing Schedule. */}
-      <Route path="/revenue" element={<Navigate to="/" replace />} />
-      <Route path="/pipeline" element={<Navigate to="/" replace />} />
+      <Route path="/patra" element={<ProtectedRoute><Layout><Patra /></Layout></ProtectedRoute>} />
+      {/* Legacy brand-deals routes — live again under Patra. */}
+      <Route path="/revenue" element={<Navigate to="/patra?tab=invoices" replace />} />
+      <Route path="/pipeline" element={<Navigate to="/patra?tab=deals" replace />} />
 
       {/* Ã¢ÂÂÃ¢ÂÂ Settings Ã¢ÂÂÃ¢ÂÂ */}
       <Route path="/profile" element={<ProtectedRoute><Layout><Profile /></Layout></ProtectedRoute>} />

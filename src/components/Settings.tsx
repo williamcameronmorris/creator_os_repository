@@ -93,6 +93,22 @@ export function Settings() {
       {/* Your Voice — the AI voice fingerprint built from the creator's own posts */}
       <VoiceCard />
 
+      {/* Patra link card */}
+      <button
+        onClick={() => navigate('/patra')}
+        className="w-full p-6 bg-card border border-border text-left hover:border-foreground/40 transition-colors group flex items-center gap-4"
+      >
+        <div className="w-10 h-10 border border-border flex items-center justify-center flex-shrink-0">
+          <DollarSign className="w-5 h-5" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="text-xs font-mono uppercase tracking-[0.08em] text-foreground mb-1">Patra</div>
+          <div className="text-muted-foreground text-sm">Brand deals, quotes, and invoices</div>
+        </div>
+        <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:translate-x-1 transition-transform flex-shrink-0" />
+      </button>
+
+
       {error && (
         <div className="p-3 border border-destructive text-sm flex items-start gap-2 bg-destructive/10 text-destructive">
           <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
@@ -183,93 +199,90 @@ export function Settings() {
         <PostForMeConnections />
       </div>
 
-      {/* ARCHIVED: CPM Tier â part of Brand Deals feature, re-enable when Brand Deals is active
-      <div className="p-6 rounded-xl bg-card border border-border">
-        <h3 className="text-xl font-bold text-foreground mb-6 flex items-center gap-2">
+      {/* CPM Tier — drives the Patra quote calculator */}
+      <div className="p-6 bg-card border border-border">
+        <h3 className="text-lg font-black uppercase tracking-tight text-foreground mb-2 flex items-center gap-2">
           <DollarSign className="w-5 h-5" />
-          CPM Tier
-        </h3>
-
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-semibold text-foreground mb-3">Select Your Tier</label>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {(['conservative', 'standard', 'premium', 'specialized'] as const).map((tier) => (
-                <button
-                  key={tier}
-                  onClick={() => setProfile({ ...profile, cpm_tier: tier, cpm_custom: null })}
-                  className={`p-4 rounded-xl border-2 text-left transition-all ${
-                    profile.cpm_tier === tier
-                      ? 'border-primary bg-accent'
-                      : 'border-border bg-card hover:border-muted-foreground'
-                  }`}
-                >
-                  <div className="mb-2">
-                    <span className="font-semibold text-foreground capitalize">{tier}</span>
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    {tier === 'conservative' && 'Default starting tier, safe for newer creators'}
-                    {tier === 'standard' && 'For established creators with consistent views'}
-                    {tier === 'premium' && 'For creators with highly engaged audiences'}
-                    {tier === 'specialized' && 'For niche experts with premium audiences'}
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="pt-4 border-t border-border">
-            <button
-              onClick={() => setProfile({ ...profile, cpm_tier: 'custom' })}
-              className={`w-full p-4 rounded-xl border-2 text-left transition-all ${
-                profile.cpm_tier === 'custom'
-                  ? 'border-primary bg-accent'
-                  : 'border-border bg-card hover:border-muted-foreground'
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <span className="font-semibold text-foreground">Custom CPM</span>
-                {profile.cpm_tier === 'custom' && (
-                  <input
-                    type="number"
-                    value={profile.cpm_custom || ''}
-                    onChange={(e) => setProfile({ ...profile, cpm_custom: parseFloat(e.target.value) || null })}
-                    placeholder="Enter CPM"
-                    className="w-32 px-3 py-2 rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                    onClick={(e) => e.stopPropagation()}
-                  />
-                )}
-              </div>
-              <div className="text-xs text-muted-foreground mt-2">Set your own CPM rate</div>
-            </button>
-          </div>
-        </div>
-      </div>
-      END ARCHIVED: CPM Tier */}
-
-      {/* ARCHIVED: Performance Averages â part of Brand Deals feature, re-enable when Brand Deals is active
-      <div className="p-6 rounded-xl bg-card border border-border">
-        <h3 className="text-xl font-bold text-foreground mb-6 flex items-center gap-2">
-          <TrendingUp className="w-5 h-5" />
-          Performance Averages
+          <span className="text-xs font-mono tracking-[0.08em]">CPM Tier</span>
         </h3>
 
         <p className="text-muted-foreground text-sm mb-6">
-          Update these monthly from your last 16 long-form videos and last 10 short posts per platform
+          The base rate Patra quotes from — dollars per 1,000 expected views.
+        </p>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+          {(['conservative', 'standard', 'premium', 'specialized'] as const).map((tier) => (
+            <button
+              key={tier}
+              onClick={() => setProfile({ ...profile, cpm_tier: tier, cpm_custom: null })}
+              className={`p-4 border text-left transition-colors ${
+                profile.cpm_tier === tier
+                  ? 'border-foreground bg-foreground/5'
+                  : 'border-border bg-card hover:border-foreground/40'
+              }`}
+            >
+              <div className="text-xs font-mono uppercase tracking-[0.08em] text-foreground mb-2">{tier}</div>
+              <div className="text-xs text-muted-foreground">
+                {tier === 'conservative' && 'Default starting tier, safe for newer creators'}
+                {tier === 'standard' && 'For established creators with consistent views'}
+                {tier === 'premium' && 'For creators with highly engaged audiences'}
+                {tier === 'specialized' && 'For niche experts with premium audiences'}
+              </div>
+            </button>
+          ))}
+        </div>
+
+        <div className="pt-4 border-t border-border">
+          <button
+            onClick={() => setProfile({ ...profile, cpm_tier: 'custom' })}
+            className={`w-full p-4 border text-left transition-colors ${
+              profile.cpm_tier === 'custom'
+                ? 'border-foreground bg-foreground/5'
+                : 'border-border bg-card hover:border-foreground/40'
+            }`}
+          >
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-xs font-mono uppercase tracking-[0.08em] text-foreground">Custom CPM</span>
+              {profile.cpm_tier === 'custom' && (
+                <input
+                  type="number"
+                  value={profile.cpm_custom || ''}
+                  onChange={(e) => setProfile({ ...profile, cpm_custom: parseFloat(e.target.value) || null })}
+                  placeholder="CPM"
+                  className="w-28 px-3 py-2 bg-background border border-border text-foreground text-sm focus:outline-none focus:border-accent"
+                  onClick={(e) => e.stopPropagation()}
+                />
+              )}
+            </div>
+            <div className="text-xs text-muted-foreground mt-2">Set your own rate per 1,000 views</div>
+          </button>
+        </div>
+      </div>
+
+      {/* Performance Averages — the views side of the CPM math */}
+      <div className="p-6 bg-card border border-border">
+        <h3 className="text-lg font-black uppercase tracking-tight text-foreground mb-2 flex items-center gap-2">
+          <TrendingUp className="w-5 h-5" />
+          <span className="text-xs font-mono tracking-[0.08em]">Performance Averages</span>
+        </h3>
+
+        <p className="text-muted-foreground text-sm mb-6">
+          Update monthly from your last 16 long-form videos and last 10 short posts per platform.
+          Patra multiplies these by your CPM to price deals.
         </p>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="block text-sm font-semibold text-foreground">
-                YouTube Long-Form Avg Views
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-xs font-mono uppercase tracking-[0.08em] text-muted-foreground">
+                YouTube Long-Form
               </label>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={profile.include_youtube_longform ?? true}
                   onChange={(e) => setProfile({ ...profile, include_youtube_longform: e.target.checked })}
-                  className="w-4 h-4 rounded border-input text-primary focus:ring-2 focus:ring-ring"
+                  className="w-4 h-4 accent-[var(--accent)]"
                 />
                 <span className="text-xs text-muted-foreground">Include</span>
               </label>
@@ -279,61 +292,66 @@ export function Settings() {
               value={profile.youtube_avg_views}
               onChange={(e) => setProfile({ ...profile, youtube_avg_views: parseInt(e.target.value) || 0 })}
               disabled={!profile.include_youtube_longform}
-              className="w-full px-4 py-2 rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+              className="w-full px-3 py-2 bg-background border border-border text-foreground text-sm focus:outline-none focus:border-accent transition-colors disabled:opacity-50"
             />
-            <p className="text-xs text-muted-foreground mt-1">Last 16 videos</p>
+            <p className="text-xs text-muted-foreground mt-1">Avg views, last 16 videos</p>
           </div>
 
           <div>
-            <label className="block text-sm font-semibold text-foreground mb-2">
-              YouTube Shorts Avg Views
+            <label className="block text-xs font-mono uppercase tracking-[0.08em] text-muted-foreground mb-1.5">
+              YouTube Shorts
             </label>
             <input
               type="number"
               value={profile.youtube_shorts_avg_views}
               onChange={(e) => setProfile({ ...profile, youtube_shorts_avg_views: parseInt(e.target.value) || 0 })}
-              className="w-full px-4 py-2 rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              className="w-full px-3 py-2 bg-background border border-border text-foreground text-sm focus:outline-none focus:border-accent transition-colors disabled:opacity-50"
             />
-            <p className="text-xs text-muted-foreground mt-1">Last 10 shorts</p>
+            <p className="text-xs text-muted-foreground mt-1">Avg views, last 10 shorts</p>
           </div>
 
           <div>
-            <label className="block text-sm font-semibold text-foreground mb-2">
-              TikTok Avg Views
+            <label className="block text-xs font-mono uppercase tracking-[0.08em] text-muted-foreground mb-1.5">
+              TikTok
             </label>
             <input
               type="number"
               value={profile.tiktok_avg_views}
               onChange={(e) => setProfile({ ...profile, tiktok_avg_views: parseInt(e.target.value) || 0 })}
-              className="w-full px-4 py-2 rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              className="w-full px-3 py-2 bg-background border border-border text-foreground text-sm focus:outline-none focus:border-accent transition-colors disabled:opacity-50"
             />
-            <p className="text-xs text-muted-foreground mt-1">Last 10 posts</p>
+            <p className="text-xs text-muted-foreground mt-1">Avg views, last 10 posts</p>
           </div>
 
           <div>
-            <label className="block text-sm font-semibold text-foreground mb-2">
-              Instagram Reels Avg Views
+            <label className="block text-xs font-mono uppercase tracking-[0.08em] text-muted-foreground mb-1.5">
+              Instagram Reels
             </label>
             <input
               type="number"
               value={profile.instagram_avg_views}
               onChange={(e) => setProfile({ ...profile, instagram_avg_views: parseInt(e.target.value) || 0 })}
-              className="w-full px-4 py-2 rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              className="w-full px-3 py-2 bg-background border border-border text-foreground text-sm focus:outline-none focus:border-accent transition-colors disabled:opacity-50"
             />
-            <p className="text-xs text-muted-foreground mt-1">Last 10 reels</p>
+            <p className="text-xs text-muted-foreground mt-1">Avg views, last 10 reels</p>
           </div>
         </div>
       </div>
-      END ARCHIVED: Performance Averages */}
 
-      {/* ARCHIVED: Default Terms â part of Brand Deals feature, re-enable when Brand Deals is active
-      <div className="p-6 rounded-xl bg-card border border-border">
-        <h3 className="text-xl font-bold text-foreground mb-6">Default Terms</h3>
+      {/* Default Terms — prefilled on new Patra deals and invoices */}
+      <div className="p-6 bg-card border border-border">
+        <h3 className="text-lg font-black uppercase tracking-tight text-foreground mb-2">
+          <span className="text-xs font-mono tracking-[0.08em]">Default Terms</span>
+        </h3>
+
+        <p className="text-muted-foreground text-sm mb-6">
+          Prefilled on new Patra deals and invoices.
+        </p>
 
         <div className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <label className="block text-sm font-semibold text-foreground mb-2">
+              <label className="block text-xs font-mono uppercase tracking-[0.08em] text-muted-foreground mb-1.5">
                 Revision Rounds Included
               </label>
               <input
@@ -342,54 +360,49 @@ export function Settings() {
                 onChange={(e) => setProfile({ ...profile, revision_rounds_included: parseInt(e.target.value) || 1 })}
                 min="1"
                 max="5"
-                className="w-full px-4 py-2 rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                className="w-full px-3 py-2 bg-background border border-border text-foreground text-sm focus:outline-none focus:border-accent transition-colors disabled:opacity-50"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-foreground mb-2">
+              <label className="block text-xs font-mono uppercase tracking-[0.08em] text-muted-foreground mb-1.5">
                 Extra Revision Fee
               </label>
               <input
                 type="number"
                 value={profile.extra_revision_fee}
                 onChange={(e) => setProfile({ ...profile, extra_revision_fee: parseFloat(e.target.value) || 0 })}
-                className="w-full px-4 py-2 rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                className="w-full px-3 py-2 bg-background border border-border text-foreground text-sm focus:outline-none focus:border-accent transition-colors disabled:opacity-50"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-semibold text-foreground mb-2">
+            <label className="block text-xs font-mono uppercase tracking-[0.08em] text-muted-foreground mb-1.5">
               Payment Terms
             </label>
             <input
               type="text"
               value={profile.payment_terms}
               onChange={(e) => setProfile({ ...profile, payment_terms: e.target.value })}
-              className="w-full px-4 py-2 rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              className="w-full px-3 py-2 bg-background border border-border text-foreground text-sm focus:outline-none focus:border-accent transition-colors disabled:opacity-50"
             />
           </div>
         </div>
       </div>
-      END ARCHIVED: Default Terms */}
 
-      {/* ARCHIVED: Save Settings button â re-enable with Default Terms when Brand Deals is active
       <div className="flex justify-end">
         <button
           onClick={handleSave}
           disabled={loading}
-          className={`px-6 py-3 font-semibold rounded-xl transition-colors flex items-center gap-2 ${
-            loading
-              ? 'opacity-50 cursor-not-allowed bg-primary text-primary-foreground'
-              : 'bg-primary text-primary-foreground hover:bg-primary/90'
-          }`}
+          className="btn-ie btn-ie-solid px-6 py-3 disabled:opacity-50"
         >
-          <Save className="w-5 h-5" />
-          {loading ? 'Saving...' : 'Save Settings' }
+          <span className="btn-ie-text flex items-center gap-2">
+            <Save className="w-3.5 h-3.5" />
+            {loading ? 'Saving…' : 'Save settings'}
+          </span>
         </button>
       </div>
-      END ARCHIVED: Save Settings button */}
     </div>
   );
 }
