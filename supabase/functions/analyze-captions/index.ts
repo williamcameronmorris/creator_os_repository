@@ -154,9 +154,9 @@ You understand hook frameworks, content structure, and what makes captions scrol
 Always respond with a single valid JSON object. No markdown, no explanation outside the JSON.`;
 
     // CANONICAL hook-framework taxonomy — must match inspiration_entries.hook_framework
-    // (see migration 20260323000002_add_inspiration_entries.sql) and the framework
-    // list in generate-recommendations. Free-form names here would never join
-    // against the Outlier library, silently breaking the recommendation engine.
+    // (see migration 20260323000002_add_inspiration_entries.sql). Free-form names
+    // here would never join against the Outlier library that powers framework
+    // matching, silently breaking it.
     const CANONICAL_FRAMEWORKS = [
       "Proof-First", "Curiosity Gap", "Pain Point", "Challenge",
       "Question + Proof", "Bold Claim", "Storytelling", "Contrarian",
