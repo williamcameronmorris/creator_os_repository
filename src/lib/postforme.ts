@@ -130,6 +130,15 @@ export interface CreatePostInput {
   mediaUrls: string[];
   socialAccountIds: string[];
   scheduledAt?: string;
+  /**
+   * Optional per-platform overrides, passed through to PFM's
+   * `platform_configurations` (verified against their OpenAPI spec). Drop Zone
+   * uses this to give YouTube Shorts a real title (snippet.title) while the
+   * post caption becomes the description.
+   */
+  platformConfigurations?: {
+    youtube?: { title?: string; description?: string };
+  };
 }
 
 export interface PostForMePost {
@@ -149,6 +158,7 @@ export async function createPostForMePost(input: CreatePostInput): Promise<PostF
     body.media = input.mediaUrls.map((url) => ({ url }));
   }
   if (input.scheduledAt) body.scheduled_at = input.scheduledAt;
+  if (input.platformConfigurations) body.platform_configurations = input.platformConfigurations;
   return proxy<PostForMePost>('POST', '/v1/social-posts', body);
 }
 

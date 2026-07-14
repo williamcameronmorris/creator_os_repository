@@ -23,6 +23,7 @@ import { Profile } from './pages/Profile';
 import { SettingsPage } from './pages/SettingsPage';
 import { PostComposerPage } from './pages/PostComposerPage';
 import { ComposePost } from './pages/ComposePost';
+import { DropZone } from './pages/DropZone';
 import { Watch } from './pages/Watch';
 import { WatchCreator } from './pages/WatchCreator';
 import { StudioChallenge } from './pages/StudioChallenge';
@@ -201,6 +202,7 @@ function AppContent() {
       <Route path="/schedule/new" element={<ProtectedRoute><Layout><PostComposerPage /></Layout></ProtectedRoute>} />
       <Route path="/schedule/edit/:id" element={<ProtectedRoute><Layout><PostComposerPage /></Layout></ProtectedRoute>} />
       <Route path="/compose" element={<ProtectedRoute><Layout><ComposePost /></Layout></ProtectedRoute>} />
+      <Route path="/drop" element={<ProtectedRoute><Layout><DropZone /></Layout></ProtectedRoute>} />
       <Route path="/analytics" element={<ProtectedRoute><Layout><Analytics /></Layout></ProtectedRoute>} />
       <Route path="/analytics/youtube" element={<ProtectedRoute><Layout><AnalyticsPlatform platform="youtube" /></Layout></ProtectedRoute>} />
       <Route path="/analytics/instagram" element={<ProtectedRoute><Layout><AnalyticsPlatform platform="instagram" /></Layout></ProtectedRoute>} />
