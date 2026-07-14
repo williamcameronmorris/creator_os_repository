@@ -180,7 +180,8 @@ export function SchedulingStage({ workflowId, contentType, onComplete }: Schedul
       const { error: stageError } = await supabase
         .from('content_workflow_stages')
         .update({
-          current_stage: 'engagement',
+          // Engagement stage retired — advance straight to analysis.
+          current_stage: 'analysis',
           published_post_id: post.id,
           schedule_date: utc,
           updated_at: new Date().toISOString(),

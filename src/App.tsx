@@ -10,7 +10,9 @@ import { Layout } from './components/Layout';
 import { Clio } from './pages/Clio';
 import { StudioHub } from './pages/StudioHub';
 import { Studio } from './pages/Studio';
-import { OfficeHub } from './pages/OfficeHub';
+// PLACEHOLDER — real Patra page ships in PR #26 (feat/patra-v1), which replaces
+// this import and the /patra route below with its own page.
+import { PatraPlaceholder } from './pages/PatraPlaceholder';
 import { Schedule } from './pages/Schedule';
 import { Media } from './pages/Media';
 import { Analytics } from './pages/Analytics';
@@ -185,7 +187,14 @@ function AppContent() {
       {/* Ã¢ÂÂÃ¢ÂÂ Office Ã¢ÂÂÃ¢ÂÂ */}
       <Route path="/watch" element={<ProtectedRoute><Layout><Watch /></Layout></ProtectedRoute>} />
       <Route path="/watch/creator/:id" element={<ProtectedRoute><Layout><WatchCreator /></Layout></ProtectedRoute>} />
-      <Route path="/office" element={<ProtectedRoute><Layout><OfficeHub /></Layout></ProtectedRoute>} />
+
+      {/* ── Patra (brand deals) ──
+          Office was absorbed: /office now redirects to /patra. The /patra route
+          renders a placeholder until PR #26 supplies the real page.
+          /office/connections is kept so existing deep links + OAuth callbacks
+          (PostForMeCallback, ConnectionGateBanner) keep working. */}
+      <Route path="/patra" element={<ProtectedRoute><Layout><PatraPlaceholder /></Layout></ProtectedRoute>} />
+      <Route path="/office" element={<Navigate to="/patra" replace />} />
       <Route path="/office/connections" element={<ProtectedRoute><Layout><Connections /></Layout></ProtectedRoute>} />
       <Route path="/schedule" element={<ProtectedRoute><Layout><Schedule /></Layout></ProtectedRoute>} />
       <Route path="/schedule/new" element={<ProtectedRoute><Layout><PostComposerPage /></Layout></ProtectedRoute>} />

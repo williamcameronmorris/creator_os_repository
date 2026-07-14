@@ -1,6 +1,8 @@
-import { Lightbulb, FileText, Video, Calendar, MessageCircle, BarChart3, CheckCircle2 } from 'lucide-react';
+import { Lightbulb, FileText, Video, Calendar, BarChart3, CheckCircle2 } from 'lucide-react';
 
-export type WorkflowStage = 'ideation' | 'scripting' | 'creation' | 'scheduling' | 'engagement' | 'analysis';
+// Engagement was retired from the Studio workflow — Playbooks owns post-publish
+// engagement now. The linear flow is 5 stages: scheduling → analysis directly.
+export type WorkflowStage = 'ideation' | 'scripting' | 'creation' | 'scheduling' | 'analysis';
 
 interface WorkflowStepperProps {
   currentStage: WorkflowStage;
@@ -14,7 +16,6 @@ export function WorkflowStepper({ currentStage, onStageSelect, completedStages }
     { id: 'scripting', label: 'Scripting', icon: FileText },
     { id: 'creation', label: 'Creation', icon: Video },
     { id: 'scheduling', label: 'Scheduling', icon: Calendar },
-    { id: 'engagement', label: 'Engagement', icon: MessageCircle },
     { id: 'analysis', label: 'Analysis', icon: BarChart3 },
   ];
 
