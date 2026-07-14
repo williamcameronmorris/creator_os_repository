@@ -324,12 +324,13 @@ export function ComposePost() {
         // trace. Surface it rather than swallowing (previously a console.warn).
         throw new Error(
           `Published to the platform, but saving it to your dashboard failed: ${insertErr.message}. ` +
-          `The post is live; it just won't appear in Office until the next sync.`
+          `The post is live; it just won't appear in Schedule until the next sync.`
         );
       }
 
       setPublishState('done');
-      setTimeout(() => navigate('/office'), 1200);
+      // Office was absorbed into Studio; the published post lands in Schedule.
+      setTimeout(() => navigate('/schedule'), 1200);
     } catch (err) {
       setPublishState('error');
       setErrorMsg((err as Error).message);
