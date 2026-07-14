@@ -140,6 +140,45 @@ export type Deal = {
   notes: string;
   created_at: string;
   updated_at: string;
+  // ── Creator-path pipeline (post-refactor: stage_id is the workflow driver;
+  //    the legacy `stage` enum above is kept only for backward compatibility) ──
+  stage_id: string | null;
+  brand_name?: string;
+  deliverable_type?: string;
+  rate?: number;
+};
+
+// Per-user pipeline stage rows (deal_stages). Seeded server-side with the
+// creator-path stages; ordered by `position`.
+export type DealStage = {
+  id: string;
+  user_id: string;
+  name: string;
+  position: number;
+  color: string;
+  stage_category?: 'opportunity' | 'delivery' | 'payment_renewal';
+  is_default?: boolean;
+  is_milestone?: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type DealInvoiceRecord = {
+  id: string;
+  deal_id: string;
+  user_id: string;
+  invoice_number: string;
+  invoice_amount: number;
+  invoice_date: string | null;
+  due_date: string | null;
+  payment_terms: string;
+  payment_received_date: string | null;
+  is_overdue: boolean;
+  invoice_file_url: string;
+  payment_method: string;
+  notes: string;
+  created_at: string;
+  updated_at: string;
 };
 
 export type DealReport = {
