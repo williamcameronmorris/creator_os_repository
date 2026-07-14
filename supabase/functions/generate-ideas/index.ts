@@ -1,12 +1,19 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { requireUser, corsHeaders } from "../_shared/auth.ts";
+import { loadVoiceContext, loadAccountNiche } from "../_shared/voice.ts";
 
 /**
  * generate-ideas Edge Function
  *
  * Calls Claude to generate content ideas based on the user's platform performance
  * data. Writes results to `ai_content_suggestions` and decrements the AI quota.
+ *
+ * Optional body.socialAccountId scopes the run to one connected account: only
+ * that account's posts feed the performance context, its voice is injected
+ * (falling back to the main voice), and its niche wins over
+ * profiles.niche_preference. Absent → exactly the legacy user-level behavior
+ * (no voice block — matching what this function did before separation).
  *
  * Caller must be authenticated; we ignore any userId field in the body and
  * use the verified id from the bearer token instead. Deploy `--no-verify-jwt`.
@@ -31,6 +38,12 @@ Deno.serve(async (req: Request) => {
     if (!auth.ok) return auth.response;
     const userId = auth.userId;
 
+    const body = await req.json().catch(() => ({}));
+    const socialAccountId: string | null =
+      typeof body.socialAccountId === "string" && body.socialAccountId.trim()
+        ? body.socialAccountId.trim()
+        : null;
+
     // ── Check and decrement quota ────────────────────────────────────────────
     const { data: quotaData, error: quotaError } = await supabase
       .rpc("check_and_reset_ai_quota", { p_user_id: userId });
@@ -45,28 +58,38 @@ Deno.serve(async (req: Request) => {
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
     const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split("T")[0];
 
-    const [metricsResult, topPostsResult, profileResult] = await Promise.all([
-      supabase
-        .from("platform_metrics")
-        .select("platform, followers_count, avg_engagement_rate, total_views, total_likes, total_comments")
-        .eq("user_id", userId)
-        .gte("date", thirtyDaysAgoStr)
-        .order("date", { ascending: false })
-        .limit(30),
-      supabase
-        .from("content_posts")
-        .select("platform, title, content_type, views, likes, comments, engagement_rate")
-        .eq("user_id", userId)
-        .eq("status", "published")
-        // published_at is what the sync writes; published_date is a dead column.
-        .gte("published_at", thirtyDaysAgoStr)
-        .order("engagement_rate", { ascending: false })
-        .limit(10),
+    let metricsQuery = supabase
+      .from("platform_metrics")
+      .select("platform, followers_count, avg_engagement_rate, total_views, total_likes, total_comments")
+      .eq("user_id", userId)
+      .gte("date", thirtyDaysAgoStr);
+    let topPostsQuery = supabase
+      .from("content_posts")
+      .select("platform, title, content_type, views, likes, comments, engagement_rate")
+      .eq("user_id", userId)
+      .eq("status", "published")
+      // published_at is what the sync writes; published_date is a dead column.
+      .gte("published_at", thirtyDaysAgoStr);
+    // Account scope: only that account's rows feed the performance context
+    // (legacy rows were backfilled with their account id by the separation
+    // migration, so a single-account user loses nothing).
+    if (socialAccountId) {
+      metricsQuery = metricsQuery.eq("social_account_id", socialAccountId);
+      topPostsQuery = topPostsQuery.eq("social_account_id", socialAccountId);
+    }
+
+    const [metricsResult, topPostsResult, profileResult, voiceContext, accountNiche] = await Promise.all([
+      metricsQuery.order("date", { ascending: false }).limit(30),
+      topPostsQuery.order("engagement_rate", { ascending: false }).limit(10),
       supabase
         .from("profiles")
         .select("display_name, first_name, niche_preference")
         .eq("id", userId)
         .maybeSingle(),
+      // Voice only in account mode — user-level runs keep their pre-separation
+      // behavior (this function never injected voice before).
+      socialAccountId ? loadVoiceContext(supabase, userId, socialAccountId) : Promise.resolve(null),
+      loadAccountNiche(supabase, userId, socialAccountId),
     ]);
 
     // Aggregate metrics by platform
@@ -86,7 +109,8 @@ Deno.serve(async (req: Request) => {
     }));
 
     const creatorName = profileResult.data?.first_name || profileResult.data?.display_name || "creator";
-    const niche = (profileResult.data?.niche_preference || "").trim();
+    // Niche resolution order: account profile.niche → profiles.niche_preference.
+    const niche = accountNiche || (profileResult.data?.niche_preference || "").trim();
 
     const platforms = Object.keys(platformSummary);
     const hasPlatformData = platforms.length > 0;
@@ -101,7 +125,7 @@ ${topPosts.slice(0, 5).map((p) => `- [${p.platform}] "${p.topic}" (${p.type}, ${
 
     // ── Call Claude ──────────────────────────────────────────────────────────
     const systemPrompt = `You are a content strategy AI for social media creators. Generate content ideas that will maximize engagement based on platform performance data.
-
+${voiceContext ? `\n${voiceContext}\n` : ""}
 Always respond with a valid JSON array. No markdown, no explanation, just the array.`;
 
     const userPrompt = `Creator: ${creatorName}

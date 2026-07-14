@@ -14,8 +14,14 @@ import { requireUserOrCron, corsHeaders } from "../_shared/auth.ts";
  * Upserts results into `user_content_profiles` for use by the recommendation engine.
  *
  * Request body:
- *   userId  - Supabase user ID
- *   force   - (optional) boolean, re-analyze even if profile is fresh (default: false)
+ *   userId          - Supabase user ID
+ *   force           - (optional) boolean, re-analyze even if profile is fresh (default: false)
+ *   socialAccountId - (optional) Post for Me social account id. When present,
+ *                     only THAT account's posts are analyzed and the result is
+ *                     upserted into the (user_id, social_account_id) profile
+ *                     row — each connected account gets its own voice. When
+ *                     absent, behavior is exactly the legacy user-level
+ *                     analysis (social_account_id NULL row).
  *
  * Called automatically at the end of instagram-sync (and future platform syncs).
  * Can also be triggered manually from the settings page.
@@ -53,16 +59,27 @@ Deno.serve(async (req: Request) => {
     if (!auth.ok) return auth.response;
     const userId = auth.userId;
     const { force = false } = body;
+    // Optional per-account scope. Non-string / empty values collapse to null
+    // (user-level analysis, the legacy behavior).
+    const socialAccountId: string | null =
+      typeof body.socialAccountId === "string" && body.socialAccountId.trim()
+        ? body.socialAccountId.trim()
+        : null;
 
     if (!userId) throw new Error("Missing required field: userId");
 
     // ── Skip if analysis is still fresh (unless forced) ───────────────────────
+    // Freshness is per profile ROW: an account-scoped rebuild checks the
+    // account's row, not the user-level one.
     if (!force) {
-      const { data: existingProfile } = await supabase
+      let freshnessQuery = supabase
         .from("user_content_profiles")
         .select("analyzed_at, posts_analyzed")
-        .eq("user_id", userId)
-        .maybeSingle();
+        .eq("user_id", userId);
+      freshnessQuery = socialAccountId
+        ? freshnessQuery.eq("social_account_id", socialAccountId)
+        : freshnessQuery.is("social_account_id", null);
+      const { data: existingProfile } = await freshnessQuery.maybeSingle();
 
       if (existingProfile?.analyzed_at) {
         const lastAnalyzed = new Date(existingProfile.analyzed_at).getTime();
@@ -85,13 +102,17 @@ Deno.serve(async (req: Request) => {
     // ── Pull top-performing published posts with captions ────────────────────
     // Sort by engagement_rate DESC, fall back to (likes + comments) for posts
     // that were synced before engagement_rate was calculated.
-    const { data: posts, error: postsError } = await supabase
+    let postsQuery = supabase
       .from("content_posts")
-      .select("id, caption, platform, media_type, likes, comments, views, engagement_rate, published_date")
+      .select("id, caption, platform, media_type, likes, comments, views, engagement_rate, published_date, account_username")
       .eq("user_id", userId)
       .eq("status", "published")
       .not("caption", "eq", "")
-      .not("caption", "is", null)
+      .not("caption", "is", null);
+    // Account scope: only that account's posts feed its voice. User-level
+    // analysis keeps reading everything (legacy behavior).
+    if (socialAccountId) postsQuery = postsQuery.eq("social_account_id", socialAccountId);
+    const { data: posts, error: postsError } = await postsQuery
       .order("engagement_rate", { ascending: false })
       .limit(POSTS_TO_ANALYZE);
 
@@ -237,8 +258,19 @@ Rules:
     }
 
     // ── Upsert user_content_profiles ──────────────────────────────────────────
+    // Denormalized handle for UI labels ("@gibsunday's voice"). Taken from the
+    // analyzed posts themselves — they're already scoped to the account.
+    type PostWithHandle = { account_username?: string | null };
+    const postWithHandle = socialAccountId
+      ? (validPosts as PostWithHandle[]).find((p) => p.account_username)
+      : undefined;
+    const accountUsername = postWithHandle?.account_username ?? null;
+
     const profileData = {
       user_id: userId,
+      // NULL = the user-level/legacy "main voice" row.
+      social_account_id: socialAccountId,
+      account_username: accountUsername,
       hook_frameworks: analysis.hook_frameworks || [],
       dominant_topics: analysis.dominant_topics || [],
       caption_style: analysis.caption_style || "",
@@ -256,13 +288,19 @@ Rules:
       analyzed_at: new Date().toISOString(),
     };
 
+    // Conflict target is the (user, account) key. social_account_key is a
+    // STORED generated column (coalesce(social_account_id,'')) so user-level
+    // rows (NULL account → '') and per-account rows share one upsert path.
+    // See migration 20260713000000_account_separation.sql.
     const { error: upsertError } = await supabase
       .from("user_content_profiles")
-      .upsert(profileData, { onConflict: "user_id" });
+      .upsert(profileData, { onConflict: "user_id,social_account_key" });
 
     if (upsertError) throw new Error(`Failed to save content profile: ${upsertError.message}`);
 
-    console.log(`Caption analysis complete for user ${userId}: ${validPosts.length} posts analyzed`);
+    console.log(
+      `Caption analysis complete for user ${userId}${socialAccountId ? ` (account ${socialAccountId})` : ""}: ${validPosts.length} posts analyzed`,
+    );
 
     return new Response(
       JSON.stringify({

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase, type AIContentSuggestion } from '../../lib/supabase';
+import { useAccount } from '../../contexts/AccountContext';
 import { Sparkles, Bot, ThumbsDown, ArrowRight, PenTool, Lightbulb, Zap } from 'lucide-react';
 
 interface IdeationStageProps {
@@ -8,6 +9,7 @@ interface IdeationStageProps {
 }
 
 export function IdeationStage({ onIdeaSelected, prefilledIdea }: IdeationStageProps) {
+  const { activeAccount } = useAccount();
   const [mode, setMode] = useState<'ai' | 'manual'>('ai');
   const [suggestions, setSuggestions] = useState<AIContentSuggestion[]>([]);
   const [loading, setLoading] = useState(false);
@@ -43,7 +45,12 @@ export function IdeationStage({ onIdeaSelected, prefilledIdea }: IdeationStagePr
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
       const { data: result, error } = await supabase.functions.invoke('generate-ideas', {
-        body: { userId: user.id },
+        body: {
+          userId: user.id,
+          // Account Switcher scope: ideas grounded in this account's posts,
+          // voice, and niche. Omitted under "All accounts" (legacy behavior).
+          ...(activeAccount ? { socialAccountId: activeAccount.id } : {}),
+        },
         headers: { Authorization: `Bearer ${session.access_token}` },
       });
       if (error) { throw new Error(error.message || 'Failed to generate ideas'); }

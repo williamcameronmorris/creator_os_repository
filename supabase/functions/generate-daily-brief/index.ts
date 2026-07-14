@@ -2,7 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { requireUser, corsHeaders } from "../_shared/auth.ts";
 import { canonicalNiche } from "../_shared/niche.ts";
-import { loadVoiceContext } from "../_shared/voice.ts";
+import { loadVoiceContext, loadAccountNiche } from "../_shared/voice.ts";
 
 /**
  * generate-daily-brief
@@ -88,43 +88,59 @@ function postLabel(p: PostRow): string {
   return (p.title || p.caption || "Untitled post").slice(0, 120);
 }
 
-async function gatherUserData(supabase: SupabaseClient, userId: string) {
+async function gatherUserData(
+  supabase: SupabaseClient,
+  userId: string,
+  socialAccountId: string | null = null,
+) {
   const now = Date.now();
   const sevenDaysAgo = new Date(now - 7 * 86_400_000).toISOString();
   const fourteenDaysAgo = new Date(now - 14 * 86_400_000).toISOString();
   const ninetyDaysAgo = new Date(now - 90 * 86_400_000).toISOString();
 
-  const [profileRes, recentRes, priorCountRes, historyRes] = await Promise.all([
+  // Account scope (user mode's "Generate now" with the Account Switcher
+  // pinned): only that account's posts feed the brief. Null → user-level,
+  // exactly the pre-separation behavior — and the only mode cron uses.
+  // Storage stays one brief per user per day; per-account briefs are a
+  // follow-up (see PR body).
+  let recentQuery = supabase
+    .from("content_posts")
+    .select("title, caption, platform, content_type, views, likes, comments, engagement_rate, published_at")
+    .eq("user_id", userId)
+    .eq("status", "published")
+    // published_at is what the sync writes; published_date is a dead column.
+    .gte("published_at", sevenDaysAgo);
+  let priorCountQuery = supabase
+    .from("content_posts")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .eq("status", "published")
+    .gte("published_at", fourteenDaysAgo)
+    .lt("published_at", sevenDaysAgo);
+  let historyQuery = supabase
+    .from("content_posts")
+    .select("published_at, likes, comments")
+    .eq("user_id", userId)
+    .eq("status", "published")
+    .not("published_at", "is", null)
+    .gte("published_at", ninetyDaysAgo);
+  if (socialAccountId) {
+    recentQuery = recentQuery.eq("social_account_id", socialAccountId);
+    priorCountQuery = priorCountQuery.eq("social_account_id", socialAccountId);
+    historyQuery = historyQuery.eq("social_account_id", socialAccountId);
+  }
+
+  const [profileRes, recentRes, priorCountRes, historyRes, accountNiche] = await Promise.all([
     supabase
       .from("profiles")
       .select("display_name, first_name, niche_preference")
       .eq("id", userId)
       .maybeSingle(),
-    supabase
-      .from("content_posts")
-      .select("title, caption, platform, content_type, views, likes, comments, engagement_rate, published_at")
-      .eq("user_id", userId)
-      .eq("status", "published")
-      // published_at is what the sync writes; published_date is a dead column.
-      .gte("published_at", sevenDaysAgo)
-      .order("published_at", { ascending: false })
-      .limit(50),
-    supabase
-      .from("content_posts")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", userId)
-      .eq("status", "published")
-      .gte("published_at", fourteenDaysAgo)
-      .lt("published_at", sevenDaysAgo),
-    supabase
-      .from("content_posts")
-      .select("published_at, likes, comments")
-      .eq("user_id", userId)
-      .eq("status", "published")
-      .not("published_at", "is", null)
-      .gte("published_at", ninetyDaysAgo)
-      .order("published_at", { ascending: false })
-      .limit(200),
+    recentQuery.order("published_at", { ascending: false }).limit(50),
+    priorCountQuery,
+    historyQuery.order("published_at", { ascending: false }).limit(200),
+    // Niche resolution order: account profile.niche → profiles.niche_preference.
+    loadAccountNiche(supabase, userId, socialAccountId),
   ]);
 
   const recent = (recentRes.data || []) as PostRow[];
@@ -149,8 +165,9 @@ async function gatherUserData(supabase: SupabaseClient, userId: string) {
     }
   }
 
-  // ── Niche trend: top watch-feed videos for the user's canonical niche.
-  const rawNiche = (profileRes.data?.niche_preference || "").trim();
+  // ── Niche trend: top watch-feed videos for the resolved canonical niche
+  //    (account niche first, profile niche as fallback).
+  const rawNiche = accountNiche || (profileRes.data?.niche_preference || "").trim();
   const niche = canonicalNiche(rawNiche);
   let trendVideos: { title: string; view_count: number | null; creator: string }[] = [];
   if (niche) {
@@ -170,7 +187,8 @@ async function gatherUserData(supabase: SupabaseClient, userId: string) {
     }));
   }
 
-  const voiceContext = await loadVoiceContext(supabase, userId);
+  // Account-scoped voice when pinned (falls back to the main voice inside).
+  const voiceContext = await loadVoiceContext(supabase, userId, socialAccountId);
 
   return {
     creatorName: profileRes.data?.first_name || profileRes.data?.display_name || "creator",
@@ -283,6 +301,7 @@ async function generateForUser(
   supabase: SupabaseClient,
   userId: string,
   force: boolean,
+  socialAccountId: string | null = null,
 ): Promise<"generated" | "skipped_exists" | { row: Record<string, unknown> }> {
   const briefDate = todayUtc();
 
@@ -296,7 +315,7 @@ async function generateForUser(
     if (existing) return "skipped_exists";
   }
 
-  const data = await gatherUserData(supabase, userId);
+  const data = await gatherUserData(supabase, userId, socialAccountId);
   const content = await generateBriefContent(data);
 
   const { data: row, error } = await supabase
@@ -324,7 +343,7 @@ Deno.serve(async (req: Request) => {
     }
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    let body: { cronSecret?: string; force?: boolean } = {};
+    let body: { cronSecret?: string; force?: boolean; socialAccountId?: string } = {};
     try {
       body = await req.json();
     } catch {
@@ -390,7 +409,15 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const result = await generateForUser(supabase, userId, !!body.force);
+    // Optional Account Switcher scope for on-demand briefs (cron mode stays
+    // user-level — briefs are one row per user per day; per-account brief
+    // STORAGE is a follow-up).
+    const socialAccountId: string | null =
+      typeof body.socialAccountId === "string" && body.socialAccountId.trim()
+        ? body.socialAccountId.trim()
+        : null;
+
+    const result = await generateForUser(supabase, userId, !!body.force, socialAccountId);
 
     if (result === "skipped_exists") {
       // Already have today's brief — return it so the client can render it.

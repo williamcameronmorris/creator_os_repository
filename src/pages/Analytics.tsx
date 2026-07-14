@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { useTimezone } from '../hooks/useTimezone';
+import { useAccount } from '../contexts/AccountContext';
 import { getLocalDayAndHour, formatInTz } from '../lib/timezone';
 import { ThreadsIcon } from '../components/icons/ThreadsIcon';
 import { KpiRow } from '../components/analytics/KpiRow';
@@ -76,6 +77,7 @@ interface AbPair {
 export function Analytics() {
   const { user } = useAuth();
   const { timezone } = useTimezone();
+  const { activeAccount } = useAccount();
 
   const [dateValue, setDateValue] = useState<DateComparisonValue>(() => defaultDateComparison());
   const [loading, setLoading] = useState(true);
@@ -87,7 +89,7 @@ export function Analytics() {
     if (user) loadAnalytics();
     else setLoading(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, dateValue.range.start.getTime(), dateValue.range.end.getTime(), dateValue.comparison?.start.getTime(), dateValue.comparison?.end.getTime()]);
+  }, [user, activeAccount?.id, dateValue.range.start.getTime(), dateValue.range.end.getTime(), dateValue.comparison?.start.getTime(), dateValue.comparison?.end.getTime()]);
 
   const loadAnalytics = async () => {
     if (!user) return;
@@ -99,33 +101,42 @@ export function Analytics() {
       const queryStartIso = isoDate(queryStart);
       const queryEndIso = isoDate(dateValue.range.end);
 
+      // Account scope: with an account pinned in the Account Switcher, only
+      // its rows count. Legacy NULL rows (pre-backfill, or metrics from the
+      // still user-level sync) surface only under "All accounts".
+      let metricsQuery = supabase
+        .from('platform_metrics')
+        .select('date, platform, followers_count, total_likes, total_comments, total_views, total_shares, avg_engagement_rate')
+        .eq('user_id', user.id)
+        .gte('date', queryStartIso)
+        .lte('date', queryEndIso);
+      let postsQuery = supabase
+        .from('content_posts')
+        .select('id, platform, caption, published_date, published_at, likes, comments, views, saves, shares, media_type, thumbnail_url, instagram_post_id, youtube_video_id, tiktok_post_id')
+        .eq('user_id', user.id)
+        .eq('status', 'published')
+        // App-published posts set published_at (not published_date), so filter
+        // on either column — otherwise the user's own content is excluded.
+        .or(
+          `and(published_at.gte.${isoDate(dateValue.range.start)},published_at.lte.${isoDate(dateValue.range.end)}),` +
+          `and(published_date.gte.${isoDate(dateValue.range.start)},published_date.lte.${isoDate(dateValue.range.end)})`
+        );
+      let abQuery = supabase
+        .from('content_posts')
+        .select('id, ab_pair_id, ab_test_group, platform, caption, published_date, likes, comments, views, scheduled_date')
+        .eq('user_id', user.id)
+        .eq('status', 'published')
+        .not('ab_pair_id', 'is', null);
+      if (activeAccount) {
+        metricsQuery = metricsQuery.eq('social_account_id', activeAccount.id);
+        postsQuery = postsQuery.eq('social_account_id', activeAccount.id);
+        abQuery = abQuery.eq('social_account_id', activeAccount.id);
+      }
+
       const [metricsRes, postsRes, abRes] = await Promise.all([
-        supabase
-          .from('platform_metrics')
-          .select('date, platform, followers_count, total_likes, total_comments, total_views, total_shares, avg_engagement_rate')
-          .eq('user_id', user.id)
-          .gte('date', queryStartIso)
-          .lte('date', queryEndIso)
-          .order('date', { ascending: true }),
-        supabase
-          .from('content_posts')
-          .select('id, platform, caption, published_date, published_at, likes, comments, views, saves, shares, media_type, thumbnail_url, instagram_post_id, youtube_video_id, tiktok_post_id')
-          .eq('user_id', user.id)
-          .eq('status', 'published')
-          // App-published posts set published_at (not published_date), so filter
-          // on either column — otherwise the user's own content is excluded.
-          .or(
-            `and(published_at.gte.${isoDate(dateValue.range.start)},published_at.lte.${isoDate(dateValue.range.end)}),` +
-            `and(published_date.gte.${isoDate(dateValue.range.start)},published_date.lte.${isoDate(dateValue.range.end)})`
-          )
-          .order('likes', { ascending: false })
-          .limit(20),
-        supabase
-          .from('content_posts')
-          .select('id, ab_pair_id, ab_test_group, platform, caption, published_date, likes, comments, views, scheduled_date')
-          .eq('user_id', user.id)
-          .eq('status', 'published')
-          .not('ab_pair_id', 'is', null),
+        metricsQuery.order('date', { ascending: true }),
+        postsQuery.order('likes', { ascending: false }).limit(20),
+        abQuery,
       ]);
 
       setMetrics((metricsRes.data ?? []) as PlatformMetricRow[]);
@@ -180,12 +191,21 @@ export function Analytics() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
-          <p className="t-micro text-muted-foreground mb-2">Analytics</p>
+          <p className="t-micro text-muted-foreground mb-2">
+            Analytics
+            {activeAccount && (
+              <span style={{ color: 'var(--accent)' }}>
+                {' '}· {activeAccount.username ? `@${activeAccount.username}` : activeAccount.platform}
+              </span>
+            )}
+          </p>
           <h1 className="text-3xl sm:text-4xl font-semibold text-foreground tracking-tight">
             Profile Performance
           </h1>
           <p className="text-sm text-muted-foreground mt-2">
-            Cross-platform performance for the selected window.
+            {activeAccount
+              ? `Performance for ${activeAccount.username ? `@${activeAccount.username}` : 'the selected account'} in the selected window.`
+              : 'Cross-platform performance across all accounts for the selected window.'}
           </p>
         </div>
         <DateComparisonPill value={dateValue} onChange={setDateValue} />

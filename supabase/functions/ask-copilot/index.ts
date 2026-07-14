@@ -2,7 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 // npm: specifier (not jsr:) so the client type matches _shared/voice.ts,
 // same as generate-script and the other AI functions.
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { loadVoiceContext } from "../_shared/voice.ts";
+import { loadVoiceContext, loadAccountNiche } from "../_shared/voice.ts";
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -111,8 +111,14 @@ Deno.serve(async (req: Request) => {
     }
     const userId = userData.user.id;
 
-    const { question, messages: rawHistory } = await req.json();
+    const { question, messages: rawHistory, socialAccountId: rawAccountId } = await req.json();
     if (!question?.trim()) return new Response(JSON.stringify({ error: "question is required" }), { status: 400, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
+
+    // Optional Account Switcher scope. When present, Clio answers as THAT
+    // account: its posts, its voice (main-voice fallback), its niche. Absent
+    // ("All accounts" / legacy clients) → exactly today's user-level behavior.
+    const socialAccountId: string | null =
+      typeof rawAccountId === "string" && rawAccountId.trim() ? rawAccountId.trim() : null;
 
     // Optional conversation history: [{ role: "user"|"assistant", content: string }].
     // Validated strictly (roles + string content only) and capped at the last
@@ -149,22 +155,37 @@ Deno.serve(async (req: Request) => {
       } catch { return []; }
     }
 
-    const [profileResult, metricsResult, postsResult, recentPostsResult, deals, pfmContext, inspirationResult, inspirationCountsResult, voiceContext] = await Promise.all([
+    // Account-scoped post queries: when the Account Switcher pins an account,
+    // only its posts feed the DATA block (legacy rows were backfilled with
+    // their account id, so single-account history is fully included).
+    let topPostsQuery = supabase.from("content_posts").select("title, caption, platform, media_type, views, likes, comments, engagement_rate, published_at").eq("user_id", userId).eq("status", "published").gte("published_at", thirtyDaysAgo);
+    let recentPostsQuery = supabase.from("content_posts").select("title, caption, platform, media_type, views, likes, comments, saves, shares, engagement_rate, published_at").eq("user_id", userId).eq("status", "published").gte("published_at", sevenDaysAgo);
+    let metricsQuery = supabase.from("platform_metrics").select("platform, date, followers_count, avg_engagement_rate").eq("user_id", userId).gte("date", sevenDaysAgo);
+    if (socialAccountId) {
+      topPostsQuery = topPostsQuery.eq("social_account_id", socialAccountId);
+      recentPostsQuery = recentPostsQuery.eq("social_account_id", socialAccountId);
+      metricsQuery = metricsQuery.eq("social_account_id", socialAccountId);
+    }
+
+    const [profileResult, metricsResult, postsResult, recentPostsResult, deals, pfmContext, inspirationResult, inspirationCountsResult, voiceContext, accountNiche] = await Promise.all([
       supabase.from("profiles").select("full_name, display_name, niche_preference, instagram_avg_views, tiktok_avg_views, youtube_avg_views, instagram_access_token, instagram_business_account_id, tiktok_access_token, youtube_access_token").eq("id", userId).maybeSingle(),
-      supabase.from("platform_metrics").select("platform, date, followers_count, avg_engagement_rate").eq("user_id", userId).gte("date", sevenDaysAgo).order("date", { ascending: false }),
-      supabase.from("content_posts").select("title, caption, platform, media_type, views, likes, comments, engagement_rate, published_at").eq("user_id", userId).eq("status", "published").gte("published_at", thirtyDaysAgo).order("likes", { ascending: false, nullsFirst: false }).limit(10),
-      supabase.from("content_posts").select("title, caption, platform, media_type, views, likes, comments, saves, shares, engagement_rate, published_at").eq("user_id", userId).eq("status", "published").gte("published_at", sevenDaysAgo).order("published_at", { ascending: false }).limit(15),
+      metricsQuery.order("date", { ascending: false }),
+      topPostsQuery.order("likes", { ascending: false, nullsFirst: false }).limit(10),
+      recentPostsQuery.order("published_at", { ascending: false }).limit(15),
       fetchDeals(),
       fetchPostForMeContext(userId),
       supabase.from("inspiration_entries").select("post_title, platform, content_format, hook_framework, hook_text, topic_tags, tactical_notes, creator, likes, views").eq("performance_tier", "Outlier").order("likes", { ascending: false, nullsFirst: false }).limit(15),
       supabase.from("inspiration_entries").select("performance_tier, hook_framework"),
       // The creator's own voice fingerprint (null until they've built one).
-      loadVoiceContext(supabase, userId),
+      // Account-scoped when pinned; falls back to the main voice.
+      loadVoiceContext(supabase, userId, socialAccountId),
+      loadAccountNiche(supabase, userId, socialAccountId),
     ]);
 
     const profile = profileResult.data;
     const creatorName = profile?.display_name || profile?.full_name?.split(" ")[0] || "Creator";
-    const niche = (profile?.niche_preference || "").trim();
+    // Niche resolution order: account profile.niche → profiles.niche_preference.
+    const niche = accountNiche || (profile?.niche_preference || "").trim();
 
     const connectedSet = new Set<string>();
     if (profile?.instagram_access_token || profile?.instagram_business_account_id) connectedSet.add("Instagram");

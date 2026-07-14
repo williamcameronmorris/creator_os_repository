@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { requireUser, corsHeaders } from "../_shared/auth.ts";
 import { canonicalNiche } from "../_shared/niche.ts";
+import { loadAccountNiche } from "../_shared/voice.ts";
 
 /**
  * watch-ensure-niche Edge Function
@@ -16,6 +17,12 @@ import { canonicalNiche } from "../_shared/niche.ts";
  *
  * If the canonical niche has no creators yet, run discovery for it inline, then
  * report ready. User-authed (verifies the caller's JWT).
+ *
+ * Optional body.socialAccountId: resolve the niche per account —
+ * user_content_profiles.niche for that account first, then
+ * profiles.niche_preference as the fallback. Absent → legacy behavior
+ * (profile niche only). @gibsunday can watch guitar while @heycam watches
+ * creator coaching.
  */
 
 function json(body: unknown, status = 200) {
@@ -38,14 +45,25 @@ Deno.serve(async (req: Request) => {
   if (!auth.ok) return auth.response;
   const userId = auth.userId;
 
-  try {
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("niche_preference")
-      .eq("id", userId)
-      .maybeSingle();
+  // Optional per-account scope (empty body / no JSON is fine — legacy clients).
+  const body = await req.json().catch(() => ({} as { socialAccountId?: unknown }));
+  const socialAccountId: string | null =
+    typeof body.socialAccountId === "string" && body.socialAccountId.trim()
+      ? body.socialAccountId.trim()
+      : null;
 
-    const niche = canonicalNiche(profile?.niche_preference || "");
+  try {
+    const [{ data: profile }, accountNiche] = await Promise.all([
+      supabase
+        .from("profiles")
+        .select("niche_preference")
+        .eq("id", userId)
+        .maybeSingle(),
+      // Niche resolution order: account profile.niche → profiles.niche_preference.
+      loadAccountNiche(supabase, userId, socialAccountId),
+    ]);
+
+    const niche = canonicalNiche(accountNiche || profile?.niche_preference || "");
     if (!niche) return json({ niche: null, ready: false, needsNiche: true });
 
     const { count } = await supabase

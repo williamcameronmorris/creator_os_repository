@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { TokenHealthBanner } from './TokenHealthBanner';
 import { ConnectionGateBanner } from './ConnectionGateBanner';
+import { AccountSwitcher } from './AccountSwitcher';
 import {
   Settings as SettingsIcon,
   LogOut,
@@ -161,6 +162,8 @@ export function Layout({ children }: LayoutProps) {
 
             {/* Right controls */}
             <div className="flex items-center gap-3">
+              {/* Account scope for the whole app — voice, niche, analytics. */}
+              <AccountSwitcher />
               <button
                 onClick={toggleTheme}
                 className="w-7 h-7 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"

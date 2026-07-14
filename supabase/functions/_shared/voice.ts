@@ -4,34 +4,55 @@ import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
  * loadVoiceContext
  *
  * Builds a prompt block describing a creator's writing voice, extracted from
- * their OWN posts by `analyze-captions` and stored per-user in
- * `user_content_profiles`. Injected into the system prompt of the AI generators
- * so output sounds like the creator, not generic AI.
+ * their OWN posts by `analyze-captions` and stored in `user_content_profiles`.
+ * Injected into the system prompt of the AI generators so output sounds like
+ * the creator, not generic AI.
  *
- * Per-user by construction: keyed on `user_id`, owner-scoped by RLS. There is
- * no shared/house voice — each creator gets their own.
+ * Account separation: profiles are keyed (user_id, social_account_id).
+ * Rows with social_account_id NULL are the user-level/legacy profile — the
+ * "main voice". When `socialAccountId` is passed we load THAT account's
+ * profile first and fall back to the user-level row if the account hasn't
+ * built its own voice yet; @gibsunday and @heycam each sound like themselves,
+ * and a brand-new account still gets the main voice instead of generic AI.
  *
- * Returns `null` when the user has no usable profile yet, so callers fall back
- * to their default prompt. Fully additive: a user with no Voice behaves exactly
- * as before.
+ * Backward compatible: 2-arg calls behave exactly as before (user-level row,
+ * which is the only row legacy users have).
  *
- * The returned string is a STABLE per-user prefix. Callers should place it in a
- * `system` block carrying `cache_control: { type: "ephemeral" }` so a creator's
- * repeat generations within the 5-minute window read the voice prefix from
- * cache instead of paying to re-process it.
+ * Returns `null` when no usable profile exists, so callers fall back to their
+ * default prompt.
+ *
+ * The returned string is a STABLE per-user(-per-account) prefix. Callers
+ * should place it in a `system` block carrying
+ * `cache_control: { type: "ephemeral" }` so a creator's repeat generations
+ * within the 5-minute window read the voice prefix from cache instead of
+ * paying to re-process it.
  */
-export async function loadVoiceContext(
+
+type ProfileVoiceRow = {
+  voice_profile: unknown;
+  caption_style: string | null;
+  raw_analysis: unknown;
+};
+
+async function fetchProfileRow(
   supabase: SupabaseClient,
   userId: string,
-): Promise<string | null> {
-  const { data } = await supabase
+  socialAccountId: string | null,
+): Promise<ProfileVoiceRow | null> {
+  let query = supabase
     .from("user_content_profiles")
     .select("voice_profile, caption_style, raw_analysis")
-    .eq("user_id", userId)
-    .maybeSingle();
+    .eq("user_id", userId);
+  // Explicitly pin the account dimension: with per-account rows in the table,
+  // an unfiltered .maybeSingle() would error on >1 rows.
+  query = socialAccountId
+    ? query.eq("social_account_id", socialAccountId)
+    : query.is("social_account_id", null);
+  const { data } = await query.maybeSingle();
+  return (data as ProfileVoiceRow | null) ?? null;
+}
 
-  if (!data) return null;
-
+function formatVoiceBlock(data: ProfileVoiceRow): string | null {
   const vp = (data.voice_profile ?? null) as
     | {
         tone?: string;
@@ -74,4 +95,48 @@ export async function loadVoiceContext(
   lines.push("Match this voice precisely. The output should read like the creator wrote it themselves.");
 
   return lines.join("\n");
+}
+
+export async function loadVoiceContext(
+  supabase: SupabaseClient,
+  userId: string,
+  socialAccountId?: string | null,
+): Promise<string | null> {
+  if (socialAccountId) {
+    const accountRow = await fetchProfileRow(supabase, userId, socialAccountId);
+    if (accountRow) {
+      const block = formatVoiceBlock(accountRow);
+      if (block) return block;
+    }
+    // Account has no voice (or an unusable one) — fall back to the main voice.
+  }
+  const userRow = await fetchProfileRow(supabase, userId, null);
+  if (!userRow) return null;
+  return formatVoiceBlock(userRow);
+}
+
+/**
+ * loadAccountNiche
+ *
+ * The account-scoped half of the niche resolution order:
+ *   user_content_profiles.niche (for the account) → profiles.niche_preference.
+ *
+ * Returns the trimmed account niche, or null when the account has no profile
+ * row / no niche set — callers then fall back to profiles.niche_preference
+ * exactly as before.
+ */
+export async function loadAccountNiche(
+  supabase: SupabaseClient,
+  userId: string,
+  socialAccountId?: string | null,
+): Promise<string | null> {
+  if (!socialAccountId) return null;
+  const { data } = await supabase
+    .from("user_content_profiles")
+    .select("niche")
+    .eq("user_id", userId)
+    .eq("social_account_id", socialAccountId)
+    .maybeSingle();
+  const niche = ((data as { niche?: string | null } | null)?.niche || "").trim();
+  return niche || null;
 }

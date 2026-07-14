@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { SubscriptionProvider } from './contexts/SubscriptionContext';
 import { ConnectionStatusProvider } from './contexts/ConnectionStatusContext';
+import { AccountProvider } from './contexts/AccountContext';
 import { Auth } from './components/Auth';
 import { Onboarding } from './components/Onboarding';
 import { Layout } from './components/Layout';
@@ -228,9 +229,13 @@ export default function App() {
         <ThemeProvider>
           <AuthProvider>
             <ConnectionStatusProvider>
-              <SubscriptionProvider>
-                <AppContent />
-              </SubscriptionProvider>
+              {/* AccountProvider reads the PFM account list from
+                  ConnectionStatusProvider, so it must sit inside it. */}
+              <AccountProvider>
+                <SubscriptionProvider>
+                  <AppContent />
+                </SubscriptionProvider>
+              </AccountProvider>
             </ConnectionStatusProvider>
           </AuthProvider>
         </ThemeProvider>

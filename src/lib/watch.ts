@@ -47,12 +47,18 @@ export interface EnsureNicheResult {
 }
 
 /**
- * Resolve the user's Watch niche (from their profile) and guarantee it has
- * discovered creators — running discovery on demand the first time a niche is
- * seen. May take a while on a cold niche while discovery runs.
+ * Resolve the user's Watch niche and guarantee it has discovered creators —
+ * running discovery on demand the first time a niche is seen. May take a
+ * while on a cold niche while discovery runs.
+ *
+ * Pass the active account's PFM id to resolve the niche PER ACCOUNT
+ * (user_content_profiles.niche for that account → profiles.niche_preference
+ * fallback). Omit for the legacy user-level resolution.
  */
-export async function ensureWatchNiche(): Promise<EnsureNicheResult> {
-  const { data, error } = await supabase.functions.invoke('watch-ensure-niche');
+export async function ensureWatchNiche(socialAccountId?: string | null): Promise<EnsureNicheResult> {
+  const { data, error } = await supabase.functions.invoke('watch-ensure-niche', {
+    body: socialAccountId ? { socialAccountId } : {},
+  });
   if (error) throw error;
   return (data || { niche: null, ready: false }) as EnsureNicheResult;
 }

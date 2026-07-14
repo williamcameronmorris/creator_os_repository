@@ -86,10 +86,15 @@ Deno.serve(async (req: Request) => {
     }
 
     // ── Load the user's content profile ──────────────────────────────────────
+    // Pin to the user-level row (social_account_id NULL): profiles are keyed
+    // (user, account) since account separation, so an unpinned .maybeSingle()
+    // would error once a per-account voice exists. Recommendations stay
+    // user-level for now.
     const { data: profile, error: profileError } = await supabase
       .from("user_content_profiles")
       .select("hook_frameworks, dominant_topics, caption_style, avg_caption_length, top_patterns, raw_analysis, posts_analyzed")
       .eq("user_id", userId)
+      .is("social_account_id", null)
       .maybeSingle();
 
     if (profileError) throw new Error(`Failed to load content profile: ${profileError.message}`);
