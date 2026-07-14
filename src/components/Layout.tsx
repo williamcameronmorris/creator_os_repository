@@ -12,9 +12,11 @@ import {
   Moon,
   MessageCircle,
   PlayCircle,
-  Briefcase,
+  Handshake,
   SquarePen,
   Eye,
+  Plus,
+  Video,
 } from 'lucide-react';
 
 interface LayoutProps {
@@ -28,16 +30,28 @@ export function Layout({ children }: LayoutProps) {
   const navigate = useNavigate();
 
   const [swipeProgress, setSwipeProgress] = useState(0);
+  const [composeSheetOpen, setComposeSheetOpen] = useState(false);
   const touchStartX = useRef<number | null>(null);
   const touchStartY = useRef<number | null>(null);
   const isSwipingBack = useRef(false);
 
-  const getActiveTab = (): 'clio' | 'studio' | 'watch' | 'office' | 'settings' => {
+  const getActiveTab = (): 'clio' | 'studio' | 'watch' | 'patra' | 'settings' => {
     const p = location.pathname;
     if (p === '/settings' || p === '/profile') return 'settings';
     if (p.startsWith('/watch')) return 'watch';
-    if (p.startsWith('/studio') || p === '/media' || p === '/saved-ideas') return 'studio';
-    if (p.startsWith('/office') || p === '/schedule' || p === '/analytics' || p.startsWith('/daily-pulse')) return 'office';
+    // Studio now owns the full make→manage lifecycle: Schedule (04) and
+    // Analytics (05) are reached from the Studio hub, so they highlight Studio.
+    if (
+      p.startsWith('/studio') ||
+      p === '/media' ||
+      p === '/saved-ideas' ||
+      p.startsWith('/schedule') ||
+      p.startsWith('/analytics') ||
+      p === '/drop'
+    ) {
+      return 'studio';
+    }
+    if (p.startsWith('/patra')) return 'patra';
     return 'clio';
   };
 
@@ -84,6 +98,21 @@ export function Layout({ children }: LayoutProps) {
       document.removeEventListener('touchend', handleTouchEnd);
     };
   }, [location.pathname]);
+
+  // Close the compose action sheet on Escape.
+  useEffect(() => {
+    if (!composeSheetOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setComposeSheetOpen(false);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [composeSheetOpen]);
+
+  const goCompose = (to: string) => {
+    setComposeSheetOpen(false);
+    navigate(to);
+  };
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -190,19 +219,22 @@ export function Layout({ children }: LayoutProps) {
             <span className="font-mono text-[8px] font-bold tracking-widest uppercase">Studio</span>
           </Link>
 
-          {/* Compose */}
-          <Link
-            to="/compose"
+          {/* Compose — opens a small action sheet (Quick post / Drop a video) */}
+          <button
+            onClick={() => setComposeSheetOpen(true)}
+            aria-label="Create"
+            aria-haspopup="menu"
+            aria-expanded={composeSheetOpen}
             className="flex flex-col items-center justify-center flex-1 h-full gap-1 transition-colors text-muted-foreground"
           >
             <div
               className="w-8 h-8 flex items-center justify-center border border-foreground"
               style={{ background: 'var(--foreground)', color: 'var(--background)' }}
             >
-              <SquarePen className="w-3.5 h-3.5" />
+              <Plus className="w-4 h-4" />
             </div>
             <span className="font-mono text-[8px] font-bold tracking-widest uppercase opacity-0">+</span>
-          </Link>
+          </button>
 
           {/* Watch */}
           <Link
@@ -215,19 +247,67 @@ export function Layout({ children }: LayoutProps) {
             <span className="font-mono text-[8px] font-bold tracking-widest uppercase">Watch</span>
           </Link>
 
-          {/* Office */}
+          {/* Patra */}
           <Link
-            to="/office"
+            to="/patra"
             className={`flex flex-col items-center justify-center flex-1 h-full gap-1 transition-colors ${
-              activeTab === 'office' ? 'text-foreground' : 'text-muted-foreground'
+              activeTab === 'patra' ? 'text-foreground' : 'text-muted-foreground'
             }`}
           >
-            <Briefcase className="w-5 h-5" />
-            <span className="font-mono text-[8px] font-bold tracking-widest uppercase">Office</span>
+            <Handshake className="w-5 h-5" />
+            <span className="font-mono text-[8px] font-bold tracking-widest uppercase">Patra</span>
           </Link>
 
         </div>
       </nav>
+
+      {/* Compose action sheet — cream-industrial bottom sheet */}
+      {composeSheetOpen && (
+        <div className="fixed inset-0 z-[70]" role="dialog" aria-modal="true" aria-label="Create">
+          {/* Backdrop */}
+          <button
+            aria-label="Close"
+            onClick={() => setComposeSheetOpen(false)}
+            className="absolute inset-0 bg-background/70 backdrop-blur-sm"
+          />
+          {/* Sheet */}
+          <div className="absolute bottom-0 left-0 right-0 bg-card border-t border-border pb-[env(safe-area-inset-bottom)]">
+            <div className="max-w-md mx-auto px-4 pt-4 pb-4">
+              <div className="flex items-center justify-between pb-3 mb-2 border-b border-border">
+                <span className="t-micro">CREATE</span>
+              </div>
+              <button
+                onClick={() => goCompose('/compose')}
+                className="w-full flex items-center gap-3 py-4 border-b border-border text-left group"
+              >
+                <div className="w-9 h-9 flex-shrink-0 flex items-center justify-center border border-border group-hover:border-accent transition-colors">
+                  <SquarePen className="w-4 h-4 text-foreground" />
+                </div>
+                <div>
+                  <div className="font-mono text-[11px] font-bold tracking-widest uppercase text-foreground group-hover:text-accent transition-colors">
+                    Quick post
+                  </div>
+                  <div className="t-micro mt-0.5">Write &amp; publish now</div>
+                </div>
+              </button>
+              <button
+                onClick={() => goCompose('/drop')}
+                className="w-full flex items-center gap-3 py-4 text-left group"
+              >
+                <div className="w-9 h-9 flex-shrink-0 flex items-center justify-center border border-border group-hover:border-accent transition-colors">
+                  <Video className="w-4 h-4 text-foreground" />
+                </div>
+                <div>
+                  <div className="font-mono text-[11px] font-bold tracking-widest uppercase text-foreground group-hover:text-accent transition-colors">
+                    Drop a video
+                  </div>
+                  <div className="t-micro mt-0.5">Turn footage into posts</div>
+                </div>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

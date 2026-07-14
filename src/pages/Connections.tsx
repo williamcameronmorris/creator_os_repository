@@ -25,11 +25,11 @@ export function Connections() {
       </h1>
 
       <button
-        onClick={() => navigate('/office')}
+        onClick={() => navigate('/settings')}
         className="t-micro mb-8 text-muted-foreground hover:text-foreground transition-colors flex items-center gap-2"
       >
         <ArrowRight className="w-3 h-3" style={{ transform: 'rotate(180deg)' }} />
-        Back to Office
+        Back to settings
       </button>
 
       <PostForMeConnections initialFlash={initialFlash} />

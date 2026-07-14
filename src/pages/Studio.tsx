@@ -7,7 +7,6 @@ import { IdeationStage } from '../components/Studio/IdeationStage';
 import { ScriptingStage } from '../components/Studio/ScriptingStage';
 import { CreationStage } from '../components/Studio/CreationStage';
 import { SchedulingStage } from '../components/Studio/SchedulingStage';
-import { EngagementStage } from '../components/Studio/EngagementStage';
 import { AnalysisStage } from '../components/Studio/AnalysisStage';
 import { Bot, CheckCircle } from 'lucide-react';
 
@@ -107,14 +106,14 @@ export function Studio() {
     if (!completedStages.includes(stageName)) {
       setCompletedStages(prev => [...prev, stageName]);
     }
-    const stages: WorkflowStage[] = ['ideation', 'scripting', 'creation', 'scheduling', 'engagement', 'analysis'];
+    const stages: WorkflowStage[] = ['ideation', 'scripting', 'creation', 'scheduling', 'analysis'];
     const idx = stages.indexOf(stageName);
     if (idx < stages.length - 1) { setActiveStage(stages[idx + 1]); }
   };
 
   const handleSkip = (stageName: WorkflowStage) => { handleStepComplete(stageName); };
-  const handleSchedulingComplete = () => { setCompletedStages(prev => [...prev, 'scheduling']); setActiveStage('engagement'); };
-  const handleEngagementComplete = () => { setCompletedStages(prev => [...prev, 'engagement']); setActiveStage('analysis'); };
+  // Scheduling now advances straight to Analysis (engagement retired).
+  const handleSchedulingComplete = () => { setCompletedStages(prev => [...prev, 'scheduling']); setActiveStage('analysis'); };
   const handleWorkflowComplete = () => {
     setShowSuccess(true);
     setTimeout(() => {
@@ -164,7 +163,6 @@ export function Studio() {
                 {activeStage === 'scripting' && "Draft your hook, body, and CTA."}
                 {activeStage === 'creation' && "Upload media and check production quality."}
                 {activeStage === 'scheduling' && "Pick the optimal time to post."}
-                {activeStage === 'engagement' && "Monitor comments and boost reach."}
                 {activeStage === 'analysis' && "Review performance and save insights."}
               </p>
             </div>
@@ -194,12 +192,6 @@ export function Studio() {
                 workflowId={activeWorkflowId}
                 contentType={activeContentType}
                 onComplete={handleSchedulingComplete}
-              />
-            ) : activeStage === 'engagement' && activeWorkflowId ? (
-              <EngagementStage
-                workflowId={activeWorkflowId}
-                contentType={activeContentType}
-                onComplete={handleEngagementComplete}
               />
             ) : activeStage === 'analysis' && activeWorkflowId ? (
               <AnalysisStage
