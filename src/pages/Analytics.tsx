@@ -22,6 +22,14 @@ import {
 } from '../components/analytics/DateComparisonPill';
 import { computeDelta, formatCount, formatPercent, formatCompact } from '../components/analytics/format';
 import type { BreakdownRow, ChartSeries } from '../components/analytics/types';
+import { Eyebrow, SectionHead } from '../components/ui/tac';
+import { VerdictCard, VerdictRow } from '../components/analytics/VerdictCard';
+import { LaneLeaderboard } from '../components/analytics/LaneLeaderboard';
+import {
+  fetchPostPerformance,
+  buildLaneStats,
+  type PostPerformance,
+} from '../lib/postPerformance';
 
 const PLATFORM_LABELS: Record<string, string> = {
   instagram: 'Instagram',
@@ -33,9 +41,6 @@ const PLATFORM_LABELS: Record<string, string> = {
   bluesky: 'Bluesky',
 };
 
-const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const HOUR_LABELS = ['12a','1a','2a','3a','4a','5a','6a','7a','8a','9a','10a','11a',
-  '12p','1p','2p','3p','4p','5p','6p','7p','8p','9p','10p','11p'];
 
 interface PlatformMetricRow {
   date: string;
@@ -69,10 +74,6 @@ interface ContentPostRow {
   ab_test_group?: 'A' | 'B' | null;
 }
 
-interface AbPair {
-  A?: ContentPostRow;
-  B?: ContentPostRow;
-}
 
 export function Analytics() {
   const { user } = useAuth();
@@ -83,7 +84,7 @@ export function Analytics() {
   const [loading, setLoading] = useState(true);
   const [metrics, setMetrics] = useState<PlatformMetricRow[]>([]);
   const [posts, setPosts] = useState<ContentPostRow[]>([]);
-  const [abPairs, setAbPairs] = useState<AbPair[]>([]);
+  const [perf, setPerf] = useState<PostPerformance[]>([]);
 
   useEffect(() => {
     if (user) loadAnalytics();
@@ -95,6 +96,11 @@ export function Analytics() {
     if (!user) return;
     setLoading(true);
     const safetyTimer = setTimeout(() => setLoading(false), 5000);
+    // Scored posts are independent of the date pill: the verdict compares a
+    // post to the creator's own trailing median, not to a calendar window.
+    fetchPostPerformance(user.id, { platform: activeAccount?.platform, limit: 60 })
+      .then(setPerf)
+      .catch(() => setPerf([]));
     try {
       // Fetch the FULL window covering both comparison and current ranges in one query.
       const queryStart = dateValue.comparison?.start ?? dateValue.range.start;
@@ -121,36 +127,19 @@ export function Analytics() {
           `and(published_at.gte.${isoDate(dateValue.range.start)},published_at.lte.${isoDate(dateValue.range.end)}),` +
           `and(published_date.gte.${isoDate(dateValue.range.start)},published_date.lte.${isoDate(dateValue.range.end)})`
         );
-      let abQuery = supabase
-        .from('content_posts')
-        .select('id, ab_pair_id, ab_test_group, platform, caption, published_date, likes, comments, views, scheduled_date')
-        .eq('user_id', user.id)
-        .eq('status', 'published')
-        .not('ab_pair_id', 'is', null);
       if (activeAccount) {
         metricsQuery = metricsQuery.eq('social_account_id', activeAccount.id);
         postsQuery = postsQuery.eq('social_account_id', activeAccount.id);
-        abQuery = abQuery.eq('social_account_id', activeAccount.id);
       }
 
-      const [metricsRes, postsRes, abRes] = await Promise.all([
+      const [metricsRes, postsRes] = await Promise.all([
         metricsQuery.order('date', { ascending: true }),
         postsQuery.order('likes', { ascending: false }).limit(20),
-        abQuery,
       ]);
 
       setMetrics((metricsRes.data ?? []) as PlatformMetricRow[]);
       setPosts((postsRes.data ?? []) as ContentPostRow[]);
 
-      const pairMap = new Map<string, AbPair>();
-      for (const p of (abRes.data ?? []) as ContentPostRow[]) {
-        const key = p.ab_pair_id as string;
-        if (!pairMap.has(key)) pairMap.set(key, {});
-        if (p.ab_test_group === 'A' || p.ab_test_group === 'B') {
-          pairMap.get(key)![p.ab_test_group] = p;
-        }
-      }
-      setAbPairs(Array.from(pairMap.values()).filter((pair) => pair.A && pair.B));
     } catch (err) {
       console.error('loadAnalytics error', err);
     } finally {
@@ -166,15 +155,30 @@ export function Analytics() {
     [metrics, dateValue]
   );
 
-  const kpis = useMemo(() => buildKpis(split), [split]);
+  const kpis = useMemo(
+    () => buildKpis(split).filter((k) => hasFollowerDataRef(metrics) || 
+      (k.label !== 'Followers' && k.label !== 'Net Growth')),
+    [split, metrics]
+  );
   const audienceWidget = useMemo(() => buildAudienceWidget(split), [split]);
   const engagementsWidget = useMemo(() => buildEngagementsWidget(split), [split]);
   const engagementRateWidget = useMemo(() => buildEngagementRateWidget(split), [split]);
 
-  const heatmap = useMemo(() => buildHeatmap(posts, timezone), [posts, timezone]);
-  const heatmapMax = Math.max(1, ...heatmap.flat());
+  // Follower counts still come from the direct Meta/YouTube syncs, which are
+  // currently failing auth. Rather than render a wall of zeros and quietly lie,
+  // the audience band is hidden entirely until real numbers land.
+  const hasFollowerData = useMemo(
+    () => metrics.some((m) => (m.followers_count ?? 0) > 0),
+    [metrics]
+  );
 
-  const topPosts = useMemo(() => buildTopPosts(posts, 10), [posts]);
+  const scored = useMemo(() => perf.filter((p) => p.views_multiple !== null), [perf]);
+  const heroPost = perf[0] ?? null;
+  const recentPosts = useMemo(() => perf.slice(1, 9), [perf]);
+  const laneStats = useMemo(() => buildLaneStats(perf), [perf]);
+  const platformLabel = activeAccount?.platform
+    ? PLATFORM_LABELS[activeAccount.platform] ?? activeAccount.platform
+    : 'all platforms';
 
   const hasData = metrics.length > 0 || posts.length > 0;
 
@@ -221,220 +225,99 @@ export function Analytics() {
         </div>
       ) : (
         <>
-          <KpiRow cards={kpis} />
-
-          <MetricWidget
-            title="Audience Growth"
-            subtitle="Net new followers across connected platforms during the selected period."
-            series={audienceWidget.series}
-          >
-            <BreakdownTable
-              rowHeader="Audience Metrics"
-              columns={[{ label: 'Net Growth' }]}
-              rows={audienceWidget.rows}
-            />
-          </MetricWidget>
-
-          <MetricWidget
-            title="Engagements"
-            subtitle="Total likes plus comments earned during the selected period."
-            series={engagementsWidget.series}
-          >
-            <BreakdownTable
-              rowHeader="Engagement Metrics"
-              columns={[{ label: 'Total' }]}
-              rows={engagementsWidget.rows}
-            />
-          </MetricWidget>
-
-          <MetricWidget
-            title="Engagement Rate"
-            subtitle="Engagements divided by followers, averaged across the selected period."
-            series={engagementRateWidget.series}
-          >
-            <BreakdownTable
-              rowHeader="Engagement Rate Metrics"
-              columns={[{ label: 'Rate' }]}
-              rows={engagementRateWidget.rows}
-            />
-          </MetricWidget>
-
-          {/* Best time to post heatmap (kept from prior Analytics.tsx) */}
-          {topPosts.length > 2 && (
-            <section className="border border-border bg-card">
-              <header className="px-5 pt-5 pb-3">
-                <h2 className="text-base font-semibold">Best Time to Post</h2>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Engagement intensity by day and hour. Darker means higher engagement.
-                </p>
-              </header>
-              <div className="px-5 pb-5 overflow-x-auto">
-                <div className="min-w-[640px]">
-                  <div className="flex mb-1 ml-10">
-                    {HOUR_LABELS.map((h, i) => (
-                      <div key={i} className="flex-1 text-center text-[9px] text-muted-foreground">
-                        {i % 3 === 0 ? h : ''}
-                      </div>
-                    ))}
-                  </div>
-                  {heatmap.map((dayRow, dayIdx) => (
-                    <div key={dayIdx} className="flex items-center gap-0 mb-0.5">
-                      <span className="w-10 text-xs text-muted-foreground text-right pr-2 flex-shrink-0">
-                        {DAY_LABELS[dayIdx]}
-                      </span>
-                      {dayRow.map((val, hourIdx) => {
-                        const intensity = val / heatmapMax;
-                        return (
-                          <div
-                            key={hourIdx}
-                            className="flex-1 h-6 mx-px"
-                            style={{
-                              backgroundColor:
-                                intensity > 0
-                                  ? `rgba(26, 24, 22, ${0.08 + intensity * 0.85})`
-                                  : 'var(--muted)',
-                            }}
-                            title={`${DAY_LABELS[dayIdx]} ${HOUR_LABELS[hourIdx]}: ${val} engagement`}
-                          />
-                        );
-                      })}
-                    </div>
-                  ))}
-                </div>
+          {/* ── Band 1 · Verdict ────────────────────────────────────────
+              Was that post good or bad. The multiple is the hero, not the
+              count: a raw number cannot be read without a baseline. */}
+          <section className="space-y-4">
+            <div>
+              <Eyebrow>01 · Verdict</Eyebrow>
+              <div className="mt-2">
+                <SectionHead accent="last post.">How you did on your</SectionHead>
               </div>
-            </section>
-          )}
+            </div>
 
-          {/* Top posts */}
-          <section className="border border-border bg-card">
-            <header className="px-5 pt-5 pb-3 border-b border-border">
-              <h2 className="text-base font-semibold">Top Posts</h2>
-              <p className="text-sm text-muted-foreground mt-1">
-                Ranked by engagement during the selected period.
-              </p>
-            </header>
-            {topPosts.length === 0 ? (
-              <p className="text-center py-8 text-muted-foreground text-sm">
-                No published posts found in this period.
-              </p>
+            {heroPost ? (
+              <>
+                <VerdictCard post={heroPost} />
+                {recentPosts.length > 0 && (
+                  <div className="border border-border bg-card">
+                    <header className="px-5 py-3 border-b border-border">
+                      <p className="t-micro">Before that</p>
+                    </header>
+                    <ul>
+                      {recentPosts.map((post) => (
+                        <VerdictRow key={post.id} post={post} />
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </>
             ) : (
-              <ul>
-                {topPosts.map((post, idx) => (
-                  <li key={post.id} className="flex items-start gap-4 px-5 py-4 border-b border-border last:border-b-0">
-                    <div className="w-7 h-7 border border-border bg-muted flex items-center justify-center text-xs font-semibold tabular-nums shrink-0">
-                      {idx + 1}
-                    </div>
-                    {post.thumbnail_url ? (
-                      <img
-                        src={post.thumbnail_url}
-                        alt=""
-                        className="w-16 h-16 object-cover shrink-0"
-                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                      />
-                    ) : (
-                      <div className="w-16 h-16 bg-muted border border-border flex items-center justify-center shrink-0">
-                        <FormatIcon mediaType={post.media_type} className="w-6 h-6 text-muted-foreground" />
-                      </div>
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <PlatformIcon platform={post.platform} className="w-4 h-4 shrink-0 text-muted-foreground" />
-                        <FormatIcon mediaType={post.media_type} className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                        {post.published_at && (
-                          <span className="t-micro text-muted-foreground">
-                            {format(parseISO(post.published_at), 'MMM d')}
-                          </span>
-                        )}
-                        {post.permalink && (
-                          <a
-                            href={post.permalink}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="ml-auto text-muted-foreground hover:text-foreground shrink-0"
-                            title="View post"
-                          >
-                            <ExternalLink className="w-3.5 h-3.5" />
-                          </a>
-                        )}
-                      </div>
-                      <p className="text-sm text-foreground line-clamp-2 mb-2">
-                        {post.caption || 'No caption'}
-                      </p>
-                      <div className="flex items-center gap-4 text-xs text-muted-foreground tabular-nums">
-                        <span className="inline-flex items-center gap-1"><Heart className="w-3 h-3" />{formatCount(post.likes)}</span>
-                        <span className="inline-flex items-center gap-1"><MessageCircle className="w-3 h-3" />{formatCount(post.comments)}</span>
-                        <span className="font-semibold text-foreground">{formatCount(post.engagement)} total</span>
-                        {post.engagement_rate > 0 && (
-                          <span className="text-foreground font-semibold">{formatPercent(post.engagement_rate)}</span>
-                        )}
-                      </div>
-                    </div>
-                  </li>
-                ))}
-              </ul>
+              <div className="border border-border bg-card px-5 py-8 text-center">
+                <p className="text-sm text-muted-foreground">
+                  No scored posts yet. Metrics sync every six hours.
+                </p>
+              </div>
             )}
           </section>
 
-          {/* A/B test results — kept from prior Analytics.tsx, restyled to the new shell */}
-          {abPairs.length > 0 && (
-            <section className="border border-border bg-card">
-              <header className="px-5 pt-5 pb-3 border-b border-border">
-                <h2 className="text-base font-semibold">A/B Time Test Results</h2>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Compare engagement between your two scheduled time slots.
-                </p>
-              </header>
-              <div className="p-5 space-y-4">
-                {abPairs.map((pair, idx) => {
-                  const a = pair.A!;
-                  const b = pair.B!;
-                  const engA = (a.likes ?? 0) + (a.comments ?? 0);
-                  const engB = (b.likes ?? 0) + (b.comments ?? 0);
-                  const winner = engA > engB ? 'A' : engB > engA ? 'B' : null;
-                  return (
-                    <div key={idx} className="border border-border">
-                      <div className="px-4 py-2 bg-muted t-micro text-muted-foreground">
-                        Test #{idx + 1} · {PLATFORM_LABELS[a.platform] ?? a.platform}
-                      </div>
-                      <div className="grid grid-cols-2 divide-x divide-border">
-                        {[a, b].map((post, vi) => {
-                          const label = vi === 0 ? 'A' : 'B';
-                          const eng = (post.likes ?? 0) + (post.comments ?? 0);
-                          const isWinner = winner === label;
-                          return (
-                            <div key={label} className="p-4">
-                              <div className="flex items-center gap-2 mb-2">
-                                <span
-                                  className={`t-micro px-2 py-0.5 border ${
-                                    isWinner
-                                      ? 'border-foreground bg-foreground text-primary-foreground'
-                                      : 'border-border text-foreground'
-                                  }`}
-                                >
-                                  Version {label}{isWinner ? ' · winner' : ''}
-                                </span>
-                              </div>
-                              <p className="t-micro text-muted-foreground mb-1">
-                                {post.scheduled_date ? formatInTz(post.scheduled_date, timezone) : 'Unknown time'}
-                              </p>
-                              <p className="text-sm text-foreground line-clamp-2 mb-2">
-                                {post.caption || 'No caption'}
-                              </p>
-                              <div className="flex gap-3 text-xs tabular-nums">
-                                <span className="text-muted-foreground">{formatCount(post.likes)} likes</span>
-                                <span className="text-muted-foreground">{formatCount(post.comments)} comments</span>
-                                <span className="font-semibold text-foreground">{formatCount(eng)} total</span>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })}
+          {/* ── Band 2 · Trend ──────────────────────────────────────────────
+              Am I growing. One chart, not three. The audience widget only
+              appears once follower data is real. */}
+          <section className="space-y-4 pt-4">
+            <div>
+              <Eyebrow>02 · Trend</Eyebrow>
+              <div className="mt-2">
+                <SectionHead accent="moving.">Where the numbers are</SectionHead>
               </div>
-            </section>
-          )}
+            </div>
+
+            <KpiRow cards={kpis} />
+
+            <MetricWidget
+              title="Engagements"
+              subtitle="Total likes plus comments earned during the selected period."
+              series={engagementsWidget.series}
+            >
+              <BreakdownTable
+                rowHeader="Engagement Metrics"
+                columns={[{ label: 'Total' }]}
+                rows={engagementsWidget.rows}
+              />
+            </MetricWidget>
+
+            {hasFollowerData && (
+              <MetricWidget
+                title="Audience Growth"
+                subtitle="Net new followers across connected platforms during the selected period."
+                series={audienceWidget.series}
+              >
+                <BreakdownTable
+                  rowHeader="Audience Metrics"
+                  columns={[{ label: 'Net Growth' }]}
+                  rows={audienceWidget.rows}
+                />
+              </MetricWidget>
+            )}
+          </section>
+
+          {/* ── Band 3 · What's working ─────────────────────────────────────
+              What should I make next. Lanes are the creator's own Starter Kit
+              taxonomy, so the guidance shown back is their own words. */}
+          <section className="space-y-4 pt-4">
+            <div>
+              <Eyebrow>03 · What&rsquo;s working</Eyebrow>
+              <div className="mt-2">
+                <SectionHead accent="next.">What to make</SectionHead>
+              </div>
+              <p className="text-sm text-muted-foreground mt-2">
+                Your lanes on {platformLabel}, ranked by median views. Scored
+                against {scored.length} posts with enough history to judge.
+              </p>
+            </div>
+            <LaneLeaderboard lanes={laneStats} platformLabel={platformLabel} />
+          </section>
+
         </>
       )}
     </div>
@@ -508,6 +391,12 @@ function latestStock(byPlatform: Map<string, PlatformMetricRow[]>, field: keyof 
     total += Number(list[list.length - 1][field] ?? 0);
   }
   return total;
+}
+
+/** True once any platform reports a non-zero follower count. Gates every
+ *  follower-derived surface so a broken sync reads as absent, not as zero. */
+function hasFollowerDataRef(metrics: PlatformMetricRow[]): boolean {
+  return metrics.some((m) => (m.followers_count ?? 0) > 0);
 }
 
 function buildKpis(split: SplitMetrics) {
@@ -706,61 +595,6 @@ function perPlatformDelta(
   const list = byPlatform.get(platform) ?? [];
   if (list.length === 0) return 0;
   return Math.max(0, Number(list[list.length - 1][field] ?? 0) - Number(list[0][field] ?? 0));
-}
-
-// ── Heatmap + Top Posts builders ────────────────────────────────────────────
-
-function buildHeatmap(posts: ContentPostRow[], timezone: string): number[][] {
-  const grid: number[][] = Array.from({ length: 7 }, () => Array(24).fill(0));
-  for (const p of posts) {
-    const pub = p.published_at ?? p.published_date;
-    if (!pub) continue;
-    try {
-      const { day, hour } = getLocalDayAndHour(pub, timezone);
-      const eng = (p.likes ?? 0) + (p.comments ?? 0);
-      grid[day][hour] += eng;
-    } catch (_) {
-      /* skip invalid dates */
-    }
-  }
-  return grid;
-}
-
-interface TopPost {
-  id: string;
-  platform: string;
-  caption: string;
-  thumbnail_url: string | null;
-  permalink: string | null;
-  media_type: string | null;
-  likes: number;
-  comments: number;
-  engagement: number;
-  engagement_rate: number;
-  published_at: string;
-}
-
-function buildTopPosts(posts: ContentPostRow[], limit: number): TopPost[] {
-  const buildPermalink = (p: ContentPostRow): string | null => {
-    if (p.instagram_post_id) return `https://www.instagram.com/p/${p.instagram_post_id}/`;
-    if (p.youtube_video_id) return `https://www.youtube.com/watch?v=${p.youtube_video_id}`;
-    if (p.tiktok_post_id) return `https://www.tiktok.com/@user/video/${p.tiktok_post_id}`;
-    return null;
-  };
-  return posts.slice(0, limit).map((p) => ({
-    id: p.id,
-    platform: p.platform,
-    caption: p.caption ?? '',
-    thumbnail_url: p.thumbnail_url ?? null,
-    permalink: buildPermalink(p),
-    media_type: p.media_type ?? 'image',
-    likes: p.likes ?? 0,
-    comments: p.comments ?? 0,
-    engagement: (p.likes ?? 0) + (p.comments ?? 0),
-    engagement_rate:
-      (p.views ?? 0) > 0 ? (((p.likes ?? 0) + (p.comments ?? 0)) / (p.views ?? 1)) * 100 : 0,
-    published_at: p.published_at ?? p.published_date ?? '',
-  }));
 }
 
 // ── Small helpers ───────────────────────────────────────────────────────────

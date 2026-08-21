@@ -15,6 +15,9 @@
   /* Clio: Light */
   :root {
     --radius: 0px;
+    /* Hoefler-style serif for the gold accent word in section heads.
+       Matches the Starter Kit's italic accent treatment. */
+    --font-serif: 'Hoefler Text', 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
     --background:         #F7F4EE;
     --card:               #FBF9F4;
     --popover:            #FBF9F4;
@@ -134,6 +137,14 @@
     line-height: 1.55;
     letter-spacing: -0.005em;
     color: var(--muted-foreground);
+  }
+  /* The signature Starter Kit move: final word of a heading set in a gold
+     serif italic against the heavy sans. Used once per section, never in body. */
+  .t-accent {
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-weight: 400;
+    color: var(--accent);
   }
   .t-micro {
     font-family: var(--font-mono);

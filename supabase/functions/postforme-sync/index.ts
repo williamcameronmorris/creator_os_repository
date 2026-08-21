@@ -20,27 +20,49 @@ import { createClient } from "npm:@supabase/supabase-js@2";
  *      the `Default_PFM_User_Id` Supabase secret. (Single-tenant for now —
  *      Cam's PFM workspace is shared, so all accounts belong to one user.)
  *
- * Setup (manual):
- *   - Set Supabase secret `Default_PFM_User_Id` = <your auth.users.id>
- *   - Set Supabase secret `Cron_Secret` = <random>
- *   - Schedule via Supabase Dashboard:
- *       Functions > postforme-sync > Schedule > every 6 hours (cron 0 0,6,12,18)
- *       Body: {"cronSecret":"<your secret>"}
+ * METRICS SOURCE (changed 2026-08-21):
+ *
+ *   Metrics now come from the ACCOUNT FEED with `?expand=metrics`, not from
+ *   /v1/social-post-results. A live probe against all five connected accounts
+ *   showed social-post-results returns zero rows (it only ever covers posts
+ *   PFM itself published), which is why platform_metrics had gone stale while
+ *   this function reported success every six hours. The feed returns real
+ *   lifetime metrics for every post on every connected account:
+ *
+ *     instagram  views reach likes comments shares saved follows
+ *                profile_visits profile_activity total_interactions
+ *     youtube    views likes comments dislikes
+ *     tiktok     view_count like_count comment_count share_count
+ *     threads    views likes replies reposts quotes shares
+ *     facebook   reactions_total video_views reach comments shares (+video_*)
+ *
+ *   social-post-results is still queried, but only to mirror status/metrics
+ *   onto posts Cliopatra published through PFM. It is no longer the source of
+ *   the platform_metrics roll-up.
+ *
+ * PFM does NOT expose follower counts anywhere in its public API (verified
+ * against the account object, which carries only id/platform/username/status/
+ * tokens/profile_photo_url/metadata). followers_count therefore stays owned by
+ * instagram-sync and youtube-sync, and this function deliberately omits it
+ * from its platform_metrics writes so it never clobbers theirs.
  *
  * What it writes:
  *
- *   pfm_account_snapshots — every run inserts one row per connected PFM
- *     account with the latest follower count + raw feed payload (kept for
- *     debugging + future analysis).
+ *   pfm_account_snapshots — one row per connected PFM account per run, with
+ *     the raw feed payload kept for debugging + future analysis.
  *
- *   platform_metrics — upsert one row per (user, platform, today). Fills
- *     in followers_count + same-day aggregates (views/likes/comments/etc.)
- *     for any post results published today.
+ *   content_posts — imports feed posts not already mirrored locally, then
+ *     stamps live metrics (views/likes/comments/saves/shares/reach/
+ *     engagement_rate) onto every mirrored row the feed knows about.
  *
- *   content_posts — for any post result whose `post_id` matches a row's
- *     `postforme_post_id`, update views/likes/comments/saves/shares/
- *     engagement_rate, set status='published', set published_at. This
- *     keeps the local mirror in sync.
+ *   content_post_metrics_daily — one append-only snapshot per post per day,
+ *     which is what powers period-over-period math at the post level.
+ *
+ *   platform_metrics — one row per (user, platform, TODAY) holding the
+ *     aggregate across the posts in the feed window. Never writes the
+ *     GENERATED columns (views/likes/comments/shares/saves are generated from
+ *     the matching total_* columns; writing them raises 428C9 and aborts the
+ *     whole upsert).
  */
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -49,6 +71,10 @@ const POSTFORME_API_KEY = Deno.env.get("Post_For_Me_API");
 const CRON_SECRET = Deno.env.get("Cron_Secret");
 const DEFAULT_PFM_USER_ID = Deno.env.get("Default_PFM_User_Id");
 const PFM_BASE = "https://api.postforme.dev";
+
+/** Feed pages to walk per account. 50/page, so 3 pages ≈ the last 150 posts. */
+const MAX_FEED_PAGES = 3;
+const FEED_PAGE_SIZE = 50;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -61,6 +87,7 @@ interface PfmAccount {
   platform: string;
   username?: string | null;
   status?: string;
+  profile_photo_url?: string | null;
 }
 
 interface NormalizedMetrics {
@@ -69,19 +96,19 @@ interface NormalizedMetrics {
   comments: number;
   saves: number;
   shares: number;
+  reach: number;
   engagement_rate: number;
 }
 
 /**
  * Normalize a per-platform metrics object into our common shape.
  *
- * PFM exposes a different DTO per platform (Instagram/YouTube/TikTok/etc).
- * The exact field names aren't fully documented in the public OpenAPI spec,
- * so we probe a list of common aliases. Anything we can't find stays at 0.
- *
- * Update this map as we observe real responses.
+ * Aliases below are the REAL field names observed from PFM on 2026-08-21 for
+ * all five of Cam's connected accounts, not guesses. Three of them were wrong
+ * before this pass: Instagram spells saves `saved`, Threads spells comments
+ * `replies`, and Facebook spells likes `reactions_total`.
  */
-function normalizeMetrics(platform: string, raw: unknown): NormalizedMetrics {
+function normalizeMetrics(raw: unknown): NormalizedMetrics {
   const m = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
 
   const num = (...keys: string[]): number => {
@@ -93,18 +120,31 @@ function normalizeMetrics(platform: string, raw: unknown): NormalizedMetrics {
     return 0;
   };
 
+  // instagram/youtube/threads: views · tiktok: view_count · facebook: video_views
   const views = num("views", "view_count", "video_views", "impressions", "play_count", "plays");
-  const likes = num("likes", "like_count", "reactions", "favorite_count", "digg_count");
-  const comments = num("comments", "comment_count", "reply_count");
-  const saves = num("saves", "save_count", "bookmarks");
+  // facebook: reactions_total · tiktok: like_count · rest: likes
+  const likes = num("likes", "like_count", "reactions_total", "reactions", "favorite_count", "digg_count");
+  // threads: replies · tiktok: comment_count · rest: comments
+  const comments = num("comments", "comment_count", "replies", "reply_count");
+  // instagram: saved (no other platform reports saves)
+  const saves = num("saves", "saved", "save_count", "bookmarks");
+  // tiktok: share_count · rest: shares
   const shares = num("shares", "share_count", "retweets", "reposts");
+  // instagram + facebook only
+  const reach = num("reach");
+
+  // Instagram hands us total_interactions directly; everywhere else sum what
+  // we have. Rate is against reach when the platform reports it (that is the
+  // number a brand recognises), else against views.
+  const interactions = num("total_interactions") || (likes + comments + saves + shares);
+  const denominator = reach > 0 ? reach : views;
 
   const explicit = num("engagement_rate", "engagement");
   const engagement_rate = explicit > 0
     ? (explicit > 1 ? explicit : explicit * 100) // accept 0-1 fraction or 0-100 percent
-    : (views > 0 ? ((likes + comments + saves + shares) / views) * 100 : 0);
+    : (denominator > 0 ? (interactions / denominator) * 100 : 0);
 
-  return { views, likes, comments, saves, shares, engagement_rate };
+  return { views, likes, comments, saves, shares, reach, engagement_rate };
 }
 
 async function pfmFetch(path: string, init?: RequestInit): Promise<Response> {
@@ -139,6 +179,8 @@ interface FeedPost {
   posted_at: string | null;
   media_urls: string[];
   thumbnail_url: string | null;
+  /** null when the platform/account returned no metrics block for this post. */
+  metrics: NormalizedMetrics | null;
 }
 
 /** FeedPost stamped with the PFM account it came from (multi-account support). */
@@ -148,44 +190,93 @@ type AccountFeedPost = FeedPost & {
 };
 
 interface FeedResult {
-  followers: number; // PFM doesn't expose follower counts in public API; always 0 today
   posts: FeedPost[];
+  /** First page only — the raw payload is kept for debugging, not every page. */
   raw: unknown;
+  pagesFetched: number;
 }
 
+/**
+ * Walk an account's feed with metrics expanded.
+ *
+ * `expand=metrics` is what makes PFM attach the per-post metrics object. The
+ * account must have been connected with the `feeds` permission for this to
+ * return anything; all five of Cam's accounts already have it.
+ */
 async function getAccountFeed(accountId: string): Promise<FeedResult | null> {
-  const res = await pfmFetch(`/v1/social-account-feeds/${encodeURIComponent(accountId)}`);
-  if (!res.ok) return null;
-  const body = await res.json();
-  // PFM's feed endpoint returns { data: [posts], meta: {...} }. Each post has
-  // platform, platform_post_id, platform_url, caption, posted_at, media[].
-  // No follower count anywhere in the response — PFM doesn't expose that today.
-  const arr: Record<string, unknown>[] = Array.isArray(body?.data) ? body.data : [];
-  const posts: FeedPost[] = arr.map((p) => {
-    const media: { url?: string; thumbnail_url?: string }[] = Array.isArray(p.media) ? p.media : [];
-    return {
-      platform: String(p.platform || "").toLowerCase(),
-      platform_post_id: (p.platform_post_id as string) || null,
-      platform_url: (p.platform_url as string) || null,
-      caption: (p.caption as string) || null,
-      posted_at: (p.posted_at as string) || null,
-      media_urls: media.map((m) => m.url).filter((u): u is string => Boolean(u)),
-      thumbnail_url: media[0]?.thumbnail_url || null,
-    };
-  }).filter((p) => p.platform_post_id);
-  return { followers: 0, posts, raw: body };
+  const posts: FeedPost[] = [];
+  let firstRaw: unknown = null;
+  let cursor: string | null = null;
+  let pagesFetched = 0;
+
+  for (let page = 0; page < MAX_FEED_PAGES; page++) {
+    const params = new URLSearchParams({
+      expand: "metrics",
+      limit: String(FEED_PAGE_SIZE),
+    });
+    if (cursor) params.set("cursor", cursor);
+
+    const res = await pfmFetch(
+      `/v1/social-account-feeds/${encodeURIComponent(accountId)}?${params.toString()}`,
+    );
+    if (!res.ok) break;
+    const body = await res.json();
+    if (page === 0) firstRaw = body;
+    pagesFetched++;
+
+    const arr: Record<string, unknown>[] = Array.isArray(body?.data) ? body.data : [];
+    if (arr.length === 0) break;
+
+    for (const p of arr) {
+      const media: { url?: string; thumbnail_url?: string }[] = Array.isArray(p.media) ? p.media : [];
+      const hasMetrics = p.metrics && typeof p.metrics === "object";
+      posts.push({
+        platform: String(p.platform || "").toLowerCase(),
+        platform_post_id: (p.platform_post_id as string) || null,
+        platform_url: (p.platform_url as string) || null,
+        caption: (p.caption as string) || null,
+        posted_at: (p.posted_at as string) || null,
+        media_urls: media.map((m) => m.url).filter((u): u is string => Boolean(u)),
+        thumbnail_url: media[0]?.thumbnail_url || null,
+        metrics: hasMetrics ? normalizeMetrics(p.metrics) : null,
+      });
+    }
+
+    const meta = (body && typeof body === "object" ? body.meta : null) as
+      | { cursor?: string | null; has_more?: boolean; next?: unknown }
+      | null;
+    if (!meta?.has_more) break;
+    const nextCursor = meta?.cursor ?? null;
+    // PFM echoes the cursor it used when there is nothing further; bail rather
+    // than refetch the same page until MAX_FEED_PAGES.
+    if (!nextCursor || nextCursor === cursor) break;
+    cursor = nextCursor;
+  }
+
+  if (pagesFetched === 0) return null;
+
+  // Dedupe by platform_post_id. YouTube's feed repeats entries across pages,
+  // which produced "ON CONFLICT DO UPDATE command cannot affect row a second
+  // time" when the same content_posts id landed twice in one upsert batch.
+  const seen = new Set<string>();
+  const unique = posts.filter((p) => {
+    if (!p.platform_post_id) return false;
+    if (seen.has(p.platform_post_id)) return false;
+    seen.add(p.platform_post_id);
+    return true;
+  });
+
+  return { posts: unique, raw: firstRaw, pagesFetched };
 }
 
 interface PostResult {
   postId: string;
   platform: string;
-  /** PFM social account id the result belongs to, when the payload carries one. */
   socialAccountId: string | null;
   publishedAt: string | null;
   platformPostId: string | null;
   status: string;
   metrics: NormalizedMetrics;
-  raw: unknown;
 }
 
 function mapPostResult(r: Record<string, unknown>): PostResult {
@@ -210,29 +301,23 @@ function mapPostResult(r: Record<string, unknown>): PostResult {
     ?? null;
   const status = String(r.status || (r.result as Record<string, unknown> | undefined)?.status || "");
 
-  // Per-platform metrics may live under r.metrics, r.result.metrics, or
-  // directly on r — we try each.
   const metricsBlob = r.metrics
     ?? (r.result as Record<string, unknown> | undefined)?.metrics
     ?? r;
-  const metrics = normalizeMetrics(platform, metricsBlob);
+  const metrics = normalizeMetrics(metricsBlob);
 
-  return { postId, platform, socialAccountId, publishedAt, platformPostId, status, metrics, raw: r };
+  return { postId, platform, socialAccountId, publishedAt, platformPostId, status, metrics };
 }
 
 /**
- * Fetch ALL post results, paginating through PFM's offset/limit envelope
- * ({ data: [...], meta: { total, offset, limit, next } }). The previous
- * implementation grabbed a single 200-row page, so any user with more than
- * 200 lifetime post-results silently lost metrics on the older ones.
- *
- * Guards: a MAX_PAGES cap bounds runaway, and a per-page "added 0 new rows"
- * check stops the loop if PFM ever ignores `offset` (which would otherwise
- * refetch page 0 forever). Dedup is by post_id+platform.
+ * Fetch post results for posts PFM itself published. As of 2026-08-21 this
+ * returns zero rows for Cam's workspace (everything is published natively),
+ * so it no longer feeds the platform_metrics roll-up — it only mirrors status
+ * onto Cliopatra-published rows. Kept paginating for the day that changes.
  */
 async function listPostResults(externalId?: string): Promise<PostResult[]> {
   const PAGE = 100;
-  const MAX_PAGES = 30; // hard safety cap → up to 3000 results/user/run
+  const MAX_PAGES = 30;
   const all: PostResult[] = [];
   const seen = new Set<string>();
   let offset = 0;
@@ -268,9 +353,9 @@ async function listPostResults(externalId?: string): Promise<PostResult[]> {
       | { total?: number; next?: unknown }
       | null;
 
-    if (added === 0) break;                                     // offset ignored / all dupes → stop
-    if (arr.length < PAGE) break;                               // last (partial) page
-    if (meta && "next" in meta && meta.next == null) break;     // PFM signals no more pages
+    if (added === 0) break;
+    if (arr.length < PAGE) break;
+    if (meta && "next" in meta && meta.next == null) break;
     if (meta && typeof meta.total === "number" && all.length >= meta.total) break;
     offset += arr.length;
   }
@@ -283,6 +368,9 @@ interface SyncSummary {
   accountsSynced: number;
   snapshotsAdded: number;
   feedPostsImported: number;
+  feedPostsWithMetrics: number;
+  postMetricsUpdated: number;
+  dailySnapshotsWritten: number;
   postsSynced: number;
   postsMatched: number;
   metricsUpserted: number;
@@ -295,6 +383,9 @@ async function syncForUser(userId: string): Promise<SyncSummary> {
     accountsSynced: 0,
     snapshotsAdded: 0,
     feedPostsImported: 0,
+    feedPostsWithMetrics: 0,
+    postMetricsUpdated: 0,
+    dailySnapshotsWritten: 0,
     postsSynced: 0,
     postsMatched: 0,
     metricsUpserted: 0,
@@ -309,8 +400,6 @@ async function syncForUser(userId: string): Promise<SyncSummary> {
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
   // 1. Pull connected accounts + feeds in parallel
-  // Filter PFM accounts by this user's external_id so each Cliopatra user
-  // only sees their own connected accounts in the shared PFM workspace.
   const accounts = await listAccounts(userId);
   summary.accountsSynced = accounts.length;
 
@@ -332,8 +421,6 @@ async function syncForUser(userId: string): Promise<SyncSummary> {
           raw: feed.raw,
         });
         if (!feedPostsByPlatform[account.platform]) feedPostsByPlatform[account.platform] = [];
-        // Stamp each feed post with the account it came from so the
-        // content_posts mirror carries per-account attribution.
         feedPostsByPlatform[account.platform].push(
           ...feed.posts.map((p) => ({
             ...p,
@@ -353,10 +440,8 @@ async function syncForUser(userId: string): Promise<SyncSummary> {
     else summary.snapshotsAdded = snapshotRows.length;
   }
 
-  // Import feed posts into content_posts (deduped by platform_post_id).
-  // Each platform's feed gives us recent posts that may have been published
-  // outside Cliopatra. We mirror them so OfficeHub + Clio see the user's full
-  // recent activity rather than only posts created via Compose.
+  // Import feed posts into content_posts (deduped by platform_post_id), then
+  // stamp live metrics onto every mirrored row.
   for (const [platform, posts] of Object.entries(feedPostsByPlatform)) {
     if (posts.length === 0) continue;
     const platformPostIds = posts.map((p) => p.platform_post_id).filter((id): id is string => Boolean(id));
@@ -369,7 +454,7 @@ async function syncForUser(userId: string): Promise<SyncSummary> {
     // exact post timestamp catches those.
     const { data: existing, error: existingErr } = await supabase
       .from("content_posts")
-      .select("platform_post_id, published_at")
+      .select("id, platform_post_id, published_at")
       .eq("user_id", userId)
       .eq("platform", platform);
     if (existingErr) {
@@ -415,15 +500,121 @@ async function syncForUser(userId: string): Promise<SyncSummary> {
         status: "published",
         provider: "postforme",
         content_type: "post",
+        // Seed metrics on insert so a brand-new row is never blank.
+        views: p.metrics?.views ?? null,
+        likes: p.metrics?.likes ?? null,
+        comments: p.metrics?.comments ?? null,
+        saves: p.metrics?.saves ?? null,
+        shares: p.metrics?.shares ?? null,
+        reach: p.metrics?.reach ?? null,
+        engagement_rate: p.metrics?.engagement_rate ?? null,
       }));
 
-    if (newRows.length === 0) continue;
-    const { error: insertErr } = await supabase.from("content_posts").insert(newRows);
-    if (insertErr) summary.errors.push(`feed insert ${platform}: ${insertErr.message}`);
-    else summary.feedPostsImported += newRows.length;
+    if (newRows.length > 0) {
+      // DO NOTHING on conflict rather than a bare insert: content_posts has a
+      // UNIQUE (user_id, platform, platform_post_id), and one duplicate slipping
+      // past the dedup above would otherwise abort the entire batch. Existing
+      // rows are left exactly as they are — only the metrics pass below touches
+      // them, so a legacy provider='direct' row never gets reassigned.
+      const { error: insertErr } = await supabase
+        .from("content_posts")
+        .upsert(newRows, {
+          onConflict: "user_id,platform,platform_post_id",
+          ignoreDuplicates: true,
+        });
+      if (insertErr) summary.errors.push(`feed insert ${platform}: ${insertErr.message}`);
+      else summary.feedPostsImported += newRows.length;
+    }
+
+    // ── Stamp metrics onto mirrored rows ───────────────────────────────────
+    // Re-read ids (the insert above may have added rows) and map them to the
+    // feed's platform_post_id so we can write both the current value on
+    // content_posts and today's append-only snapshot.
+    const withMetrics = posts.filter((p) => p.metrics && p.platform_post_id);
+    summary.feedPostsWithMetrics += withMetrics.length;
+    if (withMetrics.length === 0) continue;
+
+    const { data: rows, error: rowsErr } = await supabase
+      .from("content_posts")
+      .select("id, platform_post_id")
+      .eq("user_id", userId)
+      .eq("platform", platform)
+      .in("platform_post_id", withMetrics.map((p) => p.platform_post_id as string));
+    if (rowsErr) {
+      summary.errors.push(`metrics lookup ${platform}: ${rowsErr.message}`);
+      continue;
+    }
+    const idByPlatformPostId = new Map(
+      (rows || [])
+        .filter((r) => r.platform_post_id)
+        .map((r) => [r.platform_post_id as string, r.id as string]),
+    );
+
+    const postUpdates: Record<string, unknown>[] = [];
+    const dailyRows: Record<string, unknown>[] = [];
+    for (const p of withMetrics) {
+      const id = idByPlatformPostId.get(p.platform_post_id as string);
+      if (!id) continue;
+      const m = p.metrics as NormalizedMetrics;
+      // id is read straight from the table, so ON CONFLICT (id) always fires
+      // and this behaves as an update. user_id/platform are included to keep
+      // the INSERT tuple valid before the conflict resolves.
+      const upd: Record<string, unknown> = {
+        id,
+        user_id: userId,
+        platform,
+        views: m.views,
+        likes: m.likes,
+        comments: m.comments,
+        saves: m.saves,
+        shares: m.shares,
+        reach: m.reach,
+        engagement_rate: m.engagement_rate,
+      };
+      // Instagram and Facebook CDN URLs are SIGNED and expire (the CDN starts
+      // answering "URL signature expired"), so a thumbnail written once at
+      // import goes dead within weeks and every post image in the app breaks.
+      // PFM hands back freshly signed URLs on every feed call, so refresh them
+      // on each sync. Only overwrite when the feed actually supplied one --
+      // Threads text posts have no media and must not blank an existing image.
+      if (p.thumbnail_url) upd.thumbnail_url = p.thumbnail_url;
+      if (p.media_urls.length > 0) upd.media_urls = p.media_urls;
+      postUpdates.push(upd);
+      dailyRows.push({
+        post_id: id,
+        user_id: userId,
+        platform,
+        snapshot_date: today,
+        metrics: {
+          views: m.views,
+          likes: m.likes,
+          comments: m.comments,
+          saves: m.saves,
+          shares: m.shares,
+          reach: m.reach,
+        },
+      });
+    }
+
+    if (postUpdates.length > 0) {
+      const { error } = await supabase
+        .from("content_posts")
+        .upsert(postUpdates, { onConflict: "id" });
+      if (error) summary.errors.push(`metrics update ${platform}: ${error.message}`);
+      else summary.postMetricsUpdated += postUpdates.length;
+    }
+
+    if (dailyRows.length > 0) {
+      const { error } = await supabase
+        .from("content_post_metrics_daily")
+        .upsert(dailyRows, { onConflict: "post_id,snapshot_date" });
+      if (error) summary.errors.push(`daily snapshot ${platform}: ${error.message}`);
+      else summary.dailySnapshotsWritten += dailyRows.length;
+    }
   }
 
-  // 2. Pull post results, normalize, write to platform_metrics + content_posts
+  // 2. Mirror status/metrics onto posts Cliopatra published through PFM.
+  //    NOTE: this no longer drives platform_metrics — see the header comment.
   let postResults: PostResult[] = [];
   try {
     postResults = await listPostResults(userId);
@@ -432,48 +623,7 @@ async function syncForUser(userId: string): Promise<SyncSummary> {
     summary.errors.push(`post results: ${(err as Error).message}`);
   }
 
-  // Aggregate post results by (platform, date) for the daily platform_metrics roll-up
-  const dailyAgg: Record<string, {
-    user_id: string;
-    platform: string;
-    date: string;
-    total_posts: number;
-    total_views: number;
-    total_likes: number;
-    total_comments: number;
-    total_shares: number;
-    total_saves: number;
-    avg_engagement_rate: number;
-  }> = {};
-
-  // Update content_posts mirror rows with the live metrics
   for (const result of postResults) {
-    const datePart = result.publishedAt ? result.publishedAt.slice(0, 10) : null;
-    const key = `${result.platform}:${datePart || today}`;
-    if (!dailyAgg[key]) {
-      dailyAgg[key] = {
-        user_id: userId,
-        platform: result.platform,
-        date: datePart || today,
-        total_posts: 0,
-        total_views: 0,
-        total_likes: 0,
-        total_comments: 0,
-        total_shares: 0,
-        total_saves: 0,
-        avg_engagement_rate: 0,
-      };
-    }
-    const a = dailyAgg[key];
-    a.total_posts += 1;
-    a.total_views += result.metrics.views;
-    a.total_likes += result.metrics.likes;
-    a.total_comments += result.metrics.comments;
-    a.total_shares += result.metrics.shares;
-    a.total_saves += result.metrics.saves;
-    a.avg_engagement_rate += result.metrics.engagement_rate;
-
-    // Update local content_posts mirror by postforme_post_id + platform.
     const updates: Record<string, unknown> = {
       views: result.metrics.views,
       likes: result.metrics.likes,
@@ -517,9 +667,6 @@ async function syncForUser(userId: string): Promise<SyncSummary> {
         .eq("postforme_post_id", result.postId)
         .eq("platform", result.platform)
         .eq("user_id", userId);
-      // When the result names an account, only legacy rows (no account id)
-      // may absorb the fallback — otherwise we'd clobber a sibling account's
-      // row on the same platform.
       if (result.socialAccountId) fallback = fallback.is("social_account_id", null);
       const { error, count } = await fallback.select("id");
       if (error) matchErr = error.message;
@@ -530,49 +677,43 @@ async function syncForUser(userId: string): Promise<SyncSummary> {
     else summary.postsMatched += matched;
   }
 
-  // Finalize avg_engagement_rate (we summed; divide by total_posts)
-  for (const k of Object.keys(dailyAgg)) {
-    const a = dailyAgg[k];
-    if (a.total_posts > 0) a.avg_engagement_rate = a.avg_engagement_rate / a.total_posts;
+  // 3. Roll the feed metrics up into one platform_metrics row per platform for
+  //    TODAY. This is a snapshot of current state, which is what Analytics and
+  //    the media kit both read — not a per-publish-date bucket.
+  const metricRows: Record<string, unknown>[] = [];
+  for (const [platform, posts] of Object.entries(feedPostsByPlatform)) {
+    const scored = posts.filter((p) => p.metrics);
+    if (scored.length === 0) continue;
+    let views = 0, likes = 0, comments = 0, shares = 0, saves = 0, erSum = 0;
+    for (const p of scored) {
+      const m = p.metrics as NormalizedMetrics;
+      views += m.views; likes += m.likes; comments += m.comments;
+      shares += m.shares; saves += m.saves; erSum += m.engagement_rate;
+    }
+    metricRows.push({
+      user_id: userId,
+      platform,
+      date: today,
+      social_account_id: null,
+      // total_* only. views/likes/comments/shares/saves are GENERATED ALWAYS
+      // from these; writing them raises 428C9 and kills the whole upsert.
+      total_views: views,
+      total_likes: likes,
+      total_comments: comments,
+      total_shares: shares,
+      total_saves: saves,
+      avg_engagement_rate: erSum / scored.length,
+      // followers_count and total_posts are deliberately omitted. PFM does not
+      // expose either, and naming them here would null out the values
+      // instagram-sync / youtube-sync wrote for the same (user, platform, day).
+    });
   }
-
-  // Upsert platform_metrics rows. We replace each (user, platform, date) row
-  // outright so re-running converges to PFM's latest numbers rather than
-  // double-counting. PFM doesn't expose follower counts via the public API
-  // today, so followers_count stays null until we wire a different source.
-  //
-  // TODO(account-separation follow-up): aggregate per (platform, ACCOUNT, date)
-  // instead of per (platform, date) and stamp social_account_id on each row,
-  // so two accounts on the same platform stop sharing one daily roll-up. Until
-  // then these rows stay user-level (social_account_id null → key '') and
-  // surface under "All accounts" in Analytics.
-  const metricRows = Object.values(dailyAgg).map((a) => ({
-    user_id: a.user_id,
-    platform: a.platform,
-    date: a.date,
-    social_account_id: null,
-    total_posts: a.total_posts,
-    total_views: a.total_views,
-    total_likes: a.total_likes,
-    total_comments: a.total_comments,
-    total_shares: a.total_shares,
-    total_saves: a.total_saves,
-    views: a.total_views,
-    likes: a.total_likes,
-    comments: a.total_comments,
-    shares: a.total_shares,
-    saves: a.total_saves,
-    avg_engagement_rate: a.avg_engagement_rate,
-    followers_count: null,
-  }));
 
   if (metricRows.length > 0) {
     // Conflict target includes social_account_key (STORED generated column,
     // coalesce(social_account_id,'')) — the account-separation migration
     // replaced UNIQUE(user_id,platform,date) with this 4-column key so legacy
-    // roll-ups and future per-account rows coexist. Deploy this function
-    // right after that migration; the old 3-column target errors against the
-    // new schema.
+    // roll-ups and future per-account rows coexist.
     const { error } = await supabase
       .from("platform_metrics")
       .upsert(metricRows, { onConflict: "user_id,platform,date,social_account_key" });
@@ -646,15 +787,6 @@ Deno.serve(async (req) => {
     const summary = await syncForUser(userId);
 
     // ── Trigger caption/voice analysis (fire-and-forget) ────────────────────
-    // Same cron-mode trigger instagram-sync uses: auth rides in the body as
-    // { cronSecret, userId } (requireUserOrCron). analyze-captions' own 24h
-    // freshness check prevents churn; failures never block the sync response.
-    //
-    // TODO(account-separation follow-up): this auto-build stays USER-LEVEL for
-    // now (no socialAccountId → refreshes the main voice). Per-account
-    // auto-build would fan out one analyze-captions call per connected account
-    // ({ ...body, socialAccountId: account.id }); until then account voices
-    // are built manually from the Voice card.
     fetch(`${SUPABASE_URL}/functions/v1/analyze-captions`, {
       method: "POST",
       headers: {
