@@ -1,16 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
-import {
-  TrendingUp, Heart, MessageCircle, Instagram, Youtube,
-  Facebook, Twitter, Cloud,
-  ExternalLink, Film, Image as ImageIcon, Layers,
-} from 'lucide-react';
+import { TrendingUp } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
-import { useTimezone } from '../hooks/useTimezone';
 import { useAccount } from '../contexts/AccountContext';
-import { getLocalDayAndHour, formatInTz } from '../lib/timezone';
-import { ThreadsIcon } from '../components/icons/ThreadsIcon';
 import { KpiRow } from '../components/analytics/KpiRow';
 import { MetricWidget } from '../components/analytics/MetricWidget';
 import { BreakdownTable } from '../components/analytics/BreakdownTable';
@@ -77,7 +70,6 @@ interface ContentPostRow {
 
 export function Analytics() {
   const { user } = useAuth();
-  const { timezone } = useTimezone();
   const { activeAccount } = useAccount();
 
   const [dateValue, setDateValue] = useState<DateComparisonValue>(() => defaultDateComparison());
@@ -162,7 +154,6 @@ export function Analytics() {
   );
   const audienceWidget = useMemo(() => buildAudienceWidget(split), [split]);
   const engagementsWidget = useMemo(() => buildEngagementsWidget(split), [split]);
-  const engagementRateWidget = useMemo(() => buildEngagementRateWidget(split), [split]);
 
   // Follower counts still come from the direct Meta/YouTube syncs, which are
   // currently failing auth. Rather than render a wall of zeros and quietly lie,
@@ -534,59 +525,6 @@ function buildEngagementsWidget(split: SplitMetrics) {
   return { series, rows };
 }
 
-function buildEngagementRateWidget(split: SplitMetrics) {
-  // Per-day rate uses the daily snapshot's avg_engagement_rate field already
-  // computed by each sync job. Sum across platforms = simple average weighted
-  // by platform presence (one number per platform per day, mean of those).
-  const dailyMap = new Map<string, { sum: number; count: number }>();
-  for (const r of split.current) {
-    const key = format(parseISO(r.date), 'MMM d');
-    const cell = dailyMap.get(key) ?? { sum: 0, count: 0 };
-    cell.sum += r.avg_engagement_rate ?? 0;
-    cell.count += 1;
-    dailyMap.set(key, cell);
-  }
-  const series: ChartSeries[] = [
-    {
-      name: 'Engagement Rate',
-      variant: 'line',
-      color: 'var(--chart-1)',
-      data: Array.from(dailyMap.entries()).map(([x, v]) => ({
-        x,
-        y: v.count > 0 ? v.sum / v.count : 0,
-      })),
-    },
-  ];
-
-  const meanRate = (rows: PlatformMetricRow[]) => {
-    if (rows.length === 0) return 0;
-    return rows.reduce((s, r) => s + (r.avg_engagement_rate ?? 0), 0) / rows.length;
-  };
-
-  const curRate = meanRate(split.current);
-  const prevRate = meanRate(split.previous);
-
-  const rows: BreakdownRow[] = [
-    {
-      label: 'Engagement Rate',
-      values: [formatPercent(curRate, 2)],
-      delta: computeDelta(curRate, split.previous.length > 0 ? prevRate : null),
-      isTotal: true,
-    },
-    ...Array.from(split.byPlatformCurrent.keys()).map((platform): BreakdownRow => {
-      const cur = meanRate(split.byPlatformCurrent.get(platform) ?? []);
-      const prev = meanRate(split.byPlatformPrevious.get(platform) ?? []);
-      return {
-        label: `${PLATFORM_LABELS[platform] ?? platform} Engagement Rate`,
-        values: [formatPercent(cur, 2)],
-        delta: computeDelta(cur, split.previous.length > 0 ? prev : null),
-      };
-    }),
-  ];
-
-  return { series, rows };
-}
-
 function perPlatformDelta(
   byPlatform: Map<string, PlatformMetricRow[]>,
   platform: string,
@@ -606,19 +544,4 @@ function isoDate(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
-function PlatformIcon({ platform, className }: { platform: string; className?: string }) {
-  if (platform === 'instagram') return <Instagram className={className} />;
-  if (platform === 'youtube') return <Youtube className={className} />;
-  if (platform === 'threads') return <ThreadsIcon className={className} />;
-  if (platform === 'facebook') return <Facebook className={className} />;
-  if (platform === 'x') return <Twitter className={className} />;
-  if (platform === 'bluesky') return <Cloud className={className} />;
-  return <TrendingUp className={className} />;
-}
 
-function FormatIcon({ mediaType, className }: { mediaType: string | null; className?: string }) {
-  const t = (mediaType ?? '').toLowerCase();
-  if (t.includes('video') || t === 'reel' || t === 'short') return <Film className={className} />;
-  if (t === 'carousel') return <Layers className={className} />;
-  return <ImageIcon className={className} />;
-}

@@ -81,7 +81,9 @@ export async function fetchPostPerformance(
     console.warn('post_performance query failed:', error.message);
     return [];
   }
-  return (data ?? []) as PostPerformance[];
+  // PostgREST types a view select as GenericStringError[] when it cannot
+  // resolve the shape, so go through unknown rather than fight it.
+  return (data ?? []) as unknown as PostPerformance[];
 }
 
 /** Median of a numeric list. Median rather than mean throughout: one viral post
