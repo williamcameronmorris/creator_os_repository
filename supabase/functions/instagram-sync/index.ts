@@ -2,15 +2,27 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 /**
- * instagram-sync Edge Function
+ * instagram-sync
  *
- * Syncs Instagram Business Account data using the Facebook Graph API.
- * Requires the user to have connected via Meta OAuth (meta-auth edge fn),
- * which stores:
- *   - instagram_business_account_id  (IG Business User ID)
- *   - facebook_page_access_token     (Page Access Token — also stored as instagram_access_token)
+ * SCOPE (2026-08-22): FOLLOWER COUNTS ONLY.
  *
- * Does NOT use the deprecated Instagram Basic Display API (graph.instagram.com).
+ * Per-post metrics and the engagement roll-up for all five platforms come from
+ * postforme-sync, which reads the Post for Me feed with `?expand=metrics`.
+ * Post for Me exposes no follower field anywhere in its API, so this function
+ * exists purely to supply the one number it cannot.
+ *
+ * It used to also write per-post rows and the engagement columns. That made the
+ * two functions fight over the same (user, platform, date) row: whichever ran
+ * last won. On 2026-08-22 this one ran second and overwrote Instagram's real
+ * numbers (570,285 views, 8.37 percent engagement from the Graph-backed feed)
+ * with its own much worse ones (0 views, 0.22 percent), because the Graph API
+ * no longer returns video_views for these media and the old engagement formula
+ * divided by followers instead of reach.
+ *
+ * The division is now strict, and the upsert payload is the enforcement:
+ * supabase-js only SETs the columns present in the payload, so naming just
+ * followers_count and total_posts leaves postforme-sync's columns untouched.
+ * Do not add metric columns back here.
  */
 
 const corsHeaders = {
@@ -30,66 +42,64 @@ Deno.serve(async (req: Request) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const cronSecret = Deno.env.get("Cron_Secret");
 
-    // ── Verify caller and resolve userId.
+    // Resolve caller. Three paths, in order:
+    //   1. Cron: `{ cronSecret, userId }` in the body.
+    //   2. Service-role bearer + userId in the body.
+    //   3. User session JWT.
     //
-    // Two valid call paths:
-    //   1. User-triggered (browser session JWT): we resolve the user from the
-    //      JWT and ignore body.userId.
-    //   2. Cron / service-role-triggered: caller presents the service-role
-    //      key as bearer and supplies userId in the body. (auth.getUser does
-    //      not recognize service-role tokens as user tokens, so we have to
-    //      take this path explicitly.)
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: "Missing Authorization header" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-    const jwt = authHeader.replace(/^Bearer\s+/i, "");
-
-    // Read body once (used by both auth paths)
-    let body: { userId?: string } = {};
+    // The cron path exists because the service-role comparison broke: pg_cron
+    // sends the vault copy of the key, and once the project moved to the new
+    // API key system that stopped matching SUPABASE_SERVICE_ROLE_KEY. Every
+    // nightly run 401'd from 2026-07-04 while cron.job_run_details reported
+    // "succeeded", because pg_cron only records that the call was made.
+    //
+    // Body is read FIRST so the cron path needs no Authorization header.
+    let body: { userId?: string; cronSecret?: string } = {};
     try { body = await req.json(); } catch { /* empty body is fine for user mode */ }
 
-    // Detect service-role JWTs by decoding the payload and checking the role
-    // claim. Comparing against SUPABASE_SERVICE_ROLE_KEY directly is brittle
-    // because callers may pass a separately-stored copy of the key (e.g. the
-    // value stored in vault for cron use), which can differ by whitespace.
-    // Service-role / cron path is authenticated by a real key comparison. The
-    // nightly cron sends the vault-stored service-role key (trimmed) as bearer;
-    // .trim() on both sides absorbs any whitespace from the Vault paste. The
-    // previous decode-only role check was FORGEABLE — any unsigned token with a
-    // {"role":"service_role"} payload passed, allowing cross-tenant writes.
-    const isServiceRole = jwt.trim() !== "" && jwt.trim() === supabaseKey.trim();
+    const isCron = !!body.cronSecret && !!cronSecret && body.cronSecret === cronSecret;
 
     let userId: string;
-    if (isServiceRole) {
-      // Service-role / cron path
+    if (isCron) {
       if (!body.userId) {
-        return new Response(
-          JSON.stringify({ error: "userId is required in body for service-role calls" }),
-          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+        return new Response(JSON.stringify({ error: "userId is required in body for cron calls" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
       userId = body.userId;
     } else {
-      // User session path
-      const anon = createClient(supabaseUrl, supabaseAnonKey);
-      const { data: { user }, error: userError } = await anon.auth.getUser(jwt);
-      if (userError || !user) {
-        return new Response(
-          JSON.stringify({ error: "Unauthorized" }),
-          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+      const authHeader = req.headers.get("Authorization");
+      if (!authHeader) {
+        return new Response(JSON.stringify({ error: "Missing Authorization header" }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
-      userId = user.id;
+      const jwt = authHeader.replace(/^Bearer\s+/i, "");
+
+      // Real key comparison. The previous decode-only role check was FORGEABLE:
+      // any unsigned token carrying a service_role claim passed and could write
+      // across tenants.
+      const isServiceRole = jwt.trim() !== "" && jwt.trim() === supabaseKey.trim();
+
+      if (isServiceRole) {
+        if (!body.userId) {
+          return new Response(JSON.stringify({ error: "userId is required in body for service-role calls" }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
+        userId = body.userId;
+      } else {
+        const anon = createClient(supabaseUrl, supabaseAnonKey);
+        const { data: { user }, error: userError } = await anon.auth.getUser(jwt);
+        if (userError || !user) {
+          return new Response(JSON.stringify({ error: "Unauthorized" }),
+            { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
+        userId = user.id;
+      }
     }
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // ── Look up IG Business Account ID + Page Access Token from the profile ──
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
       .select("instagram_business_account_id, instagram_access_token, facebook_page_access_token, meta_token_expires_at")
@@ -99,61 +109,43 @@ Deno.serve(async (req: Request) => {
     if (profileError || !profile) throw new Error("Failed to load user profile");
 
     const igUserId = profile.instagram_business_account_id;
-    // Prefer page access token; fall back to the stored instagram_access_token
     const accessToken = profile.facebook_page_access_token || profile.instagram_access_token;
 
     if (!igUserId || !accessToken) {
-      throw new Error(
-        "Instagram Business Account not connected. Please connect via Meta OAuth first."
-      );
+      throw new Error("Instagram Business Account not connected. Please connect via Meta OAuth first.");
     }
 
-    // ── Check token expiry before making API calls ────────────────────────────
     if (profile.meta_token_expires_at) {
       const expiresAt = new Date(profile.meta_token_expires_at).getTime();
       const now = Date.now();
       if (expiresAt < now) {
-        throw new Error(
-          "Meta access token has expired. Please reconnect your Instagram account in Settings."
-        );
+        throw new Error("Meta access token has expired. Please reconnect your Instagram account in Settings.");
       }
-      // Warn if expiring within 7 days (non-blocking — sync still proceeds)
       const sevenDays = 7 * 24 * 60 * 60 * 1000;
       if (expiresAt - now < sevenDays) {
-        console.warn(`Meta token for user ${userId} expires in less than 7 days. Run refresh-tokens to renew.`);
+        console.warn(`Meta token for user ${userId} expires in under 7 days. refresh-tokens should renew it nightly.`);
       }
     }
 
-    // ── Fetch IG Business Account info ────────────────────────────────────────
+    // Account-level figures only. No media call: per-post data is PFM's job.
     const accountRes = await fetch(
-      `${GRAPH}/${igUserId}?fields=id,username,name,biography,followers_count,media_count,profile_picture_url&access_token=${accessToken}`
+      `${GRAPH}/${igUserId}?fields=id,username,followers_count,media_count,profile_picture_url&access_token=${accessToken}`
     );
     const accountData = await accountRes.json();
-    if (accountData.error)
-      throw new Error(`IG account fetch failed: ${accountData.error.message}`);
+    if (accountData.error) throw new Error(`IG account fetch failed: ${accountData.error.message}`);
 
-    // ── Fetch recent media ────────────────────────────────────────────────────
-    // video_views is populated for VIDEO and REEL types; null/absent for images
-    const mediaRes = await fetch(
-      `${GRAPH}/${igUserId}/media?fields=id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,like_count,comments_count,video_views&limit=50&access_token=${accessToken}`
-    );
-    const mediaData = await mediaRes.json();
-    if (mediaData.error)
-      throw new Error(`IG media fetch failed: ${mediaData.error.message}`);
+    const followersCount = accountData.followers_count || 0;
+    const mediaCount = accountData.media_count || 0;
 
-    const media: any[] = mediaData.data || [];
-
-    // ── Update profile ────────────────────────────────────────────────────────
     await supabase
       .from("profiles")
       .update({
         instagram_handle: accountData.username || "",
-        instagram_followers: accountData.followers_count || 0,
+        instagram_followers: followersCount,
         last_instagram_sync: new Date().toISOString(),
       })
       .eq("id", userId);
 
-    // ── Upsert platform_credentials ──────────────────────────────────────────
     await supabase.from("platform_credentials").upsert(
       {
         user_id: userId,
@@ -167,166 +159,42 @@ Deno.serve(async (req: Request) => {
       { onConflict: "user_id,platform" }
     );
 
-    // ── Sync each post ────────────────────────────────────────────────────────
-    let totalLikes = 0;
-    let totalComments = 0;
-    let totalViews = 0;
-
-    for (const item of media) {
-      totalLikes += item.like_count || 0;
-      totalComments += item.comments_count || 0;
-      totalViews += item.video_views || 0;
-
-      const { data: existingPost } = await supabase
-        .from("content_posts")
-        .select("id")
-        .eq("instagram_post_id", item.id)
-        .eq("user_id", userId)
-        .maybeSingle();
-
-      const mediaType =
-        item.media_type === "CAROUSEL_ALBUM"
-          ? "carousel"
-          : item.media_type === "VIDEO" || item.media_type === "REEL"
-          ? "video"
-          : "image";
-
-      // Extract a human-readable title from the first line of the caption (max 80 chars)
-    const captionTitle = item.caption
-      ? item.caption.split("\n")[0].trim().slice(0, 80) || ""
-      : "";
-
-    const postData = {
-        user_id: userId,
-        platform: "instagram",
-        title: captionTitle,
-        caption: item.caption || "",
-        media_url: item.media_url || item.thumbnail_url || "",
-        thumbnail_url: item.thumbnail_url || "",
-        media_type: mediaType,
-        instagram_post_id: item.id,
-        published_date: item.timestamp,
-        published_at: item.timestamp,
-        status: "published",
-        likes: item.like_count || 0,
-        comments: item.comments_count || 0,
-        views: item.video_views || 0,
-      };
-
-      let postId: string | null = existingPost?.id ?? null;
-      if (!existingPost) {
-        const { data: inserted } = await supabase
-          .from("content_posts")
-          .insert(postData)
-          .select("id")
-          .single();
-        postId = inserted?.id ?? null;
-      } else {
-        await supabase.from("content_posts").update(postData).eq("id", existingPost.id);
-      }
-
-      // Append today's snapshot to the per-post daily history. Idempotent on
-      // (post_id, snapshot_date) so re-running the sync the same day overwrites.
-      if (postId) {
-        await supabase.from("content_post_metrics_daily").upsert(
-          {
-            post_id: postId,
-            user_id: userId,
-            platform: "instagram",
-            snapshot_date: new Date().toISOString().split("T")[0],
-            metrics: {
-              likes: item.like_count || 0,
-              comments: item.comments_count || 0,
-              video_views: item.video_views || 0,
-            },
-          },
-          { onConflict: "post_id,snapshot_date" }
-        );
-      }
-    }
-
-    // ── Upsert platform_metrics ───────────────────────────────────────────────
-    // NOTE: views/likes/comments are GENERATED columns — do NOT write to them.
-    // Only write to total_views/total_likes/total_comments (the source columns).
-    const followersCount = accountData.followers_count || 0;
-    const engagementRate =
-      media.length > 0 && followersCount > 0
-        ? ((totalLikes + totalComments) / media.length / followersCount) * 100
-        : 0;
-
+    // followers_count and total_posts ONLY.
+    //
+    // Every other column on this row belongs to postforme-sync. Omitting them
+    // from the payload is what keeps them intact, because supabase-js builds
+    // the ON CONFLICT DO UPDATE SET list from the payload keys.
+    //
+    // The bare views/likes/comments/shares/saves columns are also GENERATED
+    // ALWAYS from their total_ counterparts; naming them raises 428C9 and
+    // aborts the whole upsert.
     const { error: metricsError } = await supabase.from("platform_metrics").upsert(
       {
         user_id: userId,
         platform: "instagram",
         date: new Date().toISOString().split("T")[0],
         followers_count: followersCount,
-        total_posts: accountData.media_count || 0,
-        total_views: totalViews,
-        total_likes: totalLikes,
-        total_comments: totalComments,
-        avg_engagement_rate: engagementRate,
+        total_posts: mediaCount,
       },
-      { onConflict: "user_id,platform,date" }
+      { onConflict: "user_id,platform,date,social_account_key" }
     );
 
-    if (metricsError) {
-      console.error("platform_metrics upsert error:", metricsError);
-    }
-
-    // ── Trigger caption analysis (fire-and-forget) ────────────────────────────
-    // Runs in the background after a successful sync. Skips if analysis is
-    // already fresh (< 24 hours old). Does not block the sync response.
-    // Cron-mode call: the service-role key is NOT a user session token, so
-    // sending it as a user Bearer made analyze-captions 401 on every sync.
-    // Auth now rides in the body as { cronSecret, userId } (requireUserOrCron);
-    // the service-role Bearer stays only to satisfy the platform JWT gate.
-    //
-    // TODO(account-separation follow-up): this auto-build stays USER-LEVEL for
-    // now (no socialAccountId -> refreshes the main voice). Per-account
-    // auto-build would pass the synced account's socialAccountId here; until
-    // then account voices are built manually from the Voice card.
-    const analysisUrl = `${supabaseUrl}/functions/v1/analyze-captions`;
-    fetch(analysisUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${supabaseKey}`,
-      },
-      body: JSON.stringify({ cronSecret: Deno.env.get("Cron_Secret"), userId, force: false }),
-    }).then(async (res) => {
-      if (!res.ok) {
-        const text = await res.text();
-        console.warn(`analyze-captions returned ${res.status}: ${text}`);
-      } else {
-        const data = await res.json();
-        if (data.skipped) {
-          console.log(`analyze-captions skipped: ${data.reason}`);
-        } else {
-          console.log(`analyze-captions completed: ${data.postsAnalyzed} posts analyzed`);
-        }
-      }
-    }).catch((err) => {
-      console.warn("analyze-captions fire-and-forget failed:", err.message);
-    });
+    if (metricsError) console.error("platform_metrics upsert error:", metricsError);
 
     return new Response(
       JSON.stringify({
         success: true,
-        mediaCount: media.length,
         followersCount,
-        totalViews,
+        totalPosts: mediaCount,
         metricsError: metricsError?.message || null,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
     console.error("Instagram sync error:", error);
-    return new Response(
-      JSON.stringify({ error: (error as Error).message }),
-      {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
-    );
+    return new Response(JSON.stringify({ error: (error as Error).message }), {
+      status: 400,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });
