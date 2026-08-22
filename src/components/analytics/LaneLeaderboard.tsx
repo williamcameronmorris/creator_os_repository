@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
 import { formatCompact } from './format';
+import { Button } from '../ui/Button';
 import type { LaneStat } from '../../lib/postPerformance';
 
 /**
@@ -93,18 +94,15 @@ export function LaneLeaderboard({
                       <p className="text-sm mt-2 leading-relaxed">{lane.winning_looks_like}</p>
                     </div>
                   )}
-                  <button
-                    type="button"
+                  <Button
                     onClick={() =>
                       navigate(
                         `/studio/workflow?autostart=1&lane=${encodeURIComponent(lane.lane_name)}`
                       )
                     }
-                    className="inline-flex items-center gap-2 px-4 py-2 border text-sm font-semibold"
-                    style={{ borderColor: 'var(--accent)', color: 'var(--foreground)' }}
                   >
                     Make one <ArrowRight className="w-4 h-4" />
-                  </button>
+                  </Button>
                 </div>
               )}
             </li>
