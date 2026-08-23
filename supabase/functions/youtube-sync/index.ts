@@ -1,6 +1,31 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
+/**
+ * youtube-sync
+ *
+ * SCOPE (2026-08-22): SUBSCRIBER COUNTS ONLY.
+ *
+ * Per-post metrics and the engagement roll-up for all five platforms come from
+ * postforme-sync via the Post for Me feed. PFM exposes no follower or
+ * subscriber field anywhere, so this function exists purely to supply that.
+ *
+ * Two bugs this scope change retires:
+ *
+ *  1. It wrote the bare views/likes/comments columns on platform_metrics, which
+ *     are GENERATED ALWAYS from their total_ counterparts. Postgres rejects
+ *     that with 428C9, and the old code never checked the upsert error, so it
+ *     returned success while writing no channel metrics at all.
+ *  2. It stored the YouTube Analytics API's 90-day windowed view count in
+ *     content_posts.views, while Post for Me stores lifetime views. One column,
+ *     two incompatible meanings, which dragged the YouTube median from 1,457
+ *     down to 278 and poisoned every benchmark computed off it.
+ *
+ * The upsert payload is the enforcement: supabase-js only SETs the columns
+ * present in it, so naming just followers_count and total_posts leaves
+ * postforme-sync's columns intact. Do not add metric columns back here.
+ */
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
@@ -13,23 +38,32 @@ async function refreshAccessToken(refreshToken: string): Promise<{ accessToken: 
   const res = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ refresh_token: refreshToken, client_id: clientId, client_secret: clientSecret, grant_type: "refresh_token" }),
+    body: new URLSearchParams({
+      refresh_token: refreshToken,
+      client_id: clientId,
+      client_secret: clientSecret,
+      grant_type: "refresh_token",
+    }),
   });
   const data = await res.json();
   if (data.error) {
     const desc = data.error_description || data.error;
+    // Google revokes refresh tokens after 7 days while the OAuth consent screen
+    // is still in Testing mode, so invalid_grant here is usually about
+    // publishing the app rather than anything the user did.
     if (data.error === "invalid_grant" || desc?.includes("Bad Request") || desc?.includes("revoked")) {
-      throw new Error(`YouTube token expired. Go to Settings → disconnect YouTube → reconnect it to fix this.`);
+      throw new Error(
+        "YouTube refresh token rejected by Google (invalid_grant). Reconnect YouTube in Settings. " +
+        "If it breaks again within a week, the Google OAuth consent screen is still in Testing mode " +
+        "and needs publishing to Production."
+      );
     }
     throw new Error(`Token refresh failed: ${desc}`);
   }
-  return { accessToken: data.access_token, expiresAt: new Date(Date.now() + (data.expires_in || 3600) * 1000).toISOString() };
-}
-
-function parseDuration(iso: string): number {
-  const match = iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
-  if (!match) return 0;
-  return (parseInt(match[1] || "0") * 3600) + (parseInt(match[2] || "0") * 60) + parseInt(match[3] || "0");
+  return {
+    accessToken: data.access_token,
+    expiresAt: new Date(Date.now() + (data.expires_in || 3600) * 1000).toISOString(),
+  };
 }
 
 Deno.serve(async (req: Request) => {
@@ -39,56 +73,83 @@ Deno.serve(async (req: Request) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const cronSecret = Deno.env.get("Cron_Secret");
 
-    // ── Resolve userId. Two paths:
-    //   1. User-triggered: derive from session JWT
-    //   2. Cron / service-role: take userId from body
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(JSON.stringify({ error: "Missing Authorization header" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
-    const jwt = authHeader.replace(/^Bearer\s+/i, "");
-
-    let body: { userId?: string } = {};
+    // Resolve caller. Cron first, so it needs no Authorization header. See the
+    // instagram-sync header for why the service-role bearer comparison alone
+    // was not enough.
+    let body: { userId?: string; cronSecret?: string } = {};
     try { body = await req.json(); } catch { /* empty body ok for user mode */ }
 
-    // Service-role / cron path authenticated by a real key comparison (the
-    // nightly cron sends the vault service-role key, trimmed). The previous
-    // decode-only role check was FORGEABLE — any unsigned token with a
-    // {"role":"service_role"} payload passed, allowing cross-tenant writes.
-    const isServiceRole = jwt.trim() !== "" && jwt.trim() === supabaseKey.trim();
+    const isCron = !!body.cronSecret && !!cronSecret && body.cronSecret === cronSecret;
 
     let userId: string;
-    if (isServiceRole) {
+    if (isCron) {
       if (!body.userId) {
-        return new Response(JSON.stringify({ error: "userId required in body for service-role calls" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        return new Response(JSON.stringify({ error: "userId required in body for cron calls" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
       userId = body.userId;
     } else {
-      const anon = createClient(supabaseUrl, supabaseAnonKey);
-      const { data: { user }, error: userError } = await anon.auth.getUser(jwt);
-      if (userError || !user) {
-        return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      const authHeader = req.headers.get("Authorization");
+      if (!authHeader) {
+        return new Response(JSON.stringify({ error: "Missing Authorization header" }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
-      userId = user.id;
+      const jwt = authHeader.replace(/^Bearer\s+/i, "");
+      const isServiceRole = jwt.trim() !== "" && jwt.trim() === supabaseKey.trim();
+
+      if (isServiceRole) {
+        if (!body.userId) {
+          return new Response(JSON.stringify({ error: "userId required in body for service-role calls" }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
+        userId = body.userId;
+      } else {
+        const anon = createClient(supabaseUrl, supabaseAnonKey);
+        const { data: { user }, error: userError } = await anon.auth.getUser(jwt);
+        if (userError || !user) {
+          return new Response(JSON.stringify({ error: "Unauthorized" }),
+            { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
+        userId = user.id;
+      }
     }
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // ── Always fetch tokens from the profile — never trust tokens from the body.
-    const { data: profile } = await supabase.from("profiles").select("youtube_access_token, youtube_refresh_token, youtube_token_expires_at").eq("id", userId).maybeSingle();
-    if (!profile?.youtube_access_token && !profile?.youtube_refresh_token) throw new Error("YouTube not connected");
+    // Always read tokens from the profile, never trust tokens from the body.
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("youtube_access_token, youtube_refresh_token, youtube_token_expires_at")
+      .eq("id", userId)
+      .maybeSingle();
+    if (!profile?.youtube_access_token && !profile?.youtube_refresh_token) {
+      throw new Error("YouTube not connected");
+    }
+
     let accessToken: string | null = profile.youtube_access_token;
     const refreshToken: string | null = profile.youtube_refresh_token;
-    const expiresAt = profile.youtube_token_expires_at ? new Date(profile.youtube_token_expires_at).getTime() : 0;
+    const expiresAt = profile.youtube_token_expires_at
+      ? new Date(profile.youtube_token_expires_at).getTime()
+      : 0;
+
     if ((!accessToken || Date.now() > expiresAt - 5 * 60 * 1000) && refreshToken) {
       const refreshed = await refreshAccessToken(refreshToken);
       accessToken = refreshed.accessToken;
-      await supabase.from("profiles").update({ youtube_access_token: accessToken, youtube_token_expires_at: refreshed.expiresAt }).eq("id", userId);
+      await supabase
+        .from("profiles")
+        .update({ youtube_access_token: accessToken, youtube_token_expires_at: refreshed.expiresAt })
+        .eq("id", userId);
     }
     if (!accessToken) throw new Error("YouTube access token unavailable after refresh attempt");
 
-    const channelRes = await fetch("https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&mine=true", { headers: { Authorization: `Bearer ${accessToken}` } });
+    // Channel statistics only. No search or videos calls: per-post data is
+    // PFM's job, and those calls burned most of the daily quota.
+    const channelRes = await fetch(
+      "https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&mine=true",
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    );
     if (!channelRes.ok) throw new Error(`Channel API error: ${channelRes.statusText}`);
     const channelData = await channelRes.json();
     const channel = channelData.items?.[0];
@@ -99,132 +160,56 @@ Deno.serve(async (req: Request) => {
     const totalVideoCount = parseInt(channel.statistics?.videoCount || "0");
     const today = new Date().toISOString().split("T")[0];
 
-    await supabase.from("profiles").update({ youtube_handle: channel.snippet?.title || "", youtube_followers: subscriberCount, youtube_channel_id: channelId, last_youtube_sync: new Date().toISOString() }).eq("id", userId);
+    await supabase
+      .from("profiles")
+      .update({
+        youtube_handle: channel.snippet?.title || "",
+        youtube_followers: subscriberCount,
+        youtube_channel_id: channelId,
+        last_youtube_sync: new Date().toISOString(),
+      })
+      .eq("id", userId);
 
-    let allVideoItems: any[] = [];
-    let pageToken: string | null = null;
-    let pagesFetched = 0;
-    do {
-      const url = new URL("https://www.googleapis.com/youtube/v3/search");
-      url.searchParams.set("part", "snippet"); url.searchParams.set("forMine", "true");
-      url.searchParams.set("type", "video"); url.searchParams.set("maxResults", "50");
-      url.searchParams.set("order", "date");
-      if (pageToken) url.searchParams.set("pageToken", pageToken);
-      const r = await fetch(url.toString(), { headers: { Authorization: `Bearer ${accessToken}` } });
-      if (!r.ok) break;
-      const d = await r.json();
-      allVideoItems = allVideoItems.concat(d.items || []);
-      pageToken = d.nextPageToken || null;
-      pagesFetched++;
-    } while (pageToken && pagesFetched < 4);
-
-    if (allVideoItems.length === 0) return new Response(JSON.stringify({ success: true, videosCount: 0 }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-
-    const videoStatsMap: Record<string, any> = {};
-    for (let i = 0; i < allVideoItems.length; i += 50) {
-      const ids = allVideoItems.slice(i, i + 50).map((v: any) => v.id.videoId).join(",");
-      const r = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=statistics,contentDetails,snippet&id=${ids}`, { headers: { Authorization: `Bearer ${accessToken}` } });
-      if (r.ok) { const d = await r.json(); for (const item of (d.items || [])) videoStatsMap[item.id] = item; }
-    }
-
-    const analyticsMap: Record<string, any> = {};
-    const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-    const analyticsRes = await fetch(
-      `https://youtubeanalytics.googleapis.com/v2/reports?ids=channel==${channelId}&startDate=${ninetyDaysAgo}&endDate=${today}&metrics=estimatedMinutesWatched,averageViewDuration,impressions,impressionsClickThroughRate,views,likes,comments&dimensions=video&maxResults=200&sort=-views`,
-      { headers: { Authorization: `Bearer ${accessToken}` } }
+    await supabase.from("platform_credentials").upsert(
+      {
+        user_id: userId,
+        platform: "youtube",
+        platform_user_id: channelId,
+        platform_username: channel.snippet?.title || "",
+        last_synced_at: new Date().toISOString(),
+        is_active: true,
+      },
+      { onConflict: "user_id,platform" }
     );
-    if (analyticsRes.ok) {
-      const analyticsData = await analyticsRes.json();
-      const headers: string[] = (analyticsData.columnHeaders || []).map((h: any) => h.name);
-      const videoIdx = headers.indexOf("video");
-      for (const row of (analyticsData.rows || [])) {
-        const videoId = row[videoIdx];
-        const entry: Record<string, any> = {};
-        headers.forEach((h: string, i: number) => { entry[h] = row[i]; });
-        analyticsMap[videoId] = entry;
-      }
-    }
 
-    let totalViews = 0, totalLikes = 0, totalComments = 0, processedCount = 0;
+    // followers_count and total_posts ONLY. See the header.
+    const { error: metricsError } = await supabase.from("platform_metrics").upsert(
+      {
+        user_id: userId,
+        platform: "youtube",
+        date: today,
+        followers_count: subscriberCount,
+        total_posts: totalVideoCount,
+      },
+      { onConflict: "user_id,platform,date,social_account_key" }
+    );
 
-    for (const video of allVideoItems) {
-      const videoId = video.id.videoId;
-      const details = videoStatsMap[videoId];
-      const analytics = analyticsMap[videoId];
-      const viewCount = parseInt(details?.statistics?.viewCount || "0");
-      const likeCount = parseInt(details?.statistics?.likeCount || "0");
-      const commentCount = parseInt(details?.statistics?.commentCount || "0");
-      const durationSeconds = parseDuration(details?.contentDetails?.duration || "PT0S");
-      const isShort = durationSeconds > 0 && durationSeconds <= 60;
-      const thumbs = details?.snippet?.thumbnails || video.snippet?.thumbnails || {};
-      const thumbnailUrl = thumbs.maxres?.url || thumbs.high?.url || thumbs.medium?.url || thumbs.default?.url || "";
-      const publishedAt = video.snippet?.publishedAt || details?.snippet?.publishedAt || null;
+    if (metricsError) console.error("platform_metrics upsert error:", metricsError);
 
-      totalViews += viewCount; totalLikes += likeCount; totalComments += commentCount;
-
-      const { data: existing } = await supabase.from("content_posts").select("id").eq("youtube_video_id", videoId).eq("user_id", userId).maybeSingle();
-      const postData = {
-        user_id: userId, platform: "youtube",
-        title: details?.snippet?.title || video.snippet?.title || "",
-        caption: details?.snippet?.description || video.snippet?.description || "",
-        media_url: `https://www.youtube.com/watch?v=${videoId}`,
-        thumbnail_url: thumbnailUrl,
-        media_type: isShort ? "short" : "video",
-        content_type: isShort ? "short" : "video",
-        youtube_video_id: videoId,
-        published_date: publishedAt, published_at: publishedAt, status: "published",
-        views: analytics?.views ? parseInt(analytics.views) : viewCount,
-        likes: analytics?.likes ? parseInt(analytics.likes) : likeCount,
-        comments: analytics?.comments ? parseInt(analytics.comments) : commentCount,
-        engagement_rate: viewCount > 0 ? ((likeCount + commentCount) / viewCount) * 100 : 0,
-      };
-      let postId: string | null = existing?.id ?? null;
-      if (!existing) {
-        const { data: inserted } = await supabase
-          .from("content_posts")
-          .insert(postData)
-          .select("id")
-          .single();
-        postId = inserted?.id ?? null;
-      } else {
-        await supabase.from("content_posts").update(postData).eq("id", existing.id);
-      }
-
-      // Append today's snapshot to the per-post daily history. Idempotent on
-      // (post_id, snapshot_date) so re-running the sync the same day overwrites.
-      if (postId) {
-        await supabase.from("content_post_metrics_daily").upsert(
-          {
-            post_id: postId,
-            user_id: userId,
-            platform: "youtube",
-            snapshot_date: new Date().toISOString().split("T")[0],
-            metrics: {
-              views: postData.views,
-              likes: postData.likes,
-              comments: postData.comments,
-            },
-          },
-          { onConflict: "post_id,snapshot_date" }
-        );
-      }
-      processedCount++;
-    }
-
-    await supabase.from("platform_metrics").upsert({
-      user_id: userId, platform: "youtube", date: today,
-      followers_count: subscriberCount, total_posts: totalVideoCount,
-      views: totalViews, likes: totalLikes, comments: totalComments,
-      avg_engagement_rate: processedCount > 0 ? allVideoItems.reduce((sum: number, v: any) => {
-        const s = videoStatsMap[v.id.videoId]?.statistics;
-        const vw = parseInt(s?.viewCount || "0"); const lk = parseInt(s?.likeCount || "0"); const cm = parseInt(s?.commentCount || "0");
-        return sum + (vw > 0 ? ((lk + cm) / vw) * 100 : 0);
-      }, 0) / processedCount : 0,
-    }, { onConflict: "user_id,platform,date" });
-
-    return new Response(JSON.stringify({ success: true, videosCount: processedCount }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    return new Response(
+      JSON.stringify({
+        success: true,
+        subscriberCount,
+        totalVideos: totalVideoCount,
+        metricsError: metricsError?.message ?? null,
+      }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
   } catch (error: any) {
     console.error("YouTube sync error:", error);
-    return new Response(JSON.stringify({ error: error.message }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 400,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });
