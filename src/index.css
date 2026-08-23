@@ -14,6 +14,20 @@
 
   /* Clio: Light */
   :root {
+
+    /* ── Printed Edge buttons ─────────────────────────────────────
+       Sage face on paper. The edge is a SOLID offset shadow, never a
+       blur — that is what keeps the hard-cornered system intact while
+       still giving the button something to drop onto.
+       Contrast: face/label 6.44:1, face/page 6.44:1. */
+    --btn-face:         #4A5D50;
+    --btn-edge:         #2A342D;
+    --btn-hover:        #576C5E;
+    --btn-label:        #F7F4EE;
+    --btn-ring:         #C8A24B;
+    --btn-danger:       #8E5840;
+    --btn-danger-edge:  #5E3A2A;
+    --btn-danger-hover: #A1664B;
     --radius: 0px;
     /* Hoefler-style serif for the gold accent word in section heads.
        Matches the Starter Kit's italic accent treatment. */
@@ -59,6 +73,19 @@
 
   /* Clio: Dark */
   .dark {
+
+    /* Gold face on ink. Deep sage only reaches 2.51:1 against this
+       ground and would sink into the page; gold clears it at 7.36:1.
+       The label MUST be ink — cream on gold is 2.19:1 and fails.
+       The focus ring turns cream because gold-on-gold is invisible. */
+    --btn-face:         #C8A24B;
+    --btn-edge:         #8A6C2E;
+    --btn-hover:        #D4B266;
+    --btn-label:        #1A1816;
+    --btn-ring:         #F7F4EE;
+    --btn-danger:       #B07050;
+    --btn-danger-edge:  #6E4531;
+    --btn-danger-hover: #BF8163;
     --background:         #1A1816;
     --card:               #22201D;
     --popover:            #22201D;
@@ -274,4 +301,144 @@
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 999px; }
   ::-webkit-scrollbar-thumb:hover { background: var(--muted-foreground); }
+}
+
+/* ── Printed Edge buttons ────────────────────────────────────────────────────
+   The approved button treatment.
+
+   It is defined for TWO class families on purpose:
+
+     .btn-*     the new <Button> component (sentence case, sans)
+     .btn-ie*   the existing "industrial editorial" buttons, already used 133
+                times across 24 files
+
+   Retrofitting .btn-ie means every existing button gets the treatment without
+   touching a single call site, and new work can move to <Button> gradually.
+   The two share every mechanic below and differ only in typography — .btn-ie
+   keeps its mono uppercase label, because the ask was about shape, depth and
+   colour, not type.
+
+   The mechanic, identical in both themes:
+     3px radius        enough to read as a control, not enough to go soft
+     3px SOLID edge    an offset shadow with zero blur, so it stays hard-edged
+     2px travel        the face drops onto the edge on press
+
+   Only the face colour changes with the theme. Ratios are on the token blocks.
+   ------------------------------------------------------------------------- */
+@layer components {
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border: 0;
+    font-weight: 600;
+    line-height: 1.2;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .btn, .btn-ie {
+    border-radius: 3px;
+    transition: transform 0.06s ease, box-shadow 0.06s ease,
+                background-color 0.12s ease, border-color 0.12s ease;
+  }
+  .btn:focus-visible, .btn-ie:focus-visible {
+    outline: 2px solid var(--btn-ring);
+    outline-offset: 3px;
+  }
+  /* The press IS the feedback, so travel survives reduced-motion; only the
+     easing is dropped. */
+  @media (prefers-reduced-motion: reduce) {
+    .btn, .btn-ie { transition: none; }
+  }
+  .btn-ie-pill { border-radius: 999px; }
+
+  .btn-sm { padding: 0.5rem 0.875rem; font-size: 0.78rem; }
+  .btn-md { padding: 0.6875rem 1.25rem; font-size: 0.875rem; }
+  .btn-lg { padding: 0.875rem 1.625rem; font-size: 0.9375rem; }
+  .btn-block { width: 100%; }
+
+  /* ── Primary: the face carries the colour ─────────────────────── */
+  .btn-primary,
+  .btn-ie-solid {
+    background-color: var(--btn-face);
+    color: var(--btn-label);
+    border: 1px solid var(--btn-face);
+    box-shadow: 0 3px 0 var(--btn-edge);
+  }
+  .btn-primary:hover:not(:disabled),
+  .btn-ie-solid:hover:not(:disabled) {
+    background-color: var(--btn-hover);
+    border-color: var(--btn-hover);
+    color: var(--btn-label);
+  }
+  .btn-primary:active:not(:disabled),
+  .btn-ie-solid:active:not(:disabled) {
+    transform: translateY(2px);
+    box-shadow: 0 1px 0 var(--btn-edge);
+  }
+
+  /* ── Secondary: same mechanic in outline, so a pair presses alike ── */
+  .btn-secondary,
+  .btn-ie:not(.btn-ie-solid) {
+    background-color: var(--card);
+    color: var(--btn-face);
+    border: 1px solid var(--btn-face);
+    box-shadow: 0 3px 0 var(--border);
+  }
+  .btn-secondary:hover:not(:disabled),
+  .btn-ie:not(.btn-ie-solid):hover:not(:disabled) {
+    background-color: var(--muted);
+    color: var(--btn-face);
+    border-color: var(--btn-face);
+  }
+  .btn-secondary:active:not(:disabled),
+  .btn-ie:not(.btn-ie-solid):active:not(:disabled) {
+    transform: translateY(2px);
+    box-shadow: 0 1px 0 var(--border);
+  }
+
+  /* ── Destructive: terracotta, never sage ──────────────────────────
+     A sage delete button would read as safe, which is the wrong signal. */
+  .btn-danger {
+    background-color: var(--btn-danger);
+    color: var(--btn-label);
+    border: 1px solid var(--btn-danger);
+    box-shadow: 0 3px 0 var(--btn-danger-edge);
+  }
+  .btn-danger:hover:not(:disabled) {
+    background-color: var(--btn-danger-hover);
+    border-color: var(--btn-danger-hover);
+  }
+  .btn-danger:active:not(:disabled) {
+    transform: translateY(2px);
+    box-shadow: 0 1px 0 var(--btn-danger-edge);
+  }
+
+  /* ── Ghost: no edge, no travel ────────────────────────────────────
+     For dismissals, which should not feel like the primary action next
+     to them. */
+  .btn-ghost {
+    background-color: transparent;
+    color: var(--muted-foreground);
+    border-color: transparent;
+    box-shadow: none;
+  }
+  .btn-ghost:hover:not(:disabled) {
+    background-color: var(--muted);
+    color: var(--foreground);
+  }
+
+  /* Keeps a flat edge but loses the travel, so it reads as a button that
+     cannot move rather than as some other component. */
+  .btn:disabled, .btn-ie:disabled {
+    background-color: var(--muted);
+    color: var(--muted-foreground);
+    border-color: transparent;
+    box-shadow: 0 3px 0 var(--border);
+    cursor: not-allowed;
+  }
+  .btn-ghost:disabled { box-shadow: none; background-color: transparent; }
+  .btn:disabled:active, .btn-ie:disabled:active { transform: none; }
 }

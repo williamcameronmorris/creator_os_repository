@@ -53,9 +53,9 @@ async function refreshAccessToken(refreshToken: string): Promise<{ accessToken: 
     // publishing the app rather than anything the user did.
     if (data.error === "invalid_grant" || desc?.includes("Bad Request") || desc?.includes("revoked")) {
       throw new Error(
-        "YouTube refresh token rejected by Google (invalid_grant). Reconnect YouTube in Settings. " +
-        "If it breaks again within a week, the Google OAuth consent screen is still in Testing mode " +
-        "and needs publishing to Production."
+        "YouTube refresh token rejected by Google (invalid_grant). Reconnect from Office > Connections. " +
+        "Publish the Google OAuth consent screen to Production first — while it is in Testing, Google " +
+        "expires refresh tokens after 7 days and the reconnect will fail again within the week."
       );
     }
     throw new Error(`Token refresh failed: ${desc}`);
