@@ -120,7 +120,15 @@ export function Analytics() {
           `and(published_date.gte.${isoDate(dateValue.range.start)},published_date.lte.${isoDate(dateValue.range.end)})`
         );
       if (activeAccount) {
-        metricsQuery = metricsQuery.eq('social_account_id', activeAccount.id);
+        // platform_metrics is a USER-LEVEL roll-up: postforme-sync aggregates
+        // across every account on a platform, and the follower syncs are
+        // per-profile, so every row is written with social_account_id NULL.
+        // Filtering strictly by account therefore matched nothing and the page
+        // fell through to its empty state while the data sat right there.
+        // Include the user-level rows alongside the pinned account's.
+        metricsQuery = metricsQuery.or(
+          `social_account_id.eq.${activeAccount.id},social_account_id.is.null`
+        );
         postsQuery = postsQuery.eq('social_account_id', activeAccount.id);
       }
 
@@ -171,7 +179,16 @@ export function Analytics() {
     ? PLATFORM_LABELS[activeAccount.platform] ?? activeAccount.platform
     : 'all platforms';
 
-  const hasData = metrics.length > 0 || posts.length > 0;
+  // Scored posts count as data. Bands 1 and 3 read post_performance, which is
+  // deliberately independent of the date pill — a verdict compares a post to
+  // the creator's own trailing median, not to a calendar window. Gating the
+  // whole page on the date-filtered queries meant the one section guaranteed
+  // to have something to show never got the chance to render.
+  const hasData = metrics.length > 0 || posts.length > 0 || perf.length > 0;
+
+  // Distinguishes "nothing is connected" from "nothing was posted in this
+  // window", which are very different problems and had the same message.
+  const emptyBecauseOfDateRange = perf.length > 0 || metrics.length > 0;
 
   if (loading) {
     return (
@@ -209,9 +226,13 @@ export function Analytics() {
       {!hasData ? (
         <div className="p-16 text-center bg-card border border-border">
           <TrendingUp className="w-16 h-16 mx-auto mb-4 text-muted-foreground/40" />
-          <h3 className="text-xl font-semibold mb-2 text-foreground">No analytics data yet</h3>
+          <h3 className="text-xl font-semibold mb-2 text-foreground">
+            {emptyBecauseOfDateRange ? 'Nothing published in this window' : 'No analytics data yet'}
+          </h3>
           <p className="text-muted-foreground">
-            Connect your accounts in Settings and sync to start tracking performance.
+            {emptyBecauseOfDateRange
+              ? 'Your accounts are connected and syncing. Widen the date range to see posts from before it.'
+              : 'Connect your accounts in Office \u203a Connections and sync to start tracking performance.'}
           </p>
         </div>
       ) : (
