@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
-import { TrendingUp } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { useAccount } from '../contexts/AccountContext';
 import { KpiRow } from '../components/analytics/KpiRow';
@@ -16,6 +15,7 @@ import {
 import { computeDelta, formatCount, formatPercent, formatCompact } from '../components/analytics/format';
 import type { BreakdownRow, ChartSeries } from '../components/analytics/types';
 import { Eyebrow, SectionHead } from '../components/ui/tac';
+import { DataHealthPanel } from '../components/DataHealthPanel';
 import { VerdictCard, VerdictRow } from '../components/analytics/VerdictCard';
 import { LaneLeaderboard } from '../components/analytics/LaneLeaderboard';
 import {
@@ -186,9 +186,6 @@ export function Analytics() {
   // to have something to show never got the chance to render.
   const hasData = metrics.length > 0 || posts.length > 0 || perf.length > 0;
 
-  // Distinguishes "nothing is connected" from "nothing was posted in this
-  // window", which are very different problems and had the same message.
-  const emptyBecauseOfDateRange = perf.length > 0 || metrics.length > 0;
 
   if (loading) {
     return (
@@ -224,19 +221,14 @@ export function Analytics() {
       </div>
 
       {!hasData ? (
-        <div className="p-16 text-center bg-card border border-border">
-          <TrendingUp className="w-16 h-16 mx-auto mb-4 text-muted-foreground/40" />
-          <h3 className="text-xl font-semibold mb-2 text-foreground">
-            {emptyBecauseOfDateRange ? 'Nothing published in this window' : 'No analytics data yet'}
-          </h3>
-          <p className="text-muted-foreground">
-            {emptyBecauseOfDateRange
-              ? 'Your accounts are connected and syncing. Widen the date range to see posts from before it.'
-              : 'Connect your accounts in Office \u203a Connections and sync to start tracking performance.'}
-          </p>
-        </div>
+        <DataHealthPanel
+          postsInWindow={posts.length}
+          windowLabel="the selected date range"
+        />
       ) : (
         <>
+          <DataHealthPanel compact postsInWindow={posts.length} windowLabel="the selected date range" />
+
           {/* ── Band 1 · Verdict ────────────────────────────────────────
               Was that post good or bad. The multiple is the hero, not the
               count: a raw number cannot be read without a baseline. */}
