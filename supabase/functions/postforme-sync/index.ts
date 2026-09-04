@@ -187,6 +187,8 @@ interface FeedPost {
 type AccountFeedPost = FeedPost & {
   social_account_id: string;
   account_username: string | null;
+  /** From brand_social_accounts. Posts are stamped per account, never per user. */
+  brand_id: string;
 };
 
 interface FeedResult {
@@ -219,7 +221,17 @@ async function getAccountFeed(accountId: string): Promise<FeedResult | null> {
     const res = await pfmFetch(
       `/v1/social-account-feeds/${encodeURIComponent(accountId)}?${params.toString()}`,
     );
-    if (!res.ok) break;
+    if (!res.ok) {
+      // A non-2xx on the FIRST page means this account contributed nothing to
+      // the run. Throw so the caller records it in summary.errors: a platform
+      // that silently drops out of the roll-up is exactly how metrics went
+      // stale for seven weeks with every run reporting success.
+      if (page === 0) {
+        const detail = (await res.text().catch(() => "")).slice(0, 200);
+        throw new Error(`HTTP ${res.status}${detail ? `: ${detail}` : ""}`);
+      }
+      break;
+    }
     const body = await res.json();
     if (page === 0) firstRaw = body;
     pagesFetched++;
@@ -403,6 +415,20 @@ async function syncForUser(userId: string): Promise<SyncSummary> {
   const accounts = await listAccounts(userId);
   summary.accountsSynced = accounts.length;
 
+  // Brand per account (brand_social_accounts). Brands are fully isolated, so
+  // every row written below carries the brand of the account it came from.
+  // An account with NO mapping is skipped and reported, never silently
+  // attached to a default — that is precisely how one brand's posts would end
+  // up inside another's.
+  const { data: mappings, error: mapErr } = await supabase
+    .from("brand_social_accounts")
+    .select("pfm_account_id, brand_id")
+    .in("pfm_account_id", accounts.map((a) => a.id));
+  if (mapErr) summary.errors.push(`brand mapping lookup: ${mapErr.message}`);
+  const brandByAccount = new Map<string, string>(
+    (mappings ?? []).map((m) => [m.pfm_account_id as string, m.brand_id as string]),
+  );
+
   const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
   const snapshotRows: Record<string, unknown>[] = [];
   const feedPostsByPlatform: Record<string, AccountFeedPost[]> = {};
@@ -410,10 +436,16 @@ async function syncForUser(userId: string): Promise<SyncSummary> {
   await Promise.all(
     accounts.map(async (account) => {
       try {
+        const brandId = brandByAccount.get(account.id);
+        if (!brandId) {
+          summary.errors.push(`no brand mapping for ${account.platform}/${account.id}; skipped`);
+          return;
+        }
         const feed = await getAccountFeed(account.id);
         if (!feed) return;
         snapshotRows.push({
           user_id: userId,
+          brand_id: brandId,
           pfm_account_id: account.id,
           platform: account.platform,
           username: account.username || null,
@@ -426,6 +458,7 @@ async function syncForUser(userId: string): Promise<SyncSummary> {
             ...p,
             social_account_id: account.id,
             account_username: account.username || null,
+            brand_id: brandId,
           })),
         );
       } catch (err) {
@@ -487,6 +520,7 @@ async function syncForUser(userId: string): Promise<SyncSummary> {
       })
       .map((p) => ({
         user_id: userId,
+        brand_id: p.brand_id,
         platform: p.platform,
         platform_post_id: p.platform_post_id,
         social_account_id: p.social_account_id,
@@ -562,6 +596,7 @@ async function syncForUser(userId: string): Promise<SyncSummary> {
       const upd: Record<string, unknown> = {
         id,
         user_id: userId,
+        brand_id: p.brand_id,
         platform,
         views: m.views,
         likes: m.likes,
@@ -583,6 +618,7 @@ async function syncForUser(userId: string): Promise<SyncSummary> {
       dailyRows.push({
         post_id: id,
         user_id: userId,
+        brand_id: p.brand_id,
         platform,
         snapshot_date: today,
         metrics: {
@@ -677,50 +713,49 @@ async function syncForUser(userId: string): Promise<SyncSummary> {
     else summary.postsMatched += matched;
   }
 
-  // 3. Roll the feed metrics up into one platform_metrics row per platform for
-  //    TODAY. This is a snapshot of current state, which is what Analytics and
-  //    the media kit both read — not a per-publish-date bucket.
-  const metricRows: Record<string, unknown>[] = [];
-  for (const [platform, posts] of Object.entries(feedPostsByPlatform)) {
-    const scored = posts.filter((p) => p.metrics);
-    if (scored.length === 0) continue;
-    let views = 0, likes = 0, comments = 0, shares = 0, saves = 0, erSum = 0;
-    for (const p of scored) {
-      const m = p.metrics as NormalizedMetrics;
-      views += m.views; likes += m.likes; comments += m.comments;
-      shares += m.shares; saves += m.saves; erSum += m.engagement_rate;
+  // Roll the feed metrics up into one platform_metrics row per (BRAND, platform)
+  // for TODAY. It used to be per platform across the whole user; brands are
+  // isolated, so two brands on Instagram must never share a row. The unique key
+  // is (brand_id, platform, date, social_account_key) as of the brands migration.
+  const agg = new Map<string, { brand_id: string; platform: string; n: number;
+    views: number; likes: number; comments: number; shares: number; saves: number; er: number }>();
+  for (const posts of Object.values(feedPostsByPlatform)) {
+    for (const p of posts) {
+      if (!p.metrics) continue;
+      const key = `${p.brand_id}:${p.platform}`;
+      const a = agg.get(key) ?? { brand_id: p.brand_id, platform: p.platform, n: 0,
+        views: 0, likes: 0, comments: 0, shares: 0, saves: 0, er: 0 };
+      const m = p.metrics;
+      a.n += 1; a.views += m.views; a.likes += m.likes; a.comments += m.comments;
+      a.shares += m.shares; a.saves += m.saves; a.er += m.engagement_rate;
+      agg.set(key, a);
     }
-    metricRows.push({
-      user_id: userId,
-      platform,
-      date: today,
-      social_account_id: null,
-      // total_* only. views/likes/comments/shares/saves are GENERATED ALWAYS
-      // from these; writing them raises 428C9 and kills the whole upsert.
-      total_views: views,
-      total_likes: likes,
-      total_comments: comments,
-      total_shares: shares,
-      total_saves: saves,
-      avg_engagement_rate: erSum / scored.length,
-      // followers_count and total_posts are deliberately omitted. PFM does not
-      // expose either, and naming them here would null out the values
-      // instagram-sync / youtube-sync wrote for the same (user, platform, day).
-    });
   }
+  const metricRows = Array.from(agg.values()).map((a) => ({
+    user_id: userId,
+    brand_id: a.brand_id,
+    platform: a.platform,
+    date: today,
+    social_account_id: null,
+    // total_* only. views/likes/comments/shares/saves are GENERATED ALWAYS
+    // from these; writing them raises 428C9 and kills the whole upsert.
+    total_views: a.views,
+    total_likes: a.likes,
+    total_comments: a.comments,
+    total_shares: a.shares,
+    total_saves: a.saves,
+    avg_engagement_rate: a.er / a.n,
+    // followers_count and total_posts are deliberately omitted. PFM exposes
+    // neither, and naming them here would null out what the follower syncs wrote.
+  }));
 
   if (metricRows.length > 0) {
-    // Conflict target includes social_account_key (STORED generated column,
-    // coalesce(social_account_id,'')) — the account-separation migration
-    // replaced UNIQUE(user_id,platform,date) with this 4-column key so legacy
-    // roll-ups and future per-account rows coexist.
     const { error } = await supabase
       .from("platform_metrics")
-      .upsert(metricRows, { onConflict: "user_id,platform,date,social_account_key" });
+      .upsert(metricRows, { onConflict: "brand_id,platform,date,social_account_key" });
     if (error) summary.errors.push(`platform_metrics upsert: ${error.message}`);
     else summary.metricsUpserted = metricRows.length;
   }
-
   return summary;
 }
 
