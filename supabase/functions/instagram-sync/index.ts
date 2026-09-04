@@ -100,6 +100,15 @@ Deno.serve(async (req: Request) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
+    // Follower counts are per brand, and brands are isolated. The direct grant
+    // lives on profiles (one per user), so v1 attributes it to the owner's
+    // default brand — the first one created, i.e. the backfilled one. Office >
+    // Connections will let this be reassigned explicitly later.
+    const { data: brand, error: brandErr } = await supabase
+      .from("brands").select("id").eq("owner_id", userId)
+      .order("created_at", { ascending: true }).limit(1).maybeSingle();
+    if (brandErr || !brand) throw new Error(`No brand for user ${userId}; the brands backfill has not run`);
+
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
       .select("instagram_business_account_id, instagram_access_token, facebook_page_access_token, meta_token_expires_at")
@@ -171,12 +180,13 @@ Deno.serve(async (req: Request) => {
     const { error: metricsError } = await supabase.from("platform_metrics").upsert(
       {
         user_id: userId,
+        brand_id: brand.id,
         platform: "instagram",
         date: new Date().toISOString().split("T")[0],
         followers_count: followersCount,
         total_posts: mediaCount,
       },
-      { onConflict: "user_id,platform,date,social_account_key" }
+      { onConflict: "brand_id,platform,date,social_account_key" }
     );
 
     if (metricsError) console.error("platform_metrics upsert error:", metricsError);
