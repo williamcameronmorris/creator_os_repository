@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { requireUser, corsHeaders } from "../_shared/auth.ts";
+import { requireUser, corsHeaders, resolveBrandId } from "../_shared/auth.ts";
 
 const GRAPH = "https://graph.facebook.com/v25.0";
 const THREADS = "https://graph.threads.net/v1.0";
@@ -246,6 +246,10 @@ Deno.serve(async (req: Request) => {
     if (!auth.ok) return auth.response;
     const userId = auth.userId;
 
+    // Comments arrive through the direct Meta / Google / Threads grants on the
+    // profile (one per user), which v1 attributes to the default brand.
+    const brandId = await resolveBrandId(supabase, userId);
+
     const { platforms } = await req.json().catch(() => ({}));
 
     const { data: profile } = await supabase
@@ -277,7 +281,10 @@ Deno.serve(async (req: Request) => {
     if (allComments.length > 0) {
       const { error } = await supabase
         .from("comments")
-        .upsert(allComments, { onConflict: "user_id,platform,comment_id", ignoreDuplicates: true });
+        .upsert(
+          allComments.map((c) => ({ ...c, brand_id: brandId })),
+          { onConflict: "user_id,platform,comment_id", ignoreDuplicates: true },
+        );
 
       if (error) console.error("Upsert error:", error.message);
       else inserted = allComments.length;

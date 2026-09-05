@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { requireUserOrCron, corsHeaders } from "../_shared/auth.ts";
+import { requireUserOrCron, corsHeaders, resolveBrandId } from "../_shared/auth.ts";
 
 /**
  * analyze-captions Edge Function
@@ -65,6 +65,9 @@ Deno.serve(async (req: Request) => {
       typeof body.socialAccountId === "string" && body.socialAccountId.trim()
         ? body.socialAccountId.trim()
         : null;
+    // The voice profile belongs to the brand of the scoped account (or the
+    // default brand for the account-less legacy row).
+    const brandId = await resolveBrandId(supabase, userId, socialAccountId);
 
     if (!userId) throw new Error("Missing required field: userId");
 
@@ -268,7 +271,8 @@ Rules:
 
     const profileData = {
       user_id: userId,
-      // NULL = the user-level/legacy "main voice" row.
+      brand_id: brandId,
+      // NULL = the brand-level/legacy "main voice" row.
       social_account_id: socialAccountId,
       account_username: accountUsername,
       hook_frameworks: analysis.hook_frameworks || [],
@@ -288,13 +292,14 @@ Rules:
       analyzed_at: new Date().toISOString(),
     };
 
-    // Conflict target is the (user, account) key. social_account_key is a
-    // STORED generated column (coalesce(social_account_id,'')) so user-level
+    // Conflict target is the (brand, account) key. social_account_key is a
+    // STORED generated column (coalesce(social_account_id,'')) so brand-level
     // rows (NULL account → '') and per-account rows share one upsert path.
-    // See migration 20260713000000_account_separation.sql.
+    // Was (user, account) until migration 20260904170000_brand_isolation.sql;
+    // per user, a second brand's voice would have overwritten the first's.
     const { error: upsertError } = await supabase
       .from("user_content_profiles")
-      .upsert(profileData, { onConflict: "user_id,social_account_key" });
+      .upsert(profileData, { onConflict: "brand_id,social_account_key" });
 
     if (upsertError) throw new Error(`Failed to save content profile: ${upsertError.message}`);
 
