@@ -528,6 +528,7 @@ async function syncForUser(userId: string): Promise<SyncSummary> {
         caption: p.caption || "",
         media_urls: p.media_urls,
         thumbnail_url: p.thumbnail_url,
+        platform_url: p.platform_url,
         published_at: p.posted_at,
         scheduled_for: p.posted_at,
         scheduled_date: p.posted_at,
@@ -622,6 +623,8 @@ async function syncForUser(userId: string): Promise<SyncSummary> {
       // Threads text posts have no media and must not blank an existing image.
       if (p.thumbnail_url) upd.thumbnail_url = p.thumbnail_url;
       if (p.media_urls.length > 0) upd.media_urls = p.media_urls;
+      // The public URL, for the media kit's top-post links.
+      if (p.platform_url) upd.platform_url = p.platform_url;
       postUpdates.push(upd);
       dailyRows.push({
         post_id: id,

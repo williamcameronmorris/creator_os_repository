@@ -20,6 +20,7 @@ import { SavedIdeasPage } from './pages/SavedIdeasPage';
 import { Profile } from './pages/Profile';
 import { SettingsPage } from './pages/SettingsPage';
 import { HelpPage } from './pages/HelpPage';
+import { PublicMediaKit } from './pages/PublicMediaKit';
 import { PostComposerPage } from './pages/PostComposerPage';
 import { ComposePost } from './pages/ComposePost';
 import { DropZone } from './pages/DropZone';
@@ -134,6 +135,8 @@ function AppContent() {
     return (
       <Routes>
         <Route path="/auth" element={<Auth />} />
+        {/* Public media kit: a brand opens this with no session at all. */}
+        <Route path="/kit/:slug" element={<PublicMediaKit />} />
         <Route path="*" element={<Navigate to="/auth" replace />} />
       </Routes>
     );
@@ -161,6 +164,7 @@ function AppContent() {
     return (
       <Routes>
         <Route path="/onboarding" element={<Onboarding onComplete={loadProfile} />} />
+        <Route path="/kit/:slug" element={<PublicMediaKit />} />
         <Route path="*" element={<Navigate to="/onboarding" replace />} />
       </Routes>
     );
@@ -214,6 +218,8 @@ function AppContent() {
       <Route path="/profile" element={<ProtectedRoute><Layout><Profile /></Layout></ProtectedRoute>} />
       <Route path="/settings" element={<ProtectedRoute><Layout><SettingsPage /></Layout></ProtectedRoute>} />
       <Route path="/help" element={<ProtectedRoute><Layout><HelpPage /></Layout></ProtectedRoute>} />
+      {/* Public media kit renders without Layout even for a signed-in viewer. */}
+      <Route path="/kit/:slug" element={<PublicMediaKit />} />
 
       {/* Ã¢ÂÂÃ¢ÂÂ OAuth Callbacks Ã¢ÂÂÃ¢ÂÂ */}
       {/* OAuth callbacks are rendered above the auth gate (see AppContent top). */}
