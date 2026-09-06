@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { requireUser, corsHeaders } from "../_shared/auth.ts";
+import { requireUser, corsHeaders, resolveBrandId } from "../_shared/auth.ts";
 import { loadVoiceContext, loadAccountNiche } from "../_shared/voice.ts";
 
 /**
@@ -43,6 +43,8 @@ Deno.serve(async (req: Request) => {
       typeof body.socialAccountId === "string" && body.socialAccountId.trim()
         ? body.socialAccountId.trim()
         : null;
+    // Ideas belong to the brand of the scoped account (or the default brand).
+    const brandId = await resolveBrandId(supabase, userId, socialAccountId);
 
     // ── Check and decrement quota ────────────────────────────────────────────
     const { data: quotaData, error: quotaError } = await supabase
@@ -182,6 +184,7 @@ Generate exactly 4 content ideas. Return ONLY a JSON array with this exact shape
     // ── Write suggestions to DB ──────────────────────────────────────────────
     const rows = ideas.slice(0, 5).map((idea: any) => ({
       user_id: userId,
+      brand_id: brandId,
       platform: idea.platform || "instagram",
       content_type: idea.content_type || "reel",
       suggested_topic: idea.suggested_topic || "Untitled Idea",

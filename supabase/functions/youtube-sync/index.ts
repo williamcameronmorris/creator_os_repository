@@ -120,11 +120,11 @@ Deno.serve(async (req: Request) => {
 
     // Follower counts are per brand, and brands are isolated. The direct grant
     // lives on profiles (one per user), so v1 attributes it to the owner's
-    // default brand — the first one created, i.e. the backfilled one. Office >
-    // Connections will let this be reassigned explicitly later.
+    // default brand (brands.is_default). Office > Connections will let this be
+    // reassigned explicitly later.
     const { data: brand, error: brandErr } = await supabase
       .from("brands").select("id").eq("owner_id", userId)
-      .order("created_at", { ascending: true }).limit(1).maybeSingle();
+      .eq("is_default", true).maybeSingle();
     if (brandErr || !brand) throw new Error(`No brand for user ${userId}; the brands backfill has not run`);
 
     // Always read tokens from the profile, never trust tokens from the body.

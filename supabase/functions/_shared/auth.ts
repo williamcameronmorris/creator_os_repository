@@ -83,3 +83,52 @@ export async function requireUserOrCron(
   }
   return await requireUser(req, supabase);
 }
+
+/**
+ * Resolve the brand a write belongs to. Brands are fully isolated tenants
+ * (migration 20260828203000_add_brands.sql), so every brand-scoped row an edge
+ * function writes must carry the brand of the account it came from.
+ *
+ *   - With a Post for Me `socialAccountId`: the brand that account is mapped
+ *     to in brand_social_accounts. The mapping must belong to `userId`. An
+ *     unmapped or foreign account THROWS rather than falling back, because
+ *     silently filing one brand's data under another is the exact bug this
+ *     layer exists to prevent.
+ *   - Without one: the user's default brand (brands.is_default). Right for
+ *     user-level work: cron briefs, comments pulled through the direct grants.
+ *
+ * Never accept a brandId from the request body. The account id is the only
+ * client-supplied scope, and it is validated against ownership here.
+ */
+export async function resolveBrandId(
+  supabase: SupabaseClient,
+  userId: string,
+  socialAccountId?: string | null,
+): Promise<string> {
+  if (socialAccountId) {
+    const { data: mapping, error } = await supabase
+      .from("brand_social_accounts")
+      .select("brand_id, brands!inner(owner_id)")
+      .eq("pfm_account_id", socialAccountId)
+      .maybeSingle();
+    if (error) throw new Error(`brand lookup for account ${socialAccountId}: ${error.message}`);
+    const rel = mapping?.brands as { owner_id?: string } | { owner_id?: string }[] | null | undefined;
+    const ownerId = Array.isArray(rel) ? rel[0]?.owner_id : rel?.owner_id;
+    if (!mapping || ownerId !== userId) {
+      throw new Error(
+        `Account ${socialAccountId} is not mapped to one of your brands. Reconnect it under Office > Connections.`,
+      );
+    }
+    return mapping.brand_id as string;
+  }
+
+  const { data: brand, error } = await supabase
+    .from("brands")
+    .select("id")
+    .eq("owner_id", userId)
+    .eq("is_default", true)
+    .maybeSingle();
+  if (error) throw new Error(`default brand lookup: ${error.message}`);
+  if (!brand) throw new Error(`No default brand for user ${userId}`);
+  return brand.id as string;
+}

@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
-import { requireUser, corsHeaders } from "../_shared/auth.ts";
+import { requireUser, corsHeaders, resolveBrandId } from "../_shared/auth.ts";
 import { canonicalNiche } from "../_shared/niche.ts";
 import { loadVoiceContext, loadAccountNiche } from "../_shared/voice.ts";
 
@@ -304,12 +304,15 @@ async function generateForUser(
   socialAccountId: string | null = null,
 ): Promise<"generated" | "skipped_exists" | { row: Record<string, unknown> }> {
   const briefDate = todayUtc();
+  // Briefs are one row per BRAND per day. Resolve from the account when the
+  // caller scoped one, else the user's default brand (cron mode).
+  const brandId = await resolveBrandId(supabase, userId, socialAccountId);
 
   if (!force) {
     const { data: existing } = await supabase
       .from("ai_daily_briefs")
       .select("id")
-      .eq("user_id", userId)
+      .eq("brand_id", brandId)
       .eq("brief_date", briefDate)
       .maybeSingle();
     if (existing) return "skipped_exists";
@@ -321,8 +324,8 @@ async function generateForUser(
   const { data: row, error } = await supabase
     .from("ai_daily_briefs")
     .upsert(
-      { user_id: userId, brief_date: briefDate, content, model: MODEL },
-      { onConflict: "user_id,brief_date" },
+      { user_id: userId, brand_id: brandId, brief_date: briefDate, content, model: MODEL },
+      { onConflict: "brand_id,brief_date" },
     )
     .select()
     .single();
@@ -409,9 +412,9 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Optional Account Switcher scope for on-demand briefs (cron mode stays
-    // user-level — briefs are one row per user per day; per-account brief
-    // STORAGE is a follow-up).
+    // Optional Account Switcher scope for on-demand briefs. The brief is
+    // stored per BRAND per day (resolved from this account, or the default
+    // brand in cron mode), so two brands never share a row.
     const socialAccountId: string | null =
       typeof body.socialAccountId === "string" && body.socialAccountId.trim()
         ? body.socialAccountId.trim()
@@ -424,7 +427,7 @@ Deno.serve(async (req: Request) => {
       const { data: existing } = await supabase
         .from("ai_daily_briefs")
         .select("*")
-        .eq("user_id", userId)
+        .eq("brand_id", await resolveBrandId(supabase, userId, socialAccountId))
         .eq("brief_date", todayUtc())
         .maybeSingle();
       return new Response(
