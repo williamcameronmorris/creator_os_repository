@@ -34,7 +34,9 @@ describe('media kit admin helpers', () => {
     expect(normalizeConfigs([{ nope: 1 }, 'x', { platform: 'instagram', followers_override: 'abc' }], [])[0]).toMatchObject({
       platform: 'instagram',
       followers_override: null,
+      posts_override: null,
     });
+    expect(normalizeConfigs([{ platform: 'tiktok', posts_override: 312 }], [])[0].posts_override).toBe(312);
   });
 
   it('keeps money in integer cents', () => {

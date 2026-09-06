@@ -63,6 +63,8 @@ interface PlatformConfig {
   show_avg_views?: boolean;
   followers_override?: number | null;
   followers_override_at?: string | null;
+  /** All-time post count typed by the creator, for platforms the app cannot ask. */
+  posts_override?: number | null;
 }
 
 interface KitRow {
@@ -263,7 +265,12 @@ async function buildPayload(supabase: SupabaseClient, kit: KitRow) {
       ? round1(Number(erRow.avg_engagement_rate))
       : null;
 
-    const total_posts = latest?.total_posts && latest.total_posts > 0 ? latest.total_posts : platformPosts.length;
+    // All-time post count comes from a direct grant (Instagram, YouTube) or the
+    // creator's own figure. The number of posts WE have synced is not the same
+    // thing and must not be shown as if it were.
+    const total_posts: number | null = latest?.total_posts && latest.total_posts > 0
+      ? latest.total_posts
+      : typeof cfg.posts_override === "number" && cfg.posts_override > 0 ? Math.round(cfg.posts_override) : null;
     const as_of = latest?.date ?? null;
     if (as_of && (!newestStatDate || as_of > newestStatDate)) newestStatDate = as_of;
 
@@ -285,10 +292,15 @@ async function buildPayload(supabase: SupabaseClient, kit: KitRow) {
 
   const totals = { followers: platforms.reduce((s, x) => s + (x.followers ?? 0), 0) };
 
+  // Top posts: the best post from EVERY visible platform first, in the kit's
+  // platform order, then the next best overall. Ranking purely by views let
+  // one 2.4M Facebook video and four YouTube uploads crowd Instagram out of a
+  // kit for an Instagram-first creator. A few extra candidates ride along so
+  // the page can drop a thumbnail that no longer loads without leaving a gap.
+  const limit = Math.min(12, Math.max(1, kit.top_posts_limit || 6));
   let top_posts: unknown[] = [];
   if (kit.show_top_posts) {
-    const limit = Math.min(12, Math.max(1, kit.top_posts_limit || 6));
-    top_posts = posts
+    const ranked = posts
       .filter((x) => x.thumbnail_url)
       .map((x) => {
         const views = x.views ?? 0;
@@ -303,8 +315,24 @@ async function buildPayload(supabase: SupabaseClient, kit: KitRow) {
           metric_value,
         };
       })
-      .sort((a, b) => b.metric_value - a.metric_value)
-      .slice(0, limit);
+      .sort((a, b) => b.metric_value - a.metric_value);
+    const picked: typeof ranked = [];
+    const taken = new Set<string>();
+    for (const p of visible) {
+      const best = ranked.find((r) => r.platform === p && r.metric_value > 0);
+      if (best) {
+        picked.push(best);
+        taken.add(best.thumbnail_url!);
+      }
+    }
+    for (const r of ranked) {
+      if (picked.length >= limit + 4) break;
+      if (!taken.has(r.thumbnail_url!)) {
+        picked.push(r);
+        taken.add(r.thumbnail_url!);
+      }
+    }
+    top_posts = picked;
   }
 
   const stats_as_of = newestStatDate;
@@ -331,6 +359,7 @@ async function buildPayload(supabase: SupabaseClient, kit: KitRow) {
     platforms,
     rates: ratesRes.data ?? [],
     top_posts,
+    top_posts_limit: limit,
     stats_as_of,
     stats_stale,
   };

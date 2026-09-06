@@ -15,7 +15,8 @@ export interface PublicKitPlatform {
   followers_as_of: string | null;
   growth_30d_pct: number | null;
   engagement_rate: number | null;
-  total_posts: number;
+  /** All-time count from a direct grant or the creator's own figure; null when neither exists. */
+  total_posts: number | null;
   avg_views: number | null;
   as_of: string | null;
 }
@@ -53,7 +54,9 @@ export interface PublicKit {
   totals: { followers: number };
   platforms: PublicKitPlatform[];
   rates: PublicKitRate[];
+  /** Candidates, a few more than the limit, so a dead thumbnail can be dropped without a gap. */
   top_posts: PublicKitPost[];
+  top_posts_limit: number;
   stats_as_of: string | null;
   stats_stale: boolean;
 }

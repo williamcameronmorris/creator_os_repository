@@ -22,7 +22,7 @@ export function StatGrid({ platforms }: { platforms: PublicKitPlatform[] }) {
         if (p.growth_30d_pct != null) stats.push({ value: fmtPct(p.growth_30d_pct), label: '30-DAY GROWTH' });
         if (p.engagement_rate != null) stats.push({ value: `${p.engagement_rate}%`, label: 'ENGAGEMENT' });
         if (p.avg_views != null) stats.push({ value: fmtCompact(p.avg_views), label: 'MEDIAN VIEWS' });
-        if (p.total_posts > 0) stats.push({ value: fmtCompact(p.total_posts), label: 'POSTS' });
+        if (p.total_posts != null && p.total_posts > 0) stats.push({ value: fmtCompact(p.total_posts), label: 'POSTS' });
         const note = p.followers_source === 'manual'
           ? `${p.platform === 'youtube' ? 'SUBSCRIBERS' : 'FOLLOWERS'} ENTERED${p.followers_as_of ? ` ${fmtDate(p.followers_as_of).toUpperCase()}` : ''}`
           : p.as_of ? `AS OF ${fmtDate(p.as_of).toUpperCase()}` : null;
