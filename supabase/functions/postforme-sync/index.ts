@@ -570,7 +570,7 @@ async function syncForUser(userId: string): Promise<SyncSummary> {
 
     const { data: rows, error: rowsErr } = await supabase
       .from("content_posts")
-      .select("id, platform_post_id")
+      .select("id, platform_post_id, brand_id")
       .eq("user_id", userId)
       .eq("platform", platform)
       .in("platform_post_id", withMetrics.map((p) => p.platform_post_id as string));
@@ -581,14 +581,23 @@ async function syncForUser(userId: string): Promise<SyncSummary> {
     const idByPlatformPostId = new Map(
       (rows || [])
         .filter((r) => r.platform_post_id)
-        .map((r) => [r.platform_post_id as string, r.id as string]),
+        .map((r) => [
+          r.platform_post_id as string,
+          { id: r.id as string, brand_id: (r.brand_id as string | null) ?? null },
+        ]),
     );
 
     const postUpdates: Record<string, unknown>[] = [];
     const dailyRows: Record<string, unknown>[] = [];
     for (const p of withMetrics) {
-      const id = idByPlatformPostId.get(p.platform_post_id as string);
-      if (!id) continue;
+      const hit = idByPlatformPostId.get(p.platform_post_id as string);
+      if (!hit) continue;
+      const id = hit.id;
+      // A post keeps the brand it was imported under. Moving an account between
+      // brands is explicit (move_account_history), never a side effect of a
+      // metrics refresh, so brand_id is NOT part of the update below and the
+      // daily row follows the post rather than the current mapping.
+      const rowBrand = hit.brand_id ?? p.brand_id;
       const m = p.metrics as NormalizedMetrics;
       // id is read straight from the table, so ON CONFLICT (id) always fires
       // and this behaves as an update. user_id/platform are included to keep
@@ -596,7 +605,6 @@ async function syncForUser(userId: string): Promise<SyncSummary> {
       const upd: Record<string, unknown> = {
         id,
         user_id: userId,
-        brand_id: p.brand_id,
         platform,
         views: m.views,
         likes: m.likes,
@@ -618,7 +626,7 @@ async function syncForUser(userId: string): Promise<SyncSummary> {
       dailyRows.push({
         post_id: id,
         user_id: userId,
-        brand_id: p.brand_id,
+        brand_id: rowBrand,
         platform,
         snapshot_date: today,
         metrics: {
