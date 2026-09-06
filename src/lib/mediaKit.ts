@@ -73,7 +73,9 @@ const HEADERS = { apikey: import.meta.env.VITE_SUPABASE_ANON_KEY as string };
 
 /** Null when the kit does not exist or is not published. */
 export async function fetchPublicKit(slug: string): Promise<PublicKit | null> {
-  const res = await fetch(`${FN_URL}?slug=${encodeURIComponent(slug)}`, { headers: HEADERS });
+  // no-store: the owner opens this seconds after publishing; a cached miss
+  // would say "not published" for a minute.
+  const res = await fetch(`${FN_URL}?slug=${encodeURIComponent(slug)}`, { headers: HEADERS, cache: 'no-store' });
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`Could not load this media kit (${res.status})`);
   return (await res.json()) as PublicKit;
