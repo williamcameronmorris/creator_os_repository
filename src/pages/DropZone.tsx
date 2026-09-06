@@ -256,6 +256,7 @@ export function DropZone() {
     try {
       const { data, error } = await supabase.functions.invoke('generate-post-packages', {
         body: {
+          brandId: activeBrand?.id,
           description: description.trim() || undefined,
           platforms: selectedPlatforms,
           mediaType: media.kind,

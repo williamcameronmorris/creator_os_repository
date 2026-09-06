@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { requireUser, corsHeaders } from "../_shared/auth.ts";
+import { requireUser, corsHeaders, resolveBrandId } from "../_shared/auth.ts";
 import { loadVoiceContext } from "../_shared/voice.ts";
 
 /**
@@ -90,8 +90,13 @@ Deno.serve(async (req: Request) => {
     const body = await req.json();
     const description: string = (body.description || "").trim();
     const mediaType: string = body.mediaType === "image" ? "image" : "video";
-    // socialAccountId is accepted for forward-compat (per-account voice is a
-    // parallel workstream) but intentionally unused here.
+    // Packages are written for a set of platforms, not one account, so the
+    // voice and the recent-post context come from the BRAND: the caller's
+    // active brand (ownership verified) or the default.
+    const rawBrandId: unknown = body.brandId;
+    const requestedBrandId: string | null =
+      typeof rawBrandId === "string" && rawBrandId.trim() ? rawBrandId.trim() : null;
+    const brandId = await resolveBrandId(supabase, userId, null, requestedBrandId);
     const requested: string[] = Array.isArray(body.platforms) ? body.platforms : [];
     const platforms = [...new Set(requested)].filter((p) => PLATFORM_SPECS[p]);
 
@@ -114,9 +119,8 @@ Deno.serve(async (req: Request) => {
     const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split("T")[0];
 
     const [voiceContext, profileResult, recentResult] = await Promise.all([
-      // 2-arg call by design — do not add per-account args here (parallel
-      // workstream owns _shared/voice.ts).
-      loadVoiceContext(supabase, userId),
+      // The brand's main voice.
+      loadVoiceContext(supabase, userId, null, brandId),
       supabase
         .from("profiles")
         .select("display_name, first_name, niche_preference")
@@ -126,6 +130,7 @@ Deno.serve(async (req: Request) => {
         .from("content_posts")
         .select("caption, title, platform, engagement_rate, likes, comments, published_at")
         .eq("user_id", userId)
+        .eq("brand_id", brandId)
         .eq("status", "published")
         // published_at is what the sync writes; published_date is a dead column.
         .gte("published_at", thirtyDaysAgoStr)

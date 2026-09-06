@@ -92,6 +92,7 @@ async function gatherUserData(
   supabase: SupabaseClient,
   userId: string,
   socialAccountId: string | null = null,
+  brandId: string | null = null,
 ) {
   const now = Date.now();
   const sevenDaysAgo = new Date(now - 7 * 86_400_000).toISOString();
@@ -106,21 +107,21 @@ async function gatherUserData(
   let recentQuery = supabase
     .from("content_posts")
     .select("title, caption, platform, content_type, views, likes, comments, engagement_rate, published_at")
-    .eq("user_id", userId)
+    .eq("user_id", userId).eq("brand_id", brandId)
     .eq("status", "published")
     // published_at is what the sync writes; published_date is a dead column.
     .gte("published_at", sevenDaysAgo);
   let priorCountQuery = supabase
     .from("content_posts")
     .select("id", { count: "exact", head: true })
-    .eq("user_id", userId)
+    .eq("user_id", userId).eq("brand_id", brandId)
     .eq("status", "published")
     .gte("published_at", fourteenDaysAgo)
     .lt("published_at", sevenDaysAgo);
   let historyQuery = supabase
     .from("content_posts")
     .select("published_at, likes, comments")
-    .eq("user_id", userId)
+    .eq("user_id", userId).eq("brand_id", brandId)
     .eq("status", "published")
     .not("published_at", "is", null)
     .gte("published_at", ninetyDaysAgo);
@@ -140,7 +141,7 @@ async function gatherUserData(
     priorCountQuery,
     historyQuery.order("published_at", { ascending: false }).limit(200),
     // Niche resolution order: account profile.niche → profiles.niche_preference.
-    loadAccountNiche(supabase, userId, socialAccountId),
+    loadAccountNiche(supabase, userId, socialAccountId, brandId),
   ]);
 
   const recent = (recentRes.data || []) as PostRow[];
@@ -188,7 +189,7 @@ async function gatherUserData(
   }
 
   // Account-scoped voice when pinned (falls back to the main voice inside).
-  const voiceContext = await loadVoiceContext(supabase, userId, socialAccountId);
+  const voiceContext = await loadVoiceContext(supabase, userId, socialAccountId, brandId);
 
   return {
     creatorName: profileRes.data?.first_name || profileRes.data?.display_name || "creator",
@@ -319,7 +320,7 @@ async function generateForUser(
     if (existing) return "skipped_exists";
   }
 
-  const data = await gatherUserData(supabase, userId, socialAccountId);
+  const data = await gatherUserData(supabase, userId, socialAccountId, brandId);
   const content = await generateBriefContent(data);
 
   const { data: row, error } = await supabase

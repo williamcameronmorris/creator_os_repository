@@ -8,15 +8,18 @@ import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
  * Injected into the system prompt of the AI generators so output sounds like
  * the creator, not generic AI.
  *
- * Account separation: profiles are keyed (user_id, social_account_id).
- * Rows with social_account_id NULL are the user-level/legacy profile — the
- * "main voice". When `socialAccountId` is passed we load THAT account's
- * profile first and fall back to the user-level row if the account hasn't
- * built its own voice yet; @gibsunday and @heycam each sound like themselves,
- * and a brand-new account still gets the main voice instead of generic AI.
+ * Account separation: profiles are keyed (brand_id, social_account_id).
+ * Rows with social_account_id NULL are the BRAND-level profile — the "main
+ * voice" — and there is one per brand (migration 20260904170000). When
+ * `socialAccountId` is passed we load THAT account's profile first and fall
+ * back to the brand's main voice if the account hasn't built its own yet;
+ * @gibsunday and @heycam each sound like themselves, and a brand-new account
+ * still gets its brand's voice instead of generic AI.
  *
- * Backward compatible: 2-arg calls behave exactly as before (user-level row,
- * which is the only row legacy users have).
+ * `brandId` pins the fallback. Without it, a user with two brands has two
+ * main-voice rows and the fallback would pick one at random. Callers resolve
+ * it with resolveBrandId() in _shared/auth.ts; 2- and 3-arg calls still work
+ * for single-brand users.
  *
  * Returns `null` when no usable profile exists, so callers fall back to their
  * default prompt.
@@ -38,11 +41,13 @@ async function fetchProfileRow(
   supabase: SupabaseClient,
   userId: string,
   socialAccountId: string | null,
+  brandId: string | null = null,
 ): Promise<ProfileVoiceRow | null> {
   let query = supabase
     .from("user_content_profiles")
     .select("voice_profile, caption_style, raw_analysis")
     .eq("user_id", userId);
+  if (brandId) query = query.eq("brand_id", brandId);
   // Explicitly pin the account dimension: with per-account rows in the table,
   // an unfiltered .maybeSingle() would error on >1 rows.
   query = socialAccountId
@@ -101,16 +106,17 @@ export async function loadVoiceContext(
   supabase: SupabaseClient,
   userId: string,
   socialAccountId?: string | null,
+  brandId?: string | null,
 ): Promise<string | null> {
   if (socialAccountId) {
-    const accountRow = await fetchProfileRow(supabase, userId, socialAccountId);
+    const accountRow = await fetchProfileRow(supabase, userId, socialAccountId, brandId ?? null);
     if (accountRow) {
       const block = formatVoiceBlock(accountRow);
       if (block) return block;
     }
     // Account has no voice (or an unusable one) — fall back to the main voice.
   }
-  const userRow = await fetchProfileRow(supabase, userId, null);
+  const userRow = await fetchProfileRow(supabase, userId, null, brandId ?? null);
   if (!userRow) return null;
   return formatVoiceBlock(userRow);
 }
@@ -129,14 +135,16 @@ export async function loadAccountNiche(
   supabase: SupabaseClient,
   userId: string,
   socialAccountId?: string | null,
+  brandId?: string | null,
 ): Promise<string | null> {
   if (!socialAccountId) return null;
-  const { data } = await supabase
+  let query = supabase
     .from("user_content_profiles")
     .select("niche")
     .eq("user_id", userId)
-    .eq("social_account_id", socialAccountId)
-    .maybeSingle();
+    .eq("social_account_id", socialAccountId);
+  if (brandId) query = query.eq("brand_id", brandId);
+  const { data } = await query.maybeSingle();
   const niche = ((data as { niche?: string | null } | null)?.niche || "").trim();
   return niche || null;
 }

@@ -67,12 +67,12 @@ Deno.serve(async (req: Request) => {
     let metricsQuery = supabase
       .from("platform_metrics")
       .select("platform, followers_count, avg_engagement_rate, total_views, total_likes, total_comments")
-      .eq("user_id", userId)
+      .eq("user_id", userId).eq("brand_id", brandId)
       .gte("date", thirtyDaysAgoStr);
     let topPostsQuery = supabase
       .from("content_posts")
       .select("platform, title, content_type, views, likes, comments, engagement_rate")
-      .eq("user_id", userId)
+      .eq("user_id", userId).eq("brand_id", brandId)
       .eq("status", "published")
       // published_at is what the sync writes; published_date is a dead column.
       .gte("published_at", thirtyDaysAgoStr);
@@ -94,8 +94,8 @@ Deno.serve(async (req: Request) => {
         .maybeSingle(),
       // Voice only in account mode — user-level runs keep their pre-separation
       // behavior (this function never injected voice before).
-      socialAccountId ? loadVoiceContext(supabase, userId, socialAccountId) : Promise.resolve(null),
-      loadAccountNiche(supabase, userId, socialAccountId),
+      socialAccountId ? loadVoiceContext(supabase, userId, socialAccountId, brandId) : Promise.resolve(null),
+      loadAccountNiche(supabase, userId, socialAccountId, brandId),
     ]);
 
     // Aggregate metrics by platform

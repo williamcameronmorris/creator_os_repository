@@ -252,6 +252,7 @@ export function Clio() {
       const res = await supabase.functions.invoke('ask-copilot', {
         body: {
           userId: user!.id,
+          brandId: activeBrand?.id,
           question,
           // Prior turns so Clio keeps context across follow-ups. The edge
           // function validates + caps this at the last 12 turns anyway.
