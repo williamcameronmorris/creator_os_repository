@@ -3,20 +3,22 @@ import { useSearchParams } from 'react-router-dom';
 import { QuickQuote } from '../components/patra/QuickQuote';
 import { DealsList } from '../components/patra/DealsList';
 import { InvoicesPanel } from '../components/patra/InvoicesPanel';
+import { MediaKitEditor } from '../components/patra/MediaKitEditor';
 
-type PatraTab = 'quote' | 'deals' | 'invoices';
+type PatraTab = 'quote' | 'deals' | 'invoices' | 'kit';
 
 const TABS: { id: PatraTab; label: string }[] = [
   { id: 'quote', label: 'QUOTE' },
   { id: 'deals', label: 'DEALS' },
   { id: 'invoices', label: 'INVOICES' },
+  { id: 'kit', label: 'MEDIA KIT' },
 ];
 
 export function Patra() {
   const [searchParams, setSearchParams] = useSearchParams();
   const initial = searchParams.get('tab');
   const [tab, setTab] = useState<PatraTab>(
-    initial === 'deals' || initial === 'invoices' ? initial : 'quote'
+    initial === 'deals' || initial === 'invoices' || initial === 'kit' ? initial : 'quote'
   );
 
   const switchTab = (next: PatraTab) => {
@@ -60,6 +62,7 @@ export function Patra() {
       {tab === 'quote' && <QuickQuote onDealSaved={() => switchTab('deals')} />}
       {tab === 'deals' && <DealsList />}
       {tab === 'invoices' && <InvoicesPanel />}
+      {tab === 'kit' && <MediaKitEditor />}
     </div>
   );
 }
