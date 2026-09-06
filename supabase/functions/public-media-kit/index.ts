@@ -406,12 +406,14 @@ Deno.serve(async (req) => {
     const slug = (url.searchParams.get("slug") ?? "").trim();
     if (!SLUG_RE.test(slug)) return json({ error: "not_found" }, 404);
     const kit = await findKit(supabase, slug);
-    if (!kit) return json({ error: "not_found" }, 404, { "Cache-Control": "public, max-age=60" });
+    // Never cache the miss. The owner publishes and reloads within the minute,
+    // and a cached 404 would keep telling them the kit is not published.
+    if (!kit) return json({ error: "not_found" }, 404, { "Cache-Control": "no-store" });
 
     const payload = await buildPayload(supabase, kit);
     // Counted on the server so it cannot be gamed from the page.
     await supabase.rpc("increment_media_kit_views", { p_kit_id: kit.id });
-    return json(payload, 200, { "Cache-Control": "public, max-age=300, s-maxage=300" });
+    return json(payload, 200, { "Cache-Control": "public, max-age=60, s-maxage=60" });
   } catch (err) {
     console.error("public-media-kit:", (err as Error).message);
     return json({ error: "Something went wrong" }, 500);
