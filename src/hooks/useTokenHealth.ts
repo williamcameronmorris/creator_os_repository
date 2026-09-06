@@ -1,23 +1,16 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
+import { assessTokenHealth, type PlatformHealth } from '../lib/tokenHealth';
 
-export type TokenStatus = 'connected' | 'expired' | 'missing' | 'unknown';
-
-export interface PlatformHealth {
-  platform: string;
-  status: TokenStatus;
-  label: string;
-}
+export type { PlatformHealth, TokenStatus } from '../lib/tokenHealth';
 
 /**
- * Checks the health of connected platform tokens by:
- * 1. Checking if tokens exist in the profiles table
- * 2. For platforms with expiry timestamps, checking if they're within 24h of expiring
- *
- * The actual API-level validation (making a test call) is too expensive to do
- * on every load, so we rely on expiry times and the `token_expires_at` columns.
+ * Health of the DIRECT platform grants the app still relies on (see
+ * src/lib/tokenHealth.ts for which ones and why). Reads the token_health
+ * view (derived booleans + expiry only) so raw tokens never reach the
+ * browser. See migration 20260701000100_add_token_health_view.sql.
  */
-export function useTokenHealth(): { platformHealth: PlatformHealth[]; loading: boolean; refresh: () => void; } {
+export function useTokenHealth(): { platformHealth: PlatformHealth[]; loading: boolean; refresh: () => void } {
   const [platformHealth, setPlatformHealth] = useState<PlatformHealth[]>([]);
   const [loading, setLoading] = useState(true);
   const [tick, setTick] = useState(0);
@@ -29,54 +22,22 @@ export function useTokenHealth(): { platformHealth: PlatformHealth[]; loading: b
       setLoading(true);
       const { data: { session } } = await supabase.auth.getSession();
       const user = session?.user;
-      if (!user) { setLoading(false); return; }
-
-      // Reads from the token_health view (derived booleans + expiry only) so
-      // raw access tokens never enter the browser. See migration
-      // 20260701000100_add_token_health_view.sql.
-      const { data: profile } = await supabase
+      if (!user) {
+        setLoading(false);
+        return;
+      }
+      const { data: row } = await supabase
         .from('token_health')
-        .select(
-          'instagram_connected, instagram_token_expires_at, youtube_connected, youtube_token_expires_at, tiktok_connected, tiktok_token_expires_at, threads_connected, threads_token_expires_at'
-        )
+        .select('instagram_connected, instagram_token_expires_at, youtube_connected, youtube_token_expires_at, threads_connected, threads_token_expires_at')
         .eq('user_id', user.id)
         .maybeSingle();
-
       if (!active) return;
-
-      const now = Date.now();
-      const SOON_MS = 24 * 60 * 60 * 1000; // 24 hours
-
-      const check = (
-        platform: string,
-        label: string,
-        connected: boolean | null | undefined,
-        expiresAt: string | null | undefined
-      ): PlatformHealth => {
-        if (!connected) return { platform, status: 'missing', label };
-        if (expiresAt) {
-          const expMs = new Date(expiresAt).getTime();
-          if (expMs - now < SOON_MS) return { platform, status: 'expired', label };
-        }
-        return { platform, status: 'connected', label };
-      };
-
-      const health: PlatformHealth[] = [
-        check('instagram', 'Instagram', profile?.instagram_connected, profile?.instagram_token_expires_at),
-        // YouTube stores a short-lived (1h) ACCESS-token expiry that is refreshed
-        // on demand from the long-lived refresh token, so a past value is normal
-        // and not a sign the connection is broken. Judge YouTube by the refresh
-        // token's presence (youtube_connected), not that expiry — otherwise the
-        // banner false-flags "expired" for every healthy YouTube connection.
-        check('youtube', 'YouTube', profile?.youtube_connected, null),
-        check('tiktok', 'TikTok', profile?.tiktok_connected, profile?.tiktok_token_expires_at),
-        check('threads', 'Threads', profile?.threads_connected, profile?.threads_token_expires_at),
-      ].filter((h) => h.status !== 'missing'); // only show platforms that were at some point connected
-
-      setPlatformHealth(health);
+      setPlatformHealth(assessTokenHealth(row));
       setLoading(false);
     })();
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, [tick]);
 
   return { platformHealth, loading, refresh };

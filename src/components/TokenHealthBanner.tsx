@@ -4,12 +4,14 @@ import { useTokenHealth } from '../hooks/useTokenHealth';
 import { useState } from 'react';
 
 /**
- * Renders a dismissible warning banner when any connected platform token
- * is expired or expiring soon. Links directly to Settings for reconnect.
+ * Renders a dismissible banner when a DIRECT platform grant the app still
+ * relies on has expired. The copy names what actually stops working (see
+ * src/lib/tokenHealth.ts); it never claims posting or syncing are at risk,
+ * because those run through Post for Me. Links to Settings for reconnect.
  */
 export function TokenHealthBanner() {
   const navigate = useNavigate();
-  const { platformHealth, loading, refresh } = useTokenHealth();
+  const { platformHealth, loading } = useTokenHealth();
   const [dismissed, setDismissed] = useState<string[]>([]);
 
   if (loading) return null;
@@ -29,8 +31,9 @@ export function TokenHealthBanner() {
         >
           <AlertTriangle className="w-4 h-4 flex-shrink-0 text-amber-500" />
           <p className="text-sm font-medium flex-1">
-            Your <strong>{p.label}</strong> connection has expired or is expiring soon.
-            Reconnect to keep posting and syncing.
+            Your direct <strong>{p.label}</strong> connection has expired
+            {p.severity === 'notice' ? '. ' : ' or is expiring soon. '}
+            {p.impact}
           </p>
           <button
             onClick={() => navigate('/settings')}
