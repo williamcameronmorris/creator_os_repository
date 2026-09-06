@@ -115,6 +115,7 @@ export function ScriptingStage({ workflowId, contentType, onComplete, onSkip }: 
       const { data: fnData, error: fnError } = await supabase.functions.invoke('generate-script', {
         body: {
           userId: user.id,
+          brandId: activeBrand?.id,
           workflowId,
           topic,
           contentType,

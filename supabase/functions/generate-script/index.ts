@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { requireUser, corsHeaders } from "../_shared/auth.ts";
+import { requireUser, corsHeaders, resolveBrandId } from "../_shared/auth.ts";
 import { loadVoiceContext, loadAccountNiche } from "../_shared/voice.ts";
 
 /**
@@ -36,9 +36,15 @@ Deno.serve(async (req: Request) => {
     const auth = await requireUser(req, supabase);
     if (!auth.ok) return auth.response;
     const userId = auth.userId;
-    const { workflowId, topic, contentType, mode, socialAccountId: rawAccountId } = await req.json();
+    const { workflowId, topic, contentType, mode, socialAccountId: rawAccountId, brandId: rawBrandId } = await req.json();
     const socialAccountId: string | null =
       typeof rawAccountId === "string" && rawAccountId.trim() ? rawAccountId.trim() : null;
+    const requestedBrandId: string | null =
+      typeof rawBrandId === "string" && rawBrandId.trim() ? rawBrandId.trim() : null;
+    // Every read below is scoped to ONE brand: the account's brand when the
+    // switcher pins an account, else the caller's active brand (ownership
+    // verified), else the default brand.
+    const brandId = await resolveBrandId(supabase, userId, socialAccountId, requestedBrandId);
 
     // ── Check quota ──────────────────────────────────────────────────────────
     const { data: quotaData, error: quotaError } = await supabase
@@ -58,6 +64,7 @@ Deno.serve(async (req: Request) => {
       .from("content_posts")
       .select("platform, title, content_type, engagement_rate")
       .eq("user_id", userId)
+      .eq("brand_id", brandId)
       .eq("status", "published")
       // published_at is what the sync writes; published_date is a dead column.
       .gte("published_at", thirtyDaysAgoStr);
@@ -73,9 +80,9 @@ Deno.serve(async (req: Request) => {
         .maybeSingle(),
       // The creator's own voice fingerprint (null until they've built one).
       // Account-scoped when socialAccountId is set, falling back to the main voice.
-      loadVoiceContext(supabase, userId, socialAccountId),
+      loadVoiceContext(supabase, userId, socialAccountId, brandId),
       // Account niche → profiles.niche_preference fallback (below).
-      loadAccountNiche(supabase, userId, socialAccountId),
+      loadAccountNiche(supabase, userId, socialAccountId, brandId),
     ]);
 
     const topPosts = (topPostsResult.data || []).map((p) =>

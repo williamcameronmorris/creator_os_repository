@@ -3,6 +3,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 // same as generate-script and the other AI functions.
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { loadVoiceContext, loadAccountNiche } from "../_shared/voice.ts";
+import { resolveBrandId } from "../_shared/auth.ts";
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -111,7 +112,7 @@ Deno.serve(async (req: Request) => {
     }
     const userId = userData.user.id;
 
-    const { question, messages: rawHistory, socialAccountId: rawAccountId } = await req.json();
+    const { question, messages: rawHistory, socialAccountId: rawAccountId, brandId: rawBrandId } = await req.json();
     if (!question?.trim()) return new Response(JSON.stringify({ error: "question is required" }), { status: 400, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
 
     // Optional Account Switcher scope. When present, Clio answers as THAT
@@ -119,6 +120,12 @@ Deno.serve(async (req: Request) => {
     // ("All accounts" / legacy clients) → exactly today's user-level behavior.
     const socialAccountId: string | null =
       typeof rawAccountId === "string" && rawAccountId.trim() ? rawAccountId.trim() : null;
+    const requestedBrandId: string | null =
+      typeof rawBrandId === "string" && rawBrandId.trim() ? rawBrandId.trim() : null;
+    // Every read below is scoped to ONE brand: the account's brand when the
+    // switcher pins an account, else the caller's active brand (ownership
+    // verified), else the default brand.
+    const brandId = await resolveBrandId(supabase, userId, socialAccountId, requestedBrandId);
 
     // Optional conversation history: [{ role: "user"|"assistant", content: string }].
     // Validated strictly (roles + string content only) and capped at the last
@@ -149,6 +156,7 @@ Deno.serve(async (req: Request) => {
         const r = await supabase.from("deals")
           .select("brand_name, brand, stage, final_amount, quote_standard")
           .eq("user_id", userId)
+          .eq("brand_id", brandId)
           .order("created_at", { ascending: false })
           .limit(10);
         return r.error ? [] : (r.data || []);
@@ -158,9 +166,9 @@ Deno.serve(async (req: Request) => {
     // Account-scoped post queries: when the Account Switcher pins an account,
     // only its posts feed the DATA block (legacy rows were backfilled with
     // their account id, so single-account history is fully included).
-    let topPostsQuery = supabase.from("content_posts").select("title, caption, platform, media_type, views, likes, comments, engagement_rate, published_at").eq("user_id", userId).eq("status", "published").gte("published_at", thirtyDaysAgo);
-    let recentPostsQuery = supabase.from("content_posts").select("title, caption, platform, media_type, views, likes, comments, saves, shares, engagement_rate, published_at").eq("user_id", userId).eq("status", "published").gte("published_at", sevenDaysAgo);
-    let metricsQuery = supabase.from("platform_metrics").select("platform, date, followers_count, avg_engagement_rate").eq("user_id", userId).gte("date", sevenDaysAgo);
+    let topPostsQuery = supabase.from("content_posts").select("title, caption, platform, media_type, views, likes, comments, engagement_rate, published_at").eq("user_id", userId).eq("brand_id", brandId).eq("status", "published").gte("published_at", thirtyDaysAgo);
+    let recentPostsQuery = supabase.from("content_posts").select("title, caption, platform, media_type, views, likes, comments, saves, shares, engagement_rate, published_at").eq("user_id", userId).eq("brand_id", brandId).eq("status", "published").gte("published_at", sevenDaysAgo);
+    let metricsQuery = supabase.from("platform_metrics").select("platform, date, followers_count, avg_engagement_rate").eq("user_id", userId).eq("brand_id", brandId).gte("date", sevenDaysAgo);
     if (socialAccountId) {
       topPostsQuery = topPostsQuery.eq("social_account_id", socialAccountId);
       recentPostsQuery = recentPostsQuery.eq("social_account_id", socialAccountId);
@@ -178,8 +186,8 @@ Deno.serve(async (req: Request) => {
       supabase.from("inspiration_entries").select("performance_tier, hook_framework"),
       // The creator's own voice fingerprint (null until they've built one).
       // Account-scoped when pinned; falls back to the main voice.
-      loadVoiceContext(supabase, userId, socialAccountId),
-      loadAccountNiche(supabase, userId, socialAccountId),
+      loadVoiceContext(supabase, userId, socialAccountId, brandId),
+      loadAccountNiche(supabase, userId, socialAccountId, brandId),
     ]);
 
     const profile = profileResult.data;

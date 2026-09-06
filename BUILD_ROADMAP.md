@@ -22,7 +22,7 @@
 | Deploy `meta-auth` edge function | ✅ | ACTIVE |
 | Deploy `threads-auth` edge function | ✅ | ACTIVE |
 | Deploy `instagram-sync` edge function | ✅ | ACTIVE |
-| Deploy `tiktok-sync` edge function | ✅ | ACTIVE |
+| ~~Deploy `tiktok-sync` edge function~~ | retired 2026-09-06 | TikTok metrics come from the Post for Me feed via `postforme-sync` |
 | Deploy `youtube-sync` edge function | ✅ | ACTIVE |
 | Deploy `instagram-publish` edge function | ✅ | ACTIVE |
 | Deploy `generate-ideas` edge function | ✅ | ACTIVE — calls Claude, writes to `ai_content_suggestions` |
@@ -93,7 +93,7 @@ Low priority. Blocked on external data source (Apify, RapidAPI).
 | `meta-auth` | ✅ ACTIVE | Meta/Facebook OAuth code exchange |
 | `threads-auth` | ✅ ACTIVE | Threads OAuth token exchange |
 | `instagram-sync` | ✅ ACTIVE | Pull IG metrics → `platform_metrics` + `post_analytics` |
-| `tiktok-sync` | ✅ ACTIVE | Pull TikTok metrics |
+| ~~`tiktok-sync`~~ | RETIRED | Superseded by `postforme-sync` (Post for Me feed) |
 | `youtube-sync` | ✅ ACTIVE | Pull YouTube metrics |
 | `instagram-publish` | ✅ ACTIVE | Publish posts to IG via Graph API |
 | `generate-ideas` | ✅ ACTIVE | Generate content ideas using Claude Haiku |
