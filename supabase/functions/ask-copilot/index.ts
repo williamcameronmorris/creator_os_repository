@@ -141,10 +141,11 @@ Deno.serve(async (req: Request) => {
           .slice(-12)
       : [];
 
-    const { data: quotaData, error: quotaError } = await supabase.rpc("check_and_reset_ai_quota", { p_user_id: userId });
-    if (quotaError || !quotaData || quotaData.length === 0) return new Response(JSON.stringify({ error: "Could not check AI quota." }), { status: 500, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
-    const quota = quotaData[0];
-    if (quota.requests_remaining <= 0) return new Response(JSON.stringify({ error: "Daily AI quota exceeded." }), { status: 429, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
+    // Reserve BEFORE generating: atomic guarded UPDATE, false at the limit, so two
+    // concurrent questions cannot both slip through the old check-then-count gap.
+    const { data: reserved, error: quotaError } = await supabase.rpc("increment_ai_request", { p_user_id: userId });
+    if (quotaError) return new Response(JSON.stringify({ error: "Could not check AI quota." }), { status: 500, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
+    if (!reserved) return new Response(JSON.stringify({ error: "Daily AI quota exceeded." }), { status: 429, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
 
     const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString().split("T")[0];
     const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString().split("T")[0];
@@ -499,7 +500,6 @@ Style: direct, post-level, under 250 words. No filler, no preamble, no platform-
     const anthropicData = await anthropicRes.json();
     const answer = anthropicData.content?.[0]?.text || "Sorry, I couldn't generate a response.";
 
-    await supabase.rpc("increment_ai_request", { p_user_id: userId });
 
     return new Response(JSON.stringify({ answer, success: true, voiceActive: !!voiceContext }), {
       headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },

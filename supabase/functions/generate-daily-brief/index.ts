@@ -404,10 +404,11 @@ Deno.serve(async (req: Request) => {
 
     // On-demand generation is a user-initiated AI call — quota applies
     // (cron-generated briefs are system work and bypass this).
-    const { data: quotaData, error: quotaError } = await supabase
-      .rpc("check_and_reset_ai_quota", { p_user_id: userId });
-    if (quotaError || !quotaData?.[0]) throw new Error("Failed to check AI quota");
-    if (quotaData[0].requests_remaining <= 0) {
+    const { data: reserved, error: quotaError } = await supabase
+      .rpc("increment_ai_request", { p_user_id: userId });
+    // Reserve BEFORE generating: atomic guarded UPDATE, false at the limit.
+    if (quotaError) throw new Error("Failed to check AI quota");
+    if (!reserved) {
       return new Response(
         JSON.stringify({ error: "Daily AI quota exceeded. Resets at midnight." }),
         { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
@@ -442,7 +443,6 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    await supabase.rpc("increment_ai_request", { p_user_id: userId });
 
     return new Response(
       JSON.stringify({ success: true, brief: (result as { row: Record<string, unknown> }).row }),

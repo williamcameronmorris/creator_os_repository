@@ -47,13 +47,13 @@ Deno.serve(async (req: Request) => {
     const brandId = await resolveBrandId(supabase, userId, socialAccountId, requestedBrandId);
 
     // ── Check quota ──────────────────────────────────────────────────────────
-    const { data: quotaData, error: quotaError } = await supabase
-      .rpc("check_and_reset_ai_quota", { p_user_id: userId });
-
-    if (quotaError || !quotaData?.[0]) throw new Error("Failed to check AI quota");
-    if (quotaData[0].requests_remaining <= 0) {
-      throw new Error("Daily AI quota exceeded. Resets at midnight.");
-    }
+    const { data: reserved, error: quotaError } = await supabase
+      .rpc("increment_ai_request", { p_user_id: userId });
+    // Reserve BEFORE generating. The RPC is an atomic guarded UPDATE that
+    // returns false at the day's limit, so two concurrent calls cannot both
+    // slip through the way check-then-generate-then-count did.
+    if (quotaError) throw new Error("Failed to check AI quota");
+    if (!reserved) throw new Error("Daily AI quota exceeded. Resets at midnight.");
 
     // ── Pull platform context from DB ────────────────────────────────────────
     const thirtyDaysAgo = new Date();
@@ -229,8 +229,6 @@ No markdown. No explanation. Just the JSON object.`;
         .eq("user_id", userId); // never write another user's workflow row
     }
 
-    // ── Decrement quota ──────────────────────────────────────────────────────
-    await supabase.rpc("increment_ai_request", { p_user_id: userId });
 
     return new Response(
       JSON.stringify({ success: true, result }),
