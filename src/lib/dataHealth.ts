@@ -17,6 +17,7 @@ import { supabase } from './supabase';
 
 export interface DataHealth {
   user_id: string;
+  brand_id: string;
   last_instagram_sync: string | null;
   last_youtube_sync: string | null;
   last_facebook_sync: string | null;
@@ -65,11 +66,12 @@ function fmtDate(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
 }
 
-export async function fetchDataHealth(userId: string): Promise<DataHealth | null> {
+/** One row per BRAND: connections, syncs and coverage for that brand only. */
+export async function fetchDataHealth(brandId: string): Promise<DataHealth | null> {
   const { data, error } = await supabase
     .from('data_health')
     .select('*')
-    .eq('user_id', userId)
+    .eq('brand_id', brandId)
     .maybeSingle();
   if (error) {
     console.warn('data_health query failed:', error.message);

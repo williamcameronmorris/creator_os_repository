@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase, type Deal, type DealInvoiceRecord } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
+import { useBrand } from '../../contexts/BrandContext';
 import { Plus, X, AlertCircle } from 'lucide-react';
 
 const ERROR_COLOR = '#B07050';
@@ -27,6 +28,7 @@ const today = () => new Date().toISOString().split('T')[0];
 
 export function InvoicesPanel() {
   const { user } = useAuth();
+  const { activeBrand } = useBrand();
   const [invoices, setInvoices] = useState<DealInvoiceRecord[]>([]);
   const [deals, setDeals] = useState<Deal[]>([]);
   const [loading, setLoading] = useState(true);
@@ -44,10 +46,10 @@ export function InvoicesPanel() {
   });
 
   const load = useCallback(async () => {
-    if (!user) return;
+    if (!user || !activeBrand) return;
     const [invRes, dealsRes] = await Promise.all([
-      supabase.from('deal_invoices').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
-      supabase.from('deals').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
+      supabase.from('deal_invoices').select('*').eq('user_id', user.id).eq('brand_id', activeBrand.id).order('created_at', { ascending: false }),
+      supabase.from('deals').select('*').eq('user_id', user.id).eq('brand_id', activeBrand.id).order('created_at', { ascending: false }),
     ]);
     if (invRes.error || dealsRes.error) {
       setError('Could not load invoices.');
@@ -57,7 +59,7 @@ export function InvoicesPanel() {
       setError('');
     }
     setLoading(false);
-  }, [user]);
+  }, [user, activeBrand]);
 
   useEffect(() => {
     load();
@@ -93,7 +95,7 @@ export function InvoicesPanel() {
   };
 
   const handleCreate = async () => {
-    if (!user) return;
+    if (!user || !activeBrand) return;
     if (!form.deal_id) {
       setError('Pick the deal this invoice belongs to.');
       return;
@@ -103,6 +105,7 @@ export function InvoicesPanel() {
     try {
       const { error: insertError } = await supabase.from('deal_invoices').insert({
         user_id: user.id,
+        brand_id: activeBrand.id,
         deal_id: form.deal_id,
         invoice_number: form.invoice_number.trim(),
         invoice_amount: form.invoice_amount,

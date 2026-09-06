@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { useBrand } from '../contexts/BrandContext';
 
 /**
  * useChallenge — single source of truth for the in-app 30-day challenge feature.
@@ -96,6 +97,7 @@ const EMPTY: LoadedState = {
 
 export function useChallenge() {
   const { user } = useAuth();
+  const { activeBrand } = useBrand();
   const [state, setState] = useState<LoadedState>(EMPTY);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -106,6 +108,7 @@ export function useChallenge() {
       setLoading(false);
       return;
     }
+    if (!activeBrand) return;
     setLoading(true);
     setError(null);
     try {
@@ -121,6 +124,7 @@ export function useChallenge() {
         .from('challenge_progress')
         .select('id, user_id, track_id, status, started_at, completed_at')
         .eq('user_id', user.id)
+        .eq('brand_id', activeBrand.id)
         .eq('status', 'active')
         .maybeSingle();
       if (progressErr && progressErr.code !== 'PGRST116') throw progressErr;
@@ -192,7 +196,7 @@ export function useChallenge() {
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [user, activeBrand]);
 
   useEffect(() => {
     void load();
@@ -205,16 +209,17 @@ export function useChallenge() {
   const startChallenge = useCallback(
     async (trackId: string): Promise<ChallengeProgress> => {
       if (!user) throw new Error('Not authenticated');
+      if (!activeBrand) throw new Error('No active brand');
       const { data, error } = await supabase
         .from('challenge_progress')
-        .insert({ user_id: user.id, track_id: trackId, status: 'active' })
+        .insert({ user_id: user.id, brand_id: activeBrand.id, track_id: trackId, status: 'active' })
         .select('id, user_id, track_id, status, started_at, completed_at')
         .single();
       if (error) throw error;
       await load();
       return data as ChallengeProgress;
     },
-    [user, load]
+    [user, activeBrand, load]
   );
 
   const captureBaseline = useCallback(

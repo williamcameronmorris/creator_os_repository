@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { ArrowRight } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useConnectionStatus } from '../contexts/ConnectionStatusContext';
+import { useBrand } from '../contexts/BrandContext';
 import {
   POSTFORME_PLATFORMS,
   initPostForMeConnect,
@@ -23,6 +24,7 @@ interface Props {
 export function PostForMeConnections({ initialFlash }: Props) {
   const { user } = useAuth();
   const ctx = useConnectionStatus();
+  const { brands, activeBrand, accountBrandMap, assignAccount } = useBrand();
   // Seed from the global ConnectionStatusProvider so we don't double-fetch
   // PFM's account list on every mount. The provider already loaded this
   // when the user signed in. Only fall back to a local fetch if the
@@ -44,6 +46,39 @@ export function PostForMeConnections({ initialFlash }: Props) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
+
+  // Reconcile: any connected account with no brand yet belongs to the brand
+  // that is active right now. The Post for Me callback does not say which
+  // account was just created, so this runs on load and after every connect;
+  // the row shows its brand so a mis-filing is visible and fixable below.
+  useEffect(() => {
+    if (!activeBrand || loading) return;
+    const unmapped = accounts.filter(
+      (a) => a.status !== 'disconnected' && !accountBrandMap.has(a.id)
+    );
+    if (unmapped.length === 0) return;
+    (async () => {
+      for (const a of unmapped) {
+        try {
+          await assignAccount(a, activeBrand.id);
+        } catch (err) {
+          setError(`Could not file ${a.platform} under ${activeBrand.name}: ${(err as Error).message}`);
+        }
+      }
+    })();
+  }, [accounts, activeBrand, accountBrandMap, assignAccount, loading]);
+
+  const brandName = (id: string | undefined) => brands.find((b) => b.id === id)?.name;
+
+  const handleMove = async (account: PostForMeAccount, brandId: string) => {
+    setError(null);
+    try {
+      await assignAccount(account, brandId);
+      setFlash(`Moved ${account.platform.toUpperCase()} to ${brandName(brandId) ?? 'brand'}.`);
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  };
 
   useEffect(() => {
     if (!flash) return;
@@ -190,6 +225,22 @@ export function PostForMeConnections({ initialFlash }: Props) {
                   </div>
                   <div className="t-micro mt-0.5">
                     {account.isActive === false ? 'INACTIVE' : 'ACTIVE'} · VIA POST FOR ME
+                    {' · '}
+                    {brands.length > 1 ? (
+                      <select
+                        aria-label={`Brand for ${account.username || account.id}`}
+                        value={accountBrandMap.get(account.id) ?? ''}
+                        onChange={(e) => handleMove(account, e.target.value)}
+                        className="t-micro bg-transparent border border-border h-5 px-1 text-foreground"
+                      >
+                        {!accountBrandMap.has(account.id) && <option value="">NO BRAND</option>}
+                        {brands.map((b) => (
+                          <option key={b.id} value={b.id}>{b.name.toUpperCase()}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span>{(brandName(accountBrandMap.get(account.id)) ?? 'NO BRAND').toUpperCase()}</span>
+                    )}
                   </div>
                 </div>
                 <button

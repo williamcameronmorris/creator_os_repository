@@ -5,6 +5,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { TokenHealthBanner } from './TokenHealthBanner';
 import { ConnectionGateBanner } from './ConnectionGateBanner';
 import { AccountSwitcher } from './AccountSwitcher';
+import { BrandSwitcher } from './BrandSwitcher';
 import {
   Settings as SettingsIcon,
   LogOut,
@@ -162,7 +163,8 @@ export function Layout({ children }: LayoutProps) {
 
             {/* Right controls */}
             <div className="flex items-center gap-3">
-              {/* Account scope for the whole app — voice, niche, analytics. */}
+              {/* Scope for the whole app, read left to right: brand, then account. */}
+              <BrandSwitcher />
               <AccountSwitcher />
               <button
                 onClick={toggleTheme}

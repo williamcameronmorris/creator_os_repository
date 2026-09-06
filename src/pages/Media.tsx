@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useBrand } from '../contexts/BrandContext';
 import { supabase } from '../lib/supabase';
 import { Image as ImageIcon, Video, Upload, Trash2, Download, X } from 'lucide-react';
 import { format } from 'date-fns';
@@ -15,6 +16,7 @@ interface MediaFile {
 
 export function Media() {
   const { user } = useAuth();
+  const { activeBrand } = useBrand();
   const [media, setMedia] = useState<MediaFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -28,10 +30,10 @@ export function Media() {
     } else {
       setLoading(false);
     }
-  }, [user]);
+  }, [user, activeBrand]);
 
   const loadMedia = async () => {
-    if (!user) return;
+    if (!user || !activeBrand) return;
 
     // Bounded to the 200 most-recent uploads. Larger libraries should switch
     // to virtualized list + range-based loading (follow-up).
@@ -39,6 +41,7 @@ export function Media() {
       .from('media_library')
       .select('*')
       .eq('user_id', user.id)
+      .eq('brand_id', activeBrand.id)
       .order('uploaded_at', { ascending: false })
       .range(0, 199);
 
@@ -51,6 +54,7 @@ export function Media() {
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
+    if (!activeBrand) return;
 
     setUploading(true);
 
@@ -74,6 +78,7 @@ export function Media() {
 
         await supabase.from('media_library').insert({
           user_id: user!.id,
+          brand_id: activeBrand.id,
           file_name: file.name,
           file_url: publicUrl,
           file_type: file.type.startsWith('video') ? 'video' : 'image',

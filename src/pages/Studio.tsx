@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { supabase, type AIContentSuggestion } from '../lib/supabase';
+import { useBrand } from '../contexts/BrandContext';
 import { getAIQuota, type AIQuotaInfo } from '../lib/aiQuota';
 import { WorkflowStepper, type WorkflowStage } from '../components/Studio/WorkflowStepper';
 import { IdeationStage } from '../components/Studio/IdeationStage';
@@ -11,6 +12,7 @@ import { AnalysisStage } from '../components/Studio/AnalysisStage';
 import { Bot, CheckCircle } from 'lucide-react';
 
 export function Studio() {
+  const { activeBrand } = useBrand();
   const [activeStage, setActiveStage] = useState<WorkflowStage>('ideation');
   const [completedStages, setCompletedStages] = useState<WorkflowStage[]>([]);
   const [activeWorkflowId, setActiveWorkflowId] = useState<string | null>(null);
@@ -37,6 +39,7 @@ export function Studio() {
   // into Scripting. Without it (e.g. the 30-day challenge) we pre-fill the
   // Ideation stage and let the user confirm.
   useEffect(() => {
+    if (!activeBrand) return;
     const ideaParam = searchParams.get('idea');
     if (!ideaParam) return;
     const autostart = searchParams.get('autostart') === '1';
@@ -58,12 +61,13 @@ export function Studio() {
     } else {
       setPrefilledIdea(idea);
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeBrand]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleIdeaSelected = async (idea: AIContentSuggestion) => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { alert('You must be logged in to start a project.'); return; }
+      if (!activeBrand) { alert('No active brand selected.'); return; }
 
       if (idea.id) {
         await supabase
@@ -76,6 +80,7 @@ export function Studio() {
         .from('content_workflow_stages')
         .insert({
           user_id: user.id,
+          brand_id: activeBrand.id,
           platform: idea.platform,
           content_type: idea.content_type,
           current_stage: 'scripting',

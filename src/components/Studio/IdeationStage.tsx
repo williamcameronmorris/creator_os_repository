@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase, type AIContentSuggestion } from '../../lib/supabase';
 import { useAccount } from '../../contexts/AccountContext';
+import { useBrand } from '../../contexts/BrandContext';
 import { Sparkles, Bot, ThumbsDown, ArrowRight, PenTool, Lightbulb, Zap } from 'lucide-react';
 
 interface IdeationStageProps {
@@ -10,6 +11,7 @@ interface IdeationStageProps {
 
 export function IdeationStage({ onIdeaSelected, prefilledIdea }: IdeationStageProps) {
   const { activeAccount } = useAccount();
+  const { activeBrand } = useBrand();
   const [mode, setMode] = useState<'ai' | 'manual'>('ai');
   const [suggestions, setSuggestions] = useState<AIContentSuggestion[]>([]);
   const [loading, setLoading] = useState(false);
@@ -21,9 +23,10 @@ export function IdeationStage({ onIdeaSelected, prefilledIdea }: IdeationStagePr
 
   useEffect(() => {
     if (mode === 'ai') { loadSuggestions(); }
-  }, [mode]);
+  }, [mode, activeBrand]);
 
   const loadSuggestions = async () => {
+    if (!activeBrand) return;
     setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
@@ -31,6 +34,7 @@ export function IdeationStage({ onIdeaSelected, prefilledIdea }: IdeationStagePr
       .from('ai_content_suggestions')
       .select('*')
       .eq('user_id', user.id)
+      .eq('brand_id', activeBrand.id)
       .eq('status', 'new')
       .order('created_at', { ascending: false });
     if (data) setSuggestions(data);
@@ -38,6 +42,7 @@ export function IdeationStage({ onIdeaSelected, prefilledIdea }: IdeationStagePr
   };
 
   const generateIdeas = async () => {
+    if (!activeBrand) return;
     setGenerating(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -47,6 +52,7 @@ export function IdeationStage({ onIdeaSelected, prefilledIdea }: IdeationStagePr
       const { data: result, error } = await supabase.functions.invoke('generate-ideas', {
         body: {
           userId: user.id,
+          brandId: activeBrand.id,
           // Account Switcher scope: ideas grounded in this account's posts,
           // voice, and niche. Omitted under "All accounts" (legacy behavior).
           ...(activeAccount ? { socialAccountId: activeAccount.id } : {}),

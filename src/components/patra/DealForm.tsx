@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { supabase, type Deal, type DealStage } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
+import { useBrand } from '../../contexts/BrandContext';
 import { AlertCircle, X } from 'lucide-react';
 
 const ERROR_COLOR = '#B07050';
@@ -20,6 +21,7 @@ interface DealFormProps {
 
 export function DealForm({ deal, stages, onSaved, onClose }: DealFormProps) {
   const { user } = useAuth();
+  const { activeBrand } = useBrand();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -47,7 +49,7 @@ export function DealForm({ deal, stages, onSaved, onClose }: DealFormProps) {
     setForm((f) => ({ ...f, [key]: value }));
 
   const handleSave = async () => {
-    if (!user) return;
+    if (!user || !activeBrand) return;
     if (!form.brand.trim()) {
       setError('Brand is the one required field.');
       return;
@@ -87,6 +89,7 @@ export function DealForm({ deal, stages, onSaved, onClose }: DealFormProps) {
           await supabase.from('deal_activities').insert({
             deal_id: deal.id,
             user_id: user.id,
+            brand_id: activeBrand.id,
             activity_type: 'stage_changed',
             description: `Moved to ${stageName}`,
           });
@@ -94,7 +97,7 @@ export function DealForm({ deal, stages, onSaved, onClose }: DealFormProps) {
       } else {
         const { data, error: insertError } = await supabase
           .from('deals')
-          .insert({ user_id: user.id, ...payload })
+          .insert({ user_id: user.id, brand_id: activeBrand.id, ...payload })
           .select('id')
           .single();
         if (insertError) throw insertError;
@@ -102,6 +105,7 @@ export function DealForm({ deal, stages, onSaved, onClose }: DealFormProps) {
           await supabase.from('deal_activities').insert({
             deal_id: data.id,
             user_id: user.id,
+            brand_id: activeBrand.id,
             activity_type: 'created',
             description: `Deal created for ${form.brand.trim()}`,
           });

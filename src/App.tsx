@@ -5,6 +5,7 @@ import { ThemeProvider } from './contexts/ThemeContext';
 import { SubscriptionProvider } from './contexts/SubscriptionContext';
 import { ConnectionStatusProvider } from './contexts/ConnectionStatusContext';
 import { AccountProvider } from './contexts/AccountContext';
+import { BrandProvider } from './contexts/BrandContext';
 import { Auth } from './components/Auth';
 import { Onboarding } from './components/Onboarding';
 import { Layout } from './components/Layout';
@@ -228,13 +229,16 @@ export default function App() {
         <ThemeProvider>
           <AuthProvider>
             <ConnectionStatusProvider>
-              {/* AccountProvider reads the PFM account list from
-                  ConnectionStatusProvider, so it must sit inside it. */}
+              {/* BrandProvider owns the brand scope; AccountProvider reads the
+                  PFM account list from ConnectionStatusProvider and filters it
+                  to the active brand, so the order is fixed. */}
+              <BrandProvider>
               <AccountProvider>
                 <SubscriptionProvider>
                   <AppContent />
                 </SubscriptionProvider>
               </AccountProvider>
+              </BrandProvider>
             </ConnectionStatusProvider>
           </AuthProvider>
         </ThemeProvider>

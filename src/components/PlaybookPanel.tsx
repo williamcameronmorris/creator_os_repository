@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { useBrand } from '../contexts/BrandContext';
 import { Check, Copy, RefreshCw, X, Image as ImageIcon } from 'lucide-react';
 
 /**
@@ -78,6 +79,7 @@ function thumbOf(post: PlaybookPost | null): string | null {
 
 export function PlaybookPanel() {
   const { user } = useAuth();
+  const { activeBrand } = useBrand();
   const [tasks, setTasks] = useState<PlaybookTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [now, setNow] = useState(() => Date.now());
@@ -88,7 +90,7 @@ export function PlaybookPanel() {
   const fetchingRef = useRef(false);
 
   const fetchTasks = useCallback(async () => {
-    if (!user || fetchingRef.current) return;
+    if (!user || !activeBrand || fetchingRef.current) return;
     fetchingRef.current = true;
     try {
       // Due now, overdue, or coming due within the hour.
@@ -97,6 +99,7 @@ export function PlaybookPanel() {
         .from('playbook_tasks')
         .select('id, content_post_id, platform, account_username, task_type, title, body, due_at, status, content_posts(caption, title, thumbnail_url, media_urls, platform, account_username)')
         .eq('user_id', user.id)
+        .eq('brand_id', activeBrand.id)
         .eq('status', 'pending')
         .lte('due_at', horizon)
         .order('due_at', { ascending: true })
@@ -109,7 +112,7 @@ export function PlaybookPanel() {
       fetchingRef.current = false;
       setLoading(false);
     }
-  }, [user]);
+  }, [user, activeBrand]);
 
   // Fetch on mount + every 60s while the tab is visible.
   useEffect(() => {

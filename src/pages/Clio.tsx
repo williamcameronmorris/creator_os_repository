@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useAccount } from '../contexts/AccountContext';
+import { useBrand } from '../contexts/BrandContext';
 import { PlaybookPanel } from '../components/PlaybookPanel';
 import {
   Send,
@@ -162,6 +163,7 @@ function getGreeting() {
 export function Clio() {
   const { user } = useAuth();
   const { activeAccount } = useAccount();
+  const { activeBrand } = useBrand();
   const navigate = useNavigate();
   const [query, setQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -187,7 +189,7 @@ export function Clio() {
   // Load profile name + daily brief in parallel
   useEffect(() => {
     const loadData = async () => {
-      if (!user) { setBriefLoading(false); return; }
+      if (!user || !activeBrand) { setBriefLoading(false); return; }
       try {
         // The cron writes brief_date as the UTC calendar date, so read it
         // back the same way (toISOString is UTC).
@@ -201,6 +203,7 @@ export function Clio() {
               .from('ai_daily_briefs')
               .select('*')
               .eq('user_id', user.id)
+              .eq('brand_id', activeBrand.id)
               .eq('brief_date', today)
               .maybeSingle();
             return error ? null : (data as DailyBriefRow | null);
@@ -233,7 +236,7 @@ export function Clio() {
       }
     };
     loadData();
-  }, [user]);
+  }, [user, activeBrand]);
 
   const handleSubmit = async () => {
     if (!query.trim() || isLoading) return;
@@ -295,6 +298,7 @@ export function Clio() {
   // against the user's daily AI quota, unlike the morning cron.
   const handleGenerateBrief = async () => {
     if (generatingBrief) return;
+    if (!activeBrand) return;
     setGeneratingBrief(true);
     setErrorMsg('');
     try {
@@ -308,7 +312,10 @@ export function Clio() {
         // an account is built from that account's posts/voice/niche. Brief
         // storage stays one row per user per day (per-account briefs are a
         // follow-up), so this regenerates today's brief in that flavor.
-        body: activeAccount ? { socialAccountId: activeAccount.id } : {},
+        body: {
+          brandId: activeBrand.id,
+          ...(activeAccount ? { socialAccountId: activeAccount.id } : {}),
+        },
         headers: { Authorization: `Bearer ${session.access_token}` },
       });
       if (res.error) {

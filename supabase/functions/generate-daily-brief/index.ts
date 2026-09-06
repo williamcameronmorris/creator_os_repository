@@ -302,11 +302,12 @@ async function generateForUser(
   userId: string,
   force: boolean,
   socialAccountId: string | null = null,
+  requestedBrandId: string | null = null,
 ): Promise<"generated" | "skipped_exists" | { row: Record<string, unknown> }> {
   const briefDate = todayUtc();
   // Briefs are one row per BRAND per day. Resolve from the account when the
   // caller scoped one, else the user's default brand (cron mode).
-  const brandId = await resolveBrandId(supabase, userId, socialAccountId);
+  const brandId = await resolveBrandId(supabase, userId, socialAccountId, requestedBrandId);
 
   if (!force) {
     const { data: existing } = await supabase
@@ -346,7 +347,7 @@ Deno.serve(async (req: Request) => {
     }
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    let body: { cronSecret?: string; force?: boolean; socialAccountId?: string } = {};
+    let body: { cronSecret?: string; force?: boolean; socialAccountId?: string; brandId?: string } = {};
     try {
       body = await req.json();
     } catch {
@@ -419,15 +420,19 @@ Deno.serve(async (req: Request) => {
       typeof body.socialAccountId === "string" && body.socialAccountId.trim()
         ? body.socialAccountId.trim()
         : null;
+    const requestedBrandId: string | null =
+      typeof (body as { brandId?: unknown }).brandId === "string"
+        ? ((body as { brandId: string }).brandId.trim() || null)
+        : null;
 
-    const result = await generateForUser(supabase, userId, !!body.force, socialAccountId);
+    const result = await generateForUser(supabase, userId, !!body.force, socialAccountId, requestedBrandId);
 
     if (result === "skipped_exists") {
       // Already have today's brief — return it so the client can render it.
       const { data: existing } = await supabase
         .from("ai_daily_briefs")
         .select("*")
-        .eq("brand_id", await resolveBrandId(supabase, userId, socialAccountId))
+        .eq("brand_id", await resolveBrandId(supabase, userId, socialAccountId, requestedBrandId))
         .eq("brief_date", todayUtc())
         .maybeSingle();
       return new Response(

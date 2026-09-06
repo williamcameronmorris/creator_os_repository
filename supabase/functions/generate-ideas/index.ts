@@ -43,8 +43,12 @@ Deno.serve(async (req: Request) => {
       typeof body.socialAccountId === "string" && body.socialAccountId.trim()
         ? body.socialAccountId.trim()
         : null;
+    const requestedBrandId: string | null =
+      typeof (body as { brandId?: unknown }).brandId === "string"
+        ? ((body as { brandId: string }).brandId.trim() || null)
+        : null;
     // Ideas belong to the brand of the scoped account (or the default brand).
-    const brandId = await resolveBrandId(supabase, userId, socialAccountId);
+    const brandId = await resolveBrandId(supabase, userId, socialAccountId, requestedBrandId);
 
     // ── Check and decrement quota ────────────────────────────────────────────
     const { data: quotaData, error: quotaError } = await supabase

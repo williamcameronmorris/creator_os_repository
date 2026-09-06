@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useBrand } from '../contexts/BrandContext';
 import { supabase } from '../lib/supabase';
 import {
   X, Instagram, Youtube, Video, Calendar, Upload,
@@ -139,6 +140,7 @@ function isScheduleDateValid(localDatetimeValue: string, timezone: string): bool
 
 export function PostComposer({ onClose, onSuccess, asPage = false, editPost }: PostComposerProps) {
   const { user } = useAuth();
+  const { activeBrand } = useBrand();
   const { timezone } = useTimezone();
 
   // ── Multi-platform selection ──────────────────────────────────────────────
@@ -293,6 +295,7 @@ export function PostComposer({ onClose, onSuccess, asPage = false, editPost }: P
   // ── Upload media ──────────────────────────────────────────────────────────
   const uploadMedia = async (): Promise<string[]> => {
     if (!user || mediaFiles.length === 0) return [];
+    if (!activeBrand) throw new Error('No active brand selected.');
     const uploadedUrls: string[] = [];
     for (const file of mediaFiles) {
       const fileExt  = file.name.split('.').pop();
@@ -305,6 +308,7 @@ export function PostComposer({ onClose, onSuccess, asPage = false, editPost }: P
       uploadedUrls.push(publicUrl);
       await supabase.from('media_library').insert({
         user_id:   user.id,
+        brand_id:  activeBrand.id,
         file_name: file.name,
         file_url:  publicUrl,
         file_type: file.type.startsWith('video') ? 'video' : 'image',
@@ -316,7 +320,7 @@ export function PostComposer({ onClose, onSuccess, asPage = false, editPost }: P
 
   // ── Save (draft or scheduled) ─────────────────────────────────────────────
   const handleSave = async (status: 'draft' | 'scheduled') => {
-    if (!user) return;
+    if (!user || !activeBrand) return;
     setErrorMessage(null);
     if (!caption.trim()) { setErrorMessage('Please add a caption before saving.'); return; }
     if (status === 'scheduled') {
@@ -340,6 +344,7 @@ export function PostComposer({ onClose, onSuccess, asPage = false, editPost }: P
       for (const p of platformArray) {
         const basePost = {
           user_id:    user.id,
+          brand_id:   activeBrand.id,
           platform:   p,
           caption:    caption.trim(),
           media_url:  allMediaUrls[0] || null,
@@ -362,7 +367,11 @@ export function PostComposer({ onClose, onSuccess, asPage = false, editPost }: P
             scheduled_for:  status === 'scheduled' ? localInputToUtc(scheduledDate, timezone) : null,
           };
           if (editPost) {
-            const { error } = await supabase.from('content_posts').update(postData).eq('id', editPost.id);
+            // brand_id is stamped on INSERT only. Editing must never move a post
+            // to whichever brand happens to be active at the time.
+            const updateData: Record<string, unknown> = { ...postData };
+            delete updateData.brand_id;
+            const { error } = await supabase.from('content_posts').update(updateData).eq('id', editPost.id);
             if (error) throw error;
           } else {
             const { error } = await supabase.from('content_posts').insert([postData]);
@@ -387,7 +396,7 @@ export function PostComposer({ onClose, onSuccess, asPage = false, editPost }: P
   // Inserts the post with scheduled_for = now and immediately triggers the
   // publish-scheduled-posts edge function to dispatch it.
   const handlePublishNow = async () => {
-    if (!user) return;
+    if (!user || !activeBrand) return;
     setErrorMessage(null);
     if (!caption.trim()) { setErrorMessage('Please add a caption before publishing.'); return; }
     setPublishingNow(true);
@@ -401,6 +410,7 @@ export function PostComposer({ onClose, onSuccess, asPage = false, editPost }: P
       // Insert one row per platform, all scheduled for right now
       const rows = platformArray.map(p => ({
         user_id:        user.id,
+        brand_id:       activeBrand.id,
         platform:       p,
         caption:        caption.trim(),
         media_url:      allMediaUrls[0] || null,
