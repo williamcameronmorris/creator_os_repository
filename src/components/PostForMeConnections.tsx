@@ -3,6 +3,7 @@ import { ArrowRight } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useConnectionStatus } from '../contexts/ConnectionStatusContext';
 import { useBrand } from '../contexts/BrandContext';
+import { supabase } from '../lib/supabase';
 import {
   POSTFORME_PLATFORMS,
   initPostForMeConnect,
@@ -24,7 +25,7 @@ interface Props {
 export function PostForMeConnections({ initialFlash }: Props) {
   const { user } = useAuth();
   const ctx = useConnectionStatus();
-  const { brands, activeBrand, accountBrandMap, assignAccount } = useBrand();
+  const { brands, activeBrand, accountBrandMap, assignAccount, refresh: refreshBrands } = useBrand();
   // Seed from the global ConnectionStatusProvider so we don't double-fetch
   // PFM's account list on every mount. The provider already loaded this
   // when the user signed in. Only fall back to a local fetch if the
@@ -72,9 +73,30 @@ export function PostForMeConnections({ initialFlash }: Props) {
 
   const handleMove = async (account: PostForMeAccount, brandId: string) => {
     setError(null);
+    const target = brandName(brandId) ?? 'that brand';
+    const label = account.username ? `@${account.username}` : account.platform.toUpperCase();
+    // Two different moves. "From now on" re-points the mapping: the syncs file
+    // new rows under the new brand and everything already written stays put.
+    // "With history" also re-files what the account has produced so far, in one
+    // transaction (move_account_history).
+    const withHistory = window.confirm(
+      `Move ${label} to ${target}.\n\nAlso move its existing posts, metrics, snapshots and tasks?\n\nOK = move everything. Cancel = only from now on.`
+    );
     try {
-      await assignAccount(account, brandId);
-      setFlash(`Moved ${account.platform.toUpperCase()} to ${brandName(brandId) ?? 'brand'}.`);
+      if (withHistory) {
+        const { data, error } = await supabase.rpc('move_account_history', {
+          p_pfm_account_id: account.id,
+          p_to_brand: brandId,
+        });
+        if (error) throw new Error(error.message);
+        await refreshBrands();
+        const moved = (data ?? {}) as Record<string, number>;
+        const posts = moved.content_posts ?? 0;
+        setFlash(`Moved ${label} to ${target} with ${posts} post${posts === 1 ? '' : 's'} and their history.`);
+      } else {
+        await assignAccount(account, brandId);
+        setFlash(`Moved ${label} to ${target}. Existing history stays where it was.`);
+      }
     } catch (err) {
       setError((err as Error).message);
     }
