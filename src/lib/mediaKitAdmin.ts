@@ -25,6 +25,8 @@ export interface KitPlatformConfig {
   show_avg_views: boolean;
   followers_override: number | null;
   followers_override_at: string | null;
+  /** All-time post count, for platforms the app cannot ask. */
+  posts_override: number | null;
 }
 
 export type ContactMode = 'form' | 'email' | 'link';
@@ -106,6 +108,7 @@ function defaultConfig(platform: string): KitPlatformConfig {
     show_avg_views: true,
     followers_override: null,
     followers_override_at: null,
+    posts_override: null,
   };
 }
 
@@ -131,6 +134,7 @@ export function normalizeConfigs(raw: unknown, connectedPlatforms: string[]): Ki
       show_avg_views: c.show_avg_views ?? d.show_avg_views,
       followers_override: typeof c.followers_override === 'number' ? c.followers_override : null,
       followers_override_at: typeof c.followers_override_at === 'string' ? c.followers_override_at : null,
+      posts_override: typeof c.posts_override === 'number' ? c.posts_override : null,
     });
     seen.add(c.platform);
   }
@@ -159,6 +163,21 @@ export function dollarsToCents(input: string): number | null {
 export function centsToDollars(cents: number | null): string {
   if (cents == null) return '';
   return cents % 100 === 0 ? String(cents / 100) : (cents / 100).toFixed(2);
+}
+
+/**
+ * The creator image: a logo for a brand like Gibsunday, a headshot for a
+ * personal one. Goes to the public `media` bucket under the user's folder,
+ * same as the media library, and the returned URL is what the kit stores.
+ */
+export async function uploadKitAvatar(userId: string, brandId: string, file: File): Promise<string> {
+  if (!file.type.startsWith('image/')) throw new Error('Choose an image file.');
+  if (file.size > 5 * 1024 * 1024) throw new Error('Keep the image under 5 MB.');
+  const ext = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
+  const path = `${userId}/kit/${brandId}-${Date.now()}.${ext}`;
+  const { data, error } = await supabase.storage.from('media').upload(path, file, { cacheControl: '3600', upsert: false });
+  if (error) throw new Error(error.message);
+  return supabase.storage.from('media').getPublicUrl(data.path).data.publicUrl;
 }
 
 export function kitUrl(slug: string): string {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowUp, ArrowDown, Copy, ExternalLink, Plus, Trash2 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useBrand } from '../../contexts/BrandContext';
@@ -8,7 +8,7 @@ import { MediaKitLeads } from './MediaKitLeads';
 import { platformLabel } from '../MediaKit/platformMeta';
 import {
   centsToDollars, createKit, dollarsToCents, kitUrl, listRates, loadKit, normalizeConfigs, saveKit, saveRates,
-  slugFromName, SLUG_RE, SYNCED_FOLLOWER_PLATFORMS,
+  slugFromName, SLUG_RE, SYNCED_FOLLOWER_PLATFORMS, uploadKitAvatar,
   type ContactMode, type KitPlatformConfig, type MediaKitRateRow, type MediaKitRow,
 } from '../../lib/mediaKitAdmin';
 
@@ -35,6 +35,8 @@ export function MediaKitEditor() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [flash, setFlash] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const connectedPlatforms = useMemo(() => Array.from(new Set(accounts.map((a) => a.platform))), [accounts]);
 
@@ -147,6 +149,22 @@ export function MediaKitEditor() {
       setError((err as Error).message);
     } finally {
       setBusy(false);
+    }
+  };
+
+  const handleAvatarFile = async (file: File | undefined) => {
+    if (!file || !user || !activeBrand) return;
+    setUploading(true);
+    setError('');
+    try {
+      const url = await uploadKitAvatar(user.id, activeBrand.id, file);
+      set('avatar_url', url);
+      setFlash('Image uploaded. Save to keep it.');
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = '';
     }
   };
 
@@ -283,10 +301,39 @@ export function MediaKitEditor() {
             <span className="t-micro block mb-1.5">Website</span>
             <input className={field} value={draft.website ?? ''} onChange={(e) => set('website', e.target.value)} placeholder="https://" maxLength={200} />
           </label>
-          <label className="block sm:col-span-2">
-            <span className="t-micro block mb-1.5">Photo URL</span>
-            <input className={field} value={draft.avatar_url ?? ''} onChange={(e) => set('avatar_url', e.target.value)} placeholder="Leave empty to use your profile photo" maxLength={500} />
-          </label>
+          <div className="sm:col-span-2">
+            <span className="t-micro block mb-1.5">Image</span>
+            <div className="flex items-center gap-4">
+              {draft.avatar_url ? (
+                <img src={draft.avatar_url} alt="" className="w-16 h-16 object-cover border border-border bg-background" />
+              ) : (
+                <div className="w-16 h-16 border border-border flex items-center justify-center t-micro text-muted-foreground">NONE</div>
+              )}
+              <div className="flex flex-col gap-1.5">
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  className="hidden"
+                  onChange={(e) => handleAvatarFile(e.target.files?.[0])}
+                />
+                <button
+                  type="button"
+                  onClick={() => fileRef.current?.click()}
+                  disabled={uploading}
+                  className="t-micro text-foreground hover:text-accent transition-colors text-left disabled:opacity-50"
+                >
+                  {uploading ? 'UPLOADING…' : draft.avatar_url ? 'REPLACE IMAGE' : 'UPLOAD IMAGE'}
+                </button>
+                {draft.avatar_url && (
+                  <button type="button" onClick={() => set('avatar_url', null)} className="t-micro text-muted-foreground hover:text-foreground transition-colors text-left">
+                    REMOVE
+                  </button>
+                )}
+                <span className="t-micro text-muted-foreground">A logo for a brand, a headshot for a person. Square works best.</span>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -294,7 +341,7 @@ export function MediaKitEditor() {
       <section className="bg-card border border-border p-6 space-y-4">
         <div className="t-micro">02 · Platforms and numbers</div>
         <p className="t-micro text-muted-foreground">
-          Follower counts sync for {Array.from(SYNCED_FOLLOWER_PLATFORMS).map(platformLabel).join(' and ')} on your default brand. Enter the others yourself; the page shows the date you entered them.
+          Follower and post counts sync for {Array.from(SYNCED_FOLLOWER_PLATFORMS).map(platformLabel).join(' and ')} on your default brand. For the others, type the numbers from the app itself; the page shows the date you entered them, and leaves a stat out rather than guess.
         </p>
         <div>
           {draft.platforms.map((c) => {
@@ -319,23 +366,42 @@ export function MediaKitEditor() {
                           <span className="t-micro text-muted-foreground">{label}</span>
                         </label>
                       ))}
-                      {c.show_followers && !synced && (
-                        <label className="flex items-center gap-2">
-                          <span className="t-micro text-muted-foreground">Count</span>
-                          <input
-                            type="number"
-                            min={0}
-                            className={`${small} w-28`}
-                            value={c.followers_override ?? ''}
-                            onChange={(e) =>
-                              setPlatform(c.platform, {
-                                followers_override: e.target.value === '' ? null : Math.max(0, Math.round(Number(e.target.value))),
-                                followers_override_at: new Date().toISOString(),
-                              })
-                            }
-                            placeholder="manual"
-                          />
-                        </label>
+                      {!synced && (
+                        <>
+                          {c.show_followers && (
+                            <label className="flex items-center gap-2">
+                              <span className="t-micro text-muted-foreground">{c.platform === 'youtube' ? 'Subscribers' : 'Followers'} =</span>
+                              <input
+                                type="number"
+                                min={0}
+                                className={`${small} w-28`}
+                                value={c.followers_override ?? ''}
+                                onChange={(e) =>
+                                  setPlatform(c.platform, {
+                                    followers_override: e.target.value === '' ? null : Math.max(0, Math.round(Number(e.target.value))),
+                                    followers_override_at: new Date().toISOString(),
+                                  })
+                                }
+                                placeholder="type it"
+                              />
+                            </label>
+                          )}
+                          <label className="flex items-center gap-2">
+                            <span className="t-micro text-muted-foreground">Posts =</span>
+                            <input
+                              type="number"
+                              min={0}
+                              className={`${small} w-24`}
+                              value={c.posts_override ?? ''}
+                              onChange={(e) =>
+                                setPlatform(c.platform, {
+                                  posts_override: e.target.value === '' ? null : Math.max(0, Math.round(Number(e.target.value))),
+                                })
+                              }
+                              placeholder="type it"
+                            />
+                          </label>
+                        </>
                       )}
                     </>
                   )}

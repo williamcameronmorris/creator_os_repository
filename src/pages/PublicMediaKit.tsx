@@ -80,8 +80,8 @@ export function PublicMediaKit() {
         {k.avatar_url && (
           <img
             src={k.avatar_url}
-            alt=""
-            className="w-20 h-20 sm:w-24 sm:h-24 object-cover border border-border shrink-0"
+            alt={k.display_name ?? ''}
+            className="w-24 h-24 sm:w-32 sm:h-32 object-cover border border-border shrink-0 bg-card"
           />
         )}
         <div className="min-w-0">
@@ -130,7 +130,7 @@ export function PublicMediaKit() {
       )}
 
       <RateCard rates={kit.rates} />
-      <PostGrid posts={kit.top_posts} />
+      <PostGrid posts={kit.top_posts} limit={kit.top_posts_limit} />
       <ContactForm slug={slug} kit={k} />
 
       <footer className="pt-6 border-t border-border">
