@@ -39,7 +39,7 @@ export function Layout({ children }: LayoutProps) {
 
   const getActiveTab = (): 'clio' | 'studio' | 'watch' | 'patra' | 'settings' => {
     const p = location.pathname;
-    if (p === '/settings' || p === '/profile') return 'settings';
+    if (p === '/settings' || p === '/profile' || p === '/help') return 'settings';
     if (p.startsWith('/watch')) return 'watch';
     // Studio now owns the full make→manage lifecycle: Schedule (04) and
     // Analytics (05) are reached from the Studio hub, so they highlight Studio.

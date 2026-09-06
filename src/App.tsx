@@ -19,6 +19,7 @@ import { AnalyticsPlatform } from './pages/AnalyticsPlatform';
 import { SavedIdeasPage } from './pages/SavedIdeasPage';
 import { Profile } from './pages/Profile';
 import { SettingsPage } from './pages/SettingsPage';
+import { HelpPage } from './pages/HelpPage';
 import { PostComposerPage } from './pages/PostComposerPage';
 import { ComposePost } from './pages/ComposePost';
 import { DropZone } from './pages/DropZone';
@@ -212,6 +213,7 @@ function AppContent() {
       {/* Ã¢ÂÂÃ¢ÂÂ Settings Ã¢ÂÂÃ¢ÂÂ */}
       <Route path="/profile" element={<ProtectedRoute><Layout><Profile /></Layout></ProtectedRoute>} />
       <Route path="/settings" element={<ProtectedRoute><Layout><SettingsPage /></Layout></ProtectedRoute>} />
+      <Route path="/help" element={<ProtectedRoute><Layout><HelpPage /></Layout></ProtectedRoute>} />
 
       {/* Ã¢ÂÂÃ¢ÂÂ OAuth Callbacks Ã¢ÂÂÃ¢ÂÂ */}
       {/* OAuth callbacks are rendered above the auth gate (see AppContent top). */}

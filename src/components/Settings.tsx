@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase, type Profile } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
-import { Save, TrendingUp, DollarSign, AlertCircle, CheckCircle, Link2, Palette, Sun, Moon, User, ArrowRight } from 'lucide-react';
+import { Save, TrendingUp, DollarSign, AlertCircle, CheckCircle, Link2, Palette, Sun, Moon, User, ArrowRight, HelpCircle } from 'lucide-react';
 import { PostForMeConnections } from './PostForMeConnections';
 import { VoiceCard } from './VoiceCard';
 
@@ -74,6 +74,21 @@ export function Settings() {
         <h2 className="text-3xl font-black uppercase tracking-tight text-foreground mb-2">Settings</h2>
         <p className="text-muted-foreground text-xs font-mono uppercase tracking-[0.08em]">Configure your pricing defaults and performance averages</p>
       </div>
+
+      {/* Help: an overview of every section, for anyone landing here cold. */}
+      <button
+        onClick={() => navigate('/help')}
+        className="w-full p-6 bg-card border border-border text-left hover:border-foreground/40 transition-colors group flex items-center gap-4"
+      >
+        <div className="w-10 h-10 border border-border flex items-center justify-center flex-shrink-0">
+          <HelpCircle className="w-5 h-5" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="text-xs font-mono uppercase tracking-[0.08em] text-foreground mb-1">Help</div>
+          <div className="text-muted-foreground text-sm">What each part of the app does, and where to find it</div>
+        </div>
+        <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:translate-x-1 transition-transform flex-shrink-0" />
+      </button>
 
       {/* Profile link card */}
       <button
