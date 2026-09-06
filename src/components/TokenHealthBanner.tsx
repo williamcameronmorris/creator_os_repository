@@ -11,7 +11,7 @@ import { useState } from 'react';
  */
 export function TokenHealthBanner() {
   const navigate = useNavigate();
-  const { platformHealth, loading, refresh } = useTokenHealth();
+  const { platformHealth, loading } = useTokenHealth();
   const [dismissed, setDismissed] = useState<string[]>([]);
 
   if (loading) return null;
