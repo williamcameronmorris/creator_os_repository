@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
+import { useBrand } from '../../contexts/BrandContext';
 import { ArrowUp, ArrowDown, Lightbulb, CheckCircle2, Save, Bot, Wand2, AlertCircle } from 'lucide-react';
 
 interface AnalysisStageProps {
@@ -8,6 +9,7 @@ interface AnalysisStageProps {
 }
 
 export function AnalysisStage({ workflowId, onComplete }: AnalysisStageProps) {
+  const { activeBrand } = useBrand();
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
@@ -28,9 +30,10 @@ export function AnalysisStage({ workflowId, onComplete }: AnalysisStageProps) {
 
   useEffect(() => {
     loadData();
-  }, [workflowId]);
+  }, [workflowId, activeBrand]);
 
   const loadData = async () => {
+    if (!activeBrand) return;
     setLoading(true);
 
     const { data: workflow } = await supabase
@@ -76,6 +79,7 @@ export function AnalysisStage({ workflowId, onComplete }: AnalysisStageProps) {
           .from('content_posts')
           .select('views, engagement_rate')
           .eq('user_id', user.id)
+          .eq('brand_id', activeBrand.id)
           .eq('platform', plat)
           .eq('status', 'published')
           .gte('published_date', ninetyDaysAgo.toISOString())
@@ -140,7 +144,7 @@ export function AnalysisStage({ workflowId, onComplete }: AnalysisStageProps) {
   };
 
   const handleSave = async () => {
-    if (!insight) return;
+    if (!insight || !activeBrand) return;
     setLoading(true);
 
     await supabase
@@ -162,6 +166,7 @@ export function AnalysisStage({ workflowId, onComplete }: AnalysisStageProps) {
       if (user) {
         await supabase.from('saved_content_ideas').insert({
           user_id: user.id,
+          brand_id: activeBrand.id,
           title: nextIdea,
           platform: 'instagram',
           content_type: 'reel',

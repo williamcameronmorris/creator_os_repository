@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { format, parseISO } from 'date-fns';
 import { useAccount } from '../contexts/AccountContext';
+import { useBrand } from '../contexts/BrandContext';
 import { KpiRow } from '../components/analytics/KpiRow';
 import { MetricWidget } from '../components/analytics/MetricWidget';
 import { BreakdownTable } from '../components/analytics/BreakdownTable';
@@ -71,6 +72,7 @@ interface ContentPostRow {
 export function Analytics() {
   const { user } = useAuth();
   const { activeAccount } = useAccount();
+  const { activeBrand } = useBrand();
 
   const [dateValue, setDateValue] = useState<DateComparisonValue>(() => defaultDateComparison());
   const [loading, setLoading] = useState(true);
@@ -79,18 +81,18 @@ export function Analytics() {
   const [perf, setPerf] = useState<PostPerformance[]>([]);
 
   useEffect(() => {
-    if (user) loadAnalytics();
+    if (user && activeBrand) loadAnalytics();
     else setLoading(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, activeAccount?.id, dateValue.range.start.getTime(), dateValue.range.end.getTime(), dateValue.comparison?.start.getTime(), dateValue.comparison?.end.getTime()]);
+  }, [user, activeBrand, activeAccount?.id, dateValue.range.start.getTime(), dateValue.range.end.getTime(), dateValue.comparison?.start.getTime(), dateValue.comparison?.end.getTime()]);
 
   const loadAnalytics = async () => {
-    if (!user) return;
+    if (!user || !activeBrand) return;
     setLoading(true);
     const safetyTimer = setTimeout(() => setLoading(false), 5000);
     // Scored posts are independent of the date pill: the verdict compares a
     // post to the creator's own trailing median, not to a calendar window.
-    fetchPostPerformance(user.id, { platform: activeAccount?.platform, limit: 60 })
+    fetchPostPerformance(activeBrand.id, { platform: activeAccount?.platform, limit: 60 })
       .then(setPerf)
       .catch(() => setPerf([]));
     try {
@@ -106,12 +108,14 @@ export function Analytics() {
         .from('platform_metrics')
         .select('date, platform, followers_count, total_likes, total_comments, total_views, total_shares, avg_engagement_rate')
         .eq('user_id', user.id)
+        .eq('brand_id', activeBrand.id)
         .gte('date', queryStartIso)
         .lte('date', queryEndIso);
       let postsQuery = supabase
         .from('content_posts')
         .select('id, platform, caption, published_date, published_at, likes, comments, views, saves, shares, media_type, thumbnail_url, instagram_post_id, youtube_video_id, tiktok_post_id')
         .eq('user_id', user.id)
+        .eq('brand_id', activeBrand.id)
         .eq('status', 'published')
         // App-published posts set published_at (not published_date), so filter
         // on either column — otherwise the user's own content is excluded.

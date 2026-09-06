@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useBrand } from '../contexts/BrandContext';
 import { supabase } from '../lib/supabase';
 import {
   ArrowLeft, ArrowRight, Check, Upload, X as XIcon,
@@ -84,6 +85,7 @@ const PLATFORM_NAMES: Record<string, string> = Object.fromEntries(
 
 export function ComposePost() {
   const { user } = useAuth();
+  const { activeBrand } = useBrand();
   const navigate = useNavigate();
   const { timezone } = useTimezone();
 
@@ -232,7 +234,7 @@ export function ComposePost() {
 
   const submit = async () => {
     if (inFlight.current) return;
-    if (!user || isEmpty || overLimit || noAccountSelected) return;
+    if (!user || !activeBrand || isEmpty || overLimit || noAccountSelected) return;
     if (missingRequiredMedia) {
       setPublishState('error');
       setErrorMsg(`${platformNames(platformsRequiringMedia)} require${platformsRequiringMedia.length === 1 ? 's' : ''} at least one media file.`);
@@ -303,6 +305,7 @@ export function ComposePost() {
       // on the same platform each get their own attributable row.
       const rows = targets.map((account) => ({
         user_id: user.id,
+        brand_id: activeBrand.id,
         platform: account.platform,
         social_account_id: account.id,
         account_username: account.username || null,

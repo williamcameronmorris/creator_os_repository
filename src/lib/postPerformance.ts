@@ -65,13 +65,13 @@ const SELECT =
   'views_multiple, saves_multiple, reach_multiple, er_multiple, outlier_metric';
 
 export async function fetchPostPerformance(
-  userId: string,
+  brandId: string,
   opts: { platform?: string; limit?: number } = {}
 ): Promise<PostPerformance[]> {
   let q = supabase
     .from('post_performance')
     .select(SELECT)
-    .eq('user_id', userId)
+    .eq('brand_id', brandId)
     .order('published_at', { ascending: false })
     .limit(opts.limit ?? 60);
   if (opts.platform) q = q.eq('platform', opts.platform);

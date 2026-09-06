@@ -9,6 +9,7 @@ const ahead = (d: number) => new Date(Date.now() + d * DAY).toISOString();
 function healthy(over: Partial<DataHealth> = {}): DataHealth {
   return {
     user_id: 'u1',
+    brand_id: 'b1',
     last_instagram_sync: ago(0),
     last_youtube_sync: ago(0),
     last_facebook_sync: ago(0),

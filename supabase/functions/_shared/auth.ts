@@ -94,16 +94,19 @@ export async function requireUserOrCron(
  *     unmapped or foreign account THROWS rather than falling back, because
  *     silently filing one brand's data under another is the exact bug this
  *     layer exists to prevent.
- *   - Without one: the user's default brand (brands.is_default). Right for
- *     user-level work: cron briefs, comments pulled through the direct grants.
+ *   - Else with a `brandId` from the caller (the switcher's active brand for
+ *     "all accounts" work): that brand, after verifying `userId` owns it.
+ *   - Else: the user's default brand (brands.is_default). Right for user-level
+ *     work: cron briefs, comments pulled through the direct grants.
  *
- * Never accept a brandId from the request body. The account id is the only
- * client-supplied scope, and it is validated against ownership here.
+ * Nothing client-supplied is trusted as-is: the account id is checked against
+ * its mapping's owner, the brand id against brands.owner_id.
  */
 export async function resolveBrandId(
   supabase: SupabaseClient,
   userId: string,
   socialAccountId?: string | null,
+  brandId?: string | null,
 ): Promise<string> {
   if (socialAccountId) {
     const { data: mapping, error } = await supabase
@@ -120,6 +123,18 @@ export async function resolveBrandId(
       );
     }
     return mapping.brand_id as string;
+  }
+
+  if (brandId) {
+    const { data: own, error: ownErr } = await supabase
+      .from("brands")
+      .select("id")
+      .eq("id", brandId)
+      .eq("owner_id", userId)
+      .maybeSingle();
+    if (ownErr) throw new Error(`brand lookup: ${ownErr.message}`);
+    if (!own) throw new Error("That brand is not yours");
+    return own.id as string;
   }
 
   const { data: brand, error } = await supabase

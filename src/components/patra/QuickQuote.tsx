@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase, type Deal, type DealStage, type Profile } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
+import { useBrand } from '../../contexts/BrandContext';
 import { calculatePricing, type PricingOutput } from '../../lib/pricing';
 import { ArrowRight, Plus, AlertCircle } from 'lucide-react';
 
@@ -19,6 +20,7 @@ interface QuickQuoteProps {
 
 export function QuickQuote({ onDealSaved }: QuickQuoteProps) {
   const { user } = useAuth();
+  const { activeBrand } = useBrand();
   const navigate = useNavigate();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [deals, setDeals] = useState<Deal[]>([]);
@@ -52,19 +54,19 @@ export function QuickQuote({ onDealSaved }: QuickQuoteProps) {
   const [newDealBrand, setNewDealBrand] = useState('');
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !activeBrand) return;
     const load = async () => {
       const [profileRes, dealsRes, stagesRes] = await Promise.all([
         supabase.from('profiles').select('*').eq('id', user.id).maybeSingle(),
-        supabase.from('deals').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
-        supabase.from('deal_stages').select('*').eq('user_id', user.id).order('position', { ascending: true }),
+        supabase.from('deals').select('*').eq('user_id', user.id).eq('brand_id', activeBrand.id).order('created_at', { ascending: false }),
+        supabase.from('deal_stages').select('*').eq('user_id', user.id).eq('brand_id', activeBrand.id).order('position', { ascending: true }),
       ]);
       if (profileRes.data) setProfile(profileRes.data);
       if (dealsRes.data) setDeals(dealsRes.data);
       if (stagesRes.data) setStages(stagesRes.data);
     };
     load();
-  }, [user]);
+  }, [user, activeBrand]);
 
   const hasAverages =
     !!profile &&
@@ -123,7 +125,7 @@ export function QuickQuote({ onDealSaved }: QuickQuoteProps) {
   });
 
   const handleSaveToNewDeal = async () => {
-    if (!user || !quote || !newDealBrand.trim()) {
+    if (!user || !activeBrand || !quote || !newDealBrand.trim()) {
       setError('Enter a brand name first.');
       return;
     }
@@ -132,6 +134,7 @@ export function QuickQuote({ onDealSaved }: QuickQuoteProps) {
     try {
       const { error: insertError } = await supabase.from('deals').insert({
         user_id: user.id,
+        brand_id: activeBrand.id,
         brand: newDealBrand.trim(),
         brand_name: newDealBrand.trim(),
         stage_id: quoteStageId(),

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase, type Deal, type DealStage } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
+import { useBrand } from '../../contexts/BrandContext';
 import { DealForm } from './DealForm';
 import { Plus, Pencil } from 'lucide-react';
 
@@ -17,6 +18,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 export function DealsList() {
   const { user } = useAuth();
+  const { activeBrand } = useBrand();
   const [stages, setStages] = useState<DealStage[]>([]);
   const [deals, setDeals] = useState<Deal[]>([]);
   const [loading, setLoading] = useState(true);
@@ -25,10 +27,10 @@ export function DealsList() {
   const [editingDeal, setEditingDeal] = useState<Deal | null>(null);
 
   const load = useCallback(async () => {
-    if (!user) return;
+    if (!user || !activeBrand) return;
     const [stagesRes, dealsRes] = await Promise.all([
-      supabase.from('deal_stages').select('*').eq('user_id', user.id).order('position', { ascending: true }),
-      supabase.from('deals').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
+      supabase.from('deal_stages').select('*').eq('user_id', user.id).eq('brand_id', activeBrand.id).order('position', { ascending: true }),
+      supabase.from('deals').select('*').eq('user_id', user.id).eq('brand_id', activeBrand.id).order('created_at', { ascending: false }),
     ]);
     if (stagesRes.error || dealsRes.error) {
       setError('Could not load your deals. Pull to refresh or try again.');
@@ -38,14 +40,14 @@ export function DealsList() {
       setError('');
     }
     setLoading(false);
-  }, [user]);
+  }, [user, activeBrand]);
 
   useEffect(() => {
     load();
   }, [load]);
 
   const handleStageChange = async (deal: Deal, newStageId: string) => {
-    if (!user || newStageId === deal.stage_id) return;
+    if (!user || !activeBrand || newStageId === deal.stage_id) return;
     // Optimistic update; reconcile on error.
     setDeals((prev) => prev.map((d) => (d.id === deal.id ? { ...d, stage_id: newStageId } : d)));
     const { error: updateError } = await supabase.from('deals').update({ stage_id: newStageId }).eq('id', deal.id);
@@ -58,6 +60,7 @@ export function DealsList() {
     await supabase.from('deal_activities').insert({
       deal_id: deal.id,
       user_id: user.id,
+      brand_id: activeBrand.id,
       activity_type: 'stage_changed',
       description: `Moved to ${stageName}`,
     });

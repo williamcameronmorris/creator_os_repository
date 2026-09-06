@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState, ReactNode } from 'react';
 import { useAuth } from './AuthContext';
 import { useConnectionStatus } from './ConnectionStatusContext';
+import { useBrand } from './BrandContext';
 import { listConnectedAccounts, type PostForMeAccount } from '../lib/postforme';
 
 /**
@@ -15,8 +16,12 @@ import { listConnectedAccounts, type PostForMeAccount } from '../lib/postforme';
  *
  * Accounts come from listPostForMeAccounts via ConnectionStatusContext (one
  * fetch, shared with the connection banner) rather than a second PFM
- * round-trip. The selection is persisted in localStorage so it survives
- * reloads; default is the FIRST connected account (platform-grouped order).
+ * round-trip, then FILTERED to the active brand via brand_social_accounts
+ * (BrandContext). An account with no brand mapping is shown in no brand until
+ * Office > Connections reconciles it. The selection is persisted in
+ * localStorage so it survives reloads; default is the FIRST connected account
+ * of the brand (platform-grouped order). Switching brand therefore also
+ * switches account: the stored id no longer matches, so the default applies.
  */
 
 const STORAGE_KEY = 'clio_active_account';
@@ -43,7 +48,9 @@ const AccountContext = createContext<AccountContextValue>({
 
 export function AccountProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
-  const { accounts: rawAccounts, loading } = useConnectionStatus();
+  const { accounts: rawAccounts, loading: accountsLoading } = useConnectionStatus();
+  const { activeBrand, accountBrandMap, loading: brandLoading } = useBrand();
+  const loading = accountsLoading || brandLoading;
   const [selectedId, setSelectedId] = useState<string | null>(() => {
     try {
       return localStorage.getItem(STORAGE_KEY);
@@ -52,7 +59,11 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     }
   });
 
-  const accounts = useMemo(() => listConnectedAccounts(rawAccounts), [rawAccounts]);
+  const accounts = useMemo(() => {
+    const connected = listConnectedAccounts(rawAccounts);
+    if (!activeBrand) return [];
+    return connected.filter((a) => accountBrandMap.get(a.id) === activeBrand.id);
+  }, [rawAccounts, activeBrand, accountBrandMap]);
 
   // Signed out → forget the in-memory selection; signed (back) in → re-read
   // the persisted one, so the same user lands on the account they had pinned.

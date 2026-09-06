@@ -16,6 +16,7 @@ import {
 import { WatchPlayer } from '../components/WatchPlayer';
 import { WatchVideoStats } from '../components/WatchVideoStats';
 import { useAccount } from '../contexts/AccountContext';
+import { useBrand } from '../contexts/BrandContext';
 
 const GOLD = '#C8A24B';
 const ACCENTS = ['#B07050', '#7A9E89', '#C8A24B', '#1A1816'];
@@ -34,6 +35,7 @@ function initials(title: string): string {
 export function Watch() {
   const navigate = useNavigate();
   const { activeAccount } = useAccount();
+  const { activeBrand } = useBrand();
   const [platform, setPlatform] = useState<Platform>('youtube');
   const [creators, setCreators] = useState<SuggestedCreator[]>([]);
   const [feed, setFeed] = useState<WatchVideo[]>([]);
@@ -76,7 +78,8 @@ export function Watch() {
           setCreators(c);
           setFeed(f);
         } else if (platform === 'instagram') {
-          const posts = await getMyInstagramPosts();
+          if (!activeBrand) return;
+          const posts = await getMyInstagramPosts(activeBrand.id);
           if (!active) return;
           setMyPosts(posts);
         }
@@ -91,7 +94,7 @@ export function Watch() {
     };
     // Re-resolve when the Account Switcher changes accounts — each account
     // can carry its own niche.
-  }, [platform, activeAccount?.id]);
+  }, [platform, activeAccount?.id, activeBrand]);
 
   const sendToClio = (v: WatchVideo) => navigate(`/studio/script?${clioParams(v)}`);
 

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useBrand } from '../contexts/BrandContext';
 import { useSubscription } from '../contexts/SubscriptionContext';
 import { supabase } from '../lib/supabase';
 import { Calendar, Clock, Instagram, Youtube, Facebook, Twitter, Cloud, Plus, Sparkles, Edit, Trash2, DollarSign, TrendingUp, Lock, Crown, CheckCircle2, XCircle, Loader2, ExternalLink, RefreshCw, AlertTriangle, AtSign, LayoutGrid, List, ChevronDown } from 'lucide-react';
@@ -30,6 +31,7 @@ type CalGranularity = 'monthly' | 'weekly' | 'daily';
 
 export function Schedule() {
   const { user } = useAuth();
+  const { activeBrand } = useBrand();
   const { tier } = useSubscription();
   const navigate = useNavigate();
   const [posts, setPosts] = useState<Post[]>([]);
@@ -45,7 +47,7 @@ export function Schedule() {
 
   useEffect(() => {
     if (user) loadPosts();
-  }, [user]);
+  }, [user, activeBrand]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -59,7 +61,7 @@ export function Schedule() {
   }, []);
 
   const loadPosts = async () => {
-    if (!user) return;
+    if (!user || !activeBrand) return;
     const selectCols = 'id, platform, caption, media_urls, scheduled_date, scheduled_for, status, deal_id, is_sponsored, publish_status, publish_error, platform_post_id, published_at, thumbnail_url, media_type';
 
     // Posts written via the new Compose flow land in `content_posts`; legacy
@@ -70,10 +72,12 @@ export function Schedule() {
     const fetchFrom = (table: string) => ({
       active: supabase.from(table).select(selectCols)
         .eq('user_id', user.id)
+        .eq('brand_id', activeBrand.id)
         .in('status', ['scheduled', 'draft'])
         .order('scheduled_for', { ascending: true, nullsFirst: false }),
       published: supabase.from(table).select(selectCols)
         .eq('user_id', user.id)
+        .eq('brand_id', activeBrand.id)
         .eq('status', 'published')
         .order('published_at', { ascending: false })
         .range(0, 199),

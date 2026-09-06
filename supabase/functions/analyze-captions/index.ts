@@ -65,9 +65,13 @@ Deno.serve(async (req: Request) => {
       typeof body.socialAccountId === "string" && body.socialAccountId.trim()
         ? body.socialAccountId.trim()
         : null;
+    const requestedBrandId: string | null =
+      typeof (body as { brandId?: unknown }).brandId === "string"
+        ? ((body as { brandId: string }).brandId.trim() || null)
+        : null;
     // The voice profile belongs to the brand of the scoped account (or the
     // default brand for the account-less legacy row).
-    const brandId = await resolveBrandId(supabase, userId, socialAccountId);
+    const brandId = await resolveBrandId(supabase, userId, socialAccountId, requestedBrandId);
 
     if (!userId) throw new Error("Missing required field: userId");
 

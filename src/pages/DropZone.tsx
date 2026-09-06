@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useBrand } from '../contexts/BrandContext';
 import { supabase } from '../lib/supabase';
 import {
   ArrowLeft, ArrowRight, Check, Upload, X as XIcon, RefreshCw,
@@ -123,6 +124,7 @@ async function fnErrorMessage(err: unknown): Promise<string> {
 
 export function DropZone() {
   const { user } = useAuth();
+  const { activeBrand } = useBrand();
   const navigate = useNavigate();
   const { timezone } = useTimezone();
 
@@ -299,7 +301,7 @@ export function DropZone() {
   /** Send to every card still pending (or a single account when retrying). */
   const sendAll = async (onlyAccountId?: string) => {
     if (sendInFlight.current) return;
-    if (!user || !media || cards.length === 0) return;
+    if (!user || !activeBrand || !media || cards.length === 0) return;
     if (mode === 'schedule' && !scheduleAt) {
       setSendError('Pick a date/time to schedule.');
       return;
@@ -350,6 +352,7 @@ export function DropZone() {
           // Analytics render it with per-account attribution.
           const { error: insertErr } = await supabase.from('content_posts').insert({
             user_id: user.id,
+            brand_id: activeBrand.id,
             platform: card.platform,
             social_account_id: card.accountId,
             account_username: card.username,

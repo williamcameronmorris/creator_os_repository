@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useAccount } from '../contexts/AccountContext';
+import { useBrand } from '../contexts/BrandContext';
 import { Mic2, RefreshCw, Sparkles, AlertCircle, Check } from 'lucide-react';
 
 /**
@@ -47,6 +48,7 @@ function relativeTime(iso: string | null): string {
 export function VoiceCard() {
   const { user } = useAuth();
   const { accounts, activeAccount } = useAccount();
+  const { activeBrand } = useBrand();
   // null = the user-level "Main" voice; otherwise a PFM social account id.
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [touched, setTouched] = useState(false);
@@ -62,19 +64,20 @@ export function VoiceCard() {
   }, [activeAccount?.id, touched]);
 
   useEffect(() => {
-    if (user) load(selectedId);
+    if (user && activeBrand) load(selectedId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, selectedId]);
+  }, [user, activeBrand, selectedId]);
 
   const load = async (accountId: string | null) => {
-    if (!user) return;
+    if (!user || !activeBrand) return;
     setLoading(true);
     // Pin the account dimension explicitly — with per-account rows in the
     // table, an unfiltered .maybeSingle() would error on >1 rows.
     let query = supabase
       .from('user_content_profiles')
       .select('voice_profile, caption_style, raw_analysis, posts_analyzed, analyzed_at')
-      .eq('user_id', user.id);
+      .eq('user_id', user.id)
+      .eq('brand_id', activeBrand.id);
     query = accountId ? query.eq('social_account_id', accountId) : query.is('social_account_id', null);
     const { data } = await query.maybeSingle();
     setRow((data as VoiceRow | null) ?? null);
@@ -82,7 +85,7 @@ export function VoiceCard() {
   };
 
   const build = async () => {
-    if (!user || building) return;
+    if (!user || !activeBrand || building) return;
     setBuilding(true);
     setError(null);
     setNotice(null);
@@ -92,7 +95,7 @@ export function VoiceCard() {
       const { data, error: fnErr } = await supabase.functions.invoke('analyze-captions', {
         // socialAccountId scopes the analysis to the selected account's posts
         // and upserts that account's profile row. Omitted for the main voice.
-        body: { force: true, ...(selectedId ? { socialAccountId: selectedId } : {}) },
+        body: { force: true, brandId: activeBrand.id, ...(selectedId ? { socialAccountId: selectedId } : {}) },
         headers: { Authorization: `Bearer ${session.access_token}` },
       });
       if (fnErr) throw fnErr;

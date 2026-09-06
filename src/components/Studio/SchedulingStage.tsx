@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
+import { useBrand } from '../../contexts/BrandContext';
 import { Image as ImageIcon, Sparkles, Clock, AlertTriangle } from 'lucide-react';
 import { DateTimePicker } from '../DateTimePicker';
 import { useTimezone } from '../../hooks/useTimezone';
@@ -20,6 +21,7 @@ interface SchedulingStageProps {
 
 export function SchedulingStage({ workflowId, contentType, onComplete }: SchedulingStageProps) {
   const { timezone } = useTimezone();
+  const { activeBrand } = useBrand();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [mediaUrl, setMediaUrl] = useState<string | null>(null);
@@ -28,9 +30,10 @@ export function SchedulingStage({ workflowId, contentType, onComplete }: Schedul
   const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([]);
 
   useEffect(() => {
+    if (!activeBrand) return;
     loadWorkflowData();
     loadOptimalTimes();
-  }, [workflowId]);
+  }, [workflowId, activeBrand]);
 
   const loadWorkflowData = async () => {
     setLoading(true);
@@ -62,6 +65,7 @@ export function SchedulingStage({ workflowId, contentType, onComplete }: Schedul
   const loadOptimalTimes = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
+    if (!activeBrand) return;
 
     const ninetyDaysAgo = new Date();
     ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
@@ -70,6 +74,7 @@ export function SchedulingStage({ workflowId, contentType, onComplete }: Schedul
       .from('content_posts')
       .select('scheduled_date, published_date, engagement_rate, likes, comments, views')
       .eq('user_id', user.id)
+      .eq('brand_id', activeBrand.id)
       .eq('status', 'published')
       .gte('published_date', ninetyDaysAgo.toISOString())
       .not('engagement_rate', 'is', null)
@@ -153,6 +158,7 @@ export function SchedulingStage({ workflowId, contentType, onComplete }: Schedul
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('You must be signed in to schedule.');
+      if (!activeBrand) throw new Error('No active brand selected.');
 
       // Convert the picker's wall-clock value in the user's profile timezone,
       // and set BOTH scheduled_for (what the publisher claims by) and
@@ -164,6 +170,7 @@ export function SchedulingStage({ workflowId, contentType, onComplete }: Schedul
         .from('content_posts')
         .insert({
           user_id: user.id,
+          brand_id: activeBrand.id,
           platform: 'instagram',
           content_type: contentType,
           caption: caption,

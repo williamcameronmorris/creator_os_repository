@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useBrand } from '../contexts/BrandContext';
 import { supabase } from '../lib/supabase';
 import {
   Bookmark,
@@ -45,6 +46,7 @@ const platformIcons: Record<string, any> = {
 
 export function SavedIdeas() {
   const { user } = useAuth();
+  const { activeBrand } = useBrand();
   const [ideas, setIdeas] = useState<SavedIdea[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -65,21 +67,22 @@ export function SavedIdeas() {
   });
 
   useEffect(() => {
-    if (user) {
+    if (user && activeBrand) {
       loadIdeas();
     } else {
       setLoading(false);
     }
-  }, [user, showArchived]);
+  }, [user, activeBrand, showArchived]);
 
   const loadIdeas = async () => {
-    if (!user) return;
+    if (!user || !activeBrand) return;
 
     setLoading(true);
     const { data, error } = await supabase
       .from('saved_content_ideas')
       .select('*')
       .eq('user_id', user.id)
+      .eq('brand_id', activeBrand.id)
       .eq('is_archived', showArchived)
       .order('created_at', { ascending: false });
 
@@ -93,10 +96,11 @@ export function SavedIdeas() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) return;
+    if (!user || !activeBrand) return;
 
     const ideaData = {
       user_id: user.id,
+      brand_id: activeBrand.id,
       title: formData.title,
       description: formData.description || null,
       platform: formData.platform,
@@ -109,9 +113,12 @@ export function SavedIdeas() {
     };
 
     if (editingIdea) {
+      // brand_id is stamped on INSERT only; an edit never re-files the idea.
+      const ideaUpdate: Record<string, unknown> = { ...ideaData };
+      delete ideaUpdate.brand_id;
       const { error } = await supabase
         .from('saved_content_ideas')
-        .update(ideaData)
+        .update(ideaUpdate)
         .eq('id', editingIdea.id);
 
       if (!error) {

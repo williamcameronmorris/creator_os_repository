@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
 import { getAIQuota } from '../../lib/aiQuota';
 import { useAccount } from '../../contexts/AccountContext';
+import { useBrand } from '../../contexts/BrandContext';
 import { FileText, Hash, Layout, AlignLeft, ChevronRight, AlertCircle, Sparkles, Check } from 'lucide-react';
 
 interface ScriptingStageProps {
@@ -13,6 +14,7 @@ interface ScriptingStageProps {
 
 export function ScriptingStage({ workflowId, contentType, onComplete, onSkip }: ScriptingStageProps) {
   const { activeAccount } = useAccount();
+  const { activeBrand } = useBrand();
   const [mode, setMode] = useState<'simple' | 'structured'>(
     ['video', 'blog'].includes(contentType) ? 'structured' : 'simple'
   );
@@ -34,6 +36,7 @@ export function ScriptingStage({ workflowId, contentType, onComplete, onSkip }: 
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
+      if (!activeBrand) return;
       // Check the active account's voice first, then the user-level ("main")
       // row — mirroring the server-side fallback in _shared/voice.ts. The
       // account dimension must be pinned explicitly: with per-account rows in
@@ -42,7 +45,8 @@ export function ScriptingStage({ workflowId, contentType, onComplete, onSkip }: 
         let q = supabase
           .from('user_content_profiles')
           .select('voice_profile, raw_analysis')
-          .eq('user_id', user.id);
+          .eq('user_id', user.id)
+          .eq('brand_id', activeBrand.id);
         q = accountId ? q.eq('social_account_id', accountId) : q.is('social_account_id', null);
         const { data } = await q.maybeSingle();
         const v = data as { voice_profile?: unknown; raw_analysis?: { voice_signature?: string } } | null;
@@ -51,7 +55,7 @@ export function ScriptingStage({ workflowId, contentType, onComplete, onSkip }: 
       const active = activeAccount ? await hasUsableVoice(activeAccount.id) : false;
       setHasVoice(active || await hasUsableVoice(null));
     })();
-  }, [activeAccount?.id]);
+  }, [activeAccount?.id, activeBrand]);
 
   const loadWorkflowData = async () => {
     setLoading(true);

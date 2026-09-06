@@ -169,13 +169,14 @@ export interface MyPost {
 }
 
 /** The signed-in user's own published Instagram posts, newest first. */
-export async function getMyInstagramPosts(): Promise<MyPost[]> {
+export async function getMyInstagramPosts(brandId: string): Promise<MyPost[]> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];
   const { data, error } = await supabase
     .from('content_posts')
     .select('id, caption, media_type, thumbnail_url, views, likes, comments, published_at, published_date')
     .eq('user_id', user.id)
+    .eq('brand_id', brandId)
     .eq('platform', 'instagram')
     .eq('status', 'published')
     .order('published_at', { ascending: false, nullsFirst: false })

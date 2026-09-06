@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AlertTriangle, Check, Info } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { useBrand } from '../contexts/BrandContext';
 import { Button } from './ui/Button';
 import {
   fetchDataHealth,
@@ -35,19 +36,20 @@ export function DataHealthPanel({
   compact?: boolean;
 }) {
   const { user } = useAuth();
+  const { activeBrand } = useBrand();
   const navigate = useNavigate();
   const [health, setHealth] = useState<DataHealth | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!user) {
+    if (!user || !activeBrand) {
       setLoading(false);
       return;
     }
-    fetchDataHealth(user.id)
+    fetchDataHealth(activeBrand.id)
       .then(setHealth)
       .finally(() => setLoading(false));
-  }, [user]);
+  }, [user, activeBrand]);
 
   if (loading || !health) return null;
 
