@@ -133,8 +133,9 @@ export function PublicMediaKit() {
       <PostGrid posts={kit.top_posts} limit={kit.top_posts_limit} />
       <ContactForm slug={slug} kit={k} />
 
-      <footer className="pt-6 border-t border-border">
+      <footer className="pt-6 border-t border-border flex items-center justify-between gap-4">
         <p className="t-micro text-muted-foreground">MADE WITH CLIOPATRA</p>
+        {kit.is_owner && <p className="t-micro text-muted-foreground">YOUR OWN VISITS ARE NOT COUNTED</p>}
       </footer>
     </>,
   );
