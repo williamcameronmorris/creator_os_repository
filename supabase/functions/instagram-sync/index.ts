@@ -111,7 +111,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
-      .select("instagram_business_account_id, instagram_access_token, facebook_page_access_token, meta_token_expires_at")
+      .select("instagram_business_account_id, instagram_access_token, facebook_page_access_token, meta_token_expires_at, facebook_page_id")
       .eq("id", userId)
       .maybeSingle();
 
@@ -191,12 +191,50 @@ Deno.serve(async (req: Request) => {
 
     if (metricsError) console.error("platform_metrics upsert error:", metricsError);
 
+    // Facebook page followers ride on the same Meta grant. Post for Me supplies
+    // the page's per-post numbers; the follower count exists only here. Failure
+    // is reported, never fatal: the Instagram write above must not depend on it.
+    let facebookFollowers: number | null = null;
+    let facebookError: string | null = null;
+    if (profile.facebook_page_id) {
+      try {
+        const pageRes = await fetch(
+          `${GRAPH}/${profile.facebook_page_id}?fields=name,followers_count,fan_count&access_token=${accessToken}`
+        );
+        const page = await pageRes.json();
+        if (page.error) throw new Error(page.error.message);
+        facebookFollowers = Number(page.followers_count ?? page.fan_count ?? 0) || null;
+        if (facebookFollowers) {
+          await supabase
+            .from("profiles")
+            .update({ facebook_page_followers: facebookFollowers, last_facebook_sync: new Date().toISOString() })
+            .eq("id", userId);
+          const { error: fbMetricsError } = await supabase.from("platform_metrics").upsert(
+            {
+              user_id: userId,
+              brand_id: brand.id,
+              platform: "facebook",
+              date: new Date().toISOString().split("T")[0],
+              followers_count: facebookFollowers,
+            },
+            { onConflict: "brand_id,platform,date,social_account_key" }
+          );
+          if (fbMetricsError) facebookError = fbMetricsError.message;
+        }
+      } catch (err) {
+        facebookError = (err as Error).message;
+        console.warn("facebook followers:", facebookError);
+      }
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
         followersCount,
         totalPosts: mediaCount,
         metricsError: metricsError?.message || null,
+        facebookFollowers,
+        facebookError,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
