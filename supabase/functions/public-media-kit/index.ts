@@ -439,10 +439,21 @@ Deno.serve(async (req) => {
     // and a cached 404 would keep telling them the kit is not published.
     if (!kit) return json({ error: "not_found" }, 404, { "Cache-Control": "no-store" });
 
+    // The owner's own visits are not views. The page sends the session when
+    // there is one; anyone else, or a bad token, is counted as a visitor.
+    let isOwner = false;
+    const authHeader = req.headers.get("Authorization");
+    if (authHeader?.startsWith("Bearer ")) {
+      const { data } = await supabase.auth.getUser(authHeader.slice(7));
+      isOwner = !!data?.user && data.user.id === kit.user_id;
+    }
+
     const payload = await buildPayload(supabase, kit);
     // Counted on the server so it cannot be gamed from the page.
-    await supabase.rpc("increment_media_kit_views", { p_kit_id: kit.id });
-    return json(payload, 200, { "Cache-Control": "public, max-age=60, s-maxage=60" });
+    if (!isOwner) await supabase.rpc("increment_media_kit_views", { p_kit_id: kit.id });
+    return json({ ...payload, is_owner: isOwner }, 200, {
+      "Cache-Control": isOwner ? "private, no-store" : "public, max-age=60, s-maxage=60",
+    });
   } catch (err) {
     console.error("public-media-kit:", (err as Error).message);
     return json({ error: "Something went wrong" }, 500);

@@ -1,3 +1,5 @@
+import { supabase } from './supabase';
+
 /**
  * Public media kit: types, fetchers and number formatting.
  *
@@ -59,6 +61,8 @@ export interface PublicKit {
   top_posts_limit: number;
   stats_as_of: string | null;
   stats_stale: boolean;
+  /** True when the viewer is the kit's owner; those visits are not counted. */
+  is_owner?: boolean;
 }
 
 export interface LeadInput {
@@ -76,9 +80,18 @@ const HEADERS = { apikey: import.meta.env.VITE_SUPABASE_ANON_KEY as string };
 
 /** Null when the kit does not exist or is not published. */
 export async function fetchPublicKit(slug: string): Promise<PublicKit | null> {
+  // The session rides along when there is one, so the function can tell an
+  // owner's own visit from a brand's and leave it out of the view count.
+  const headers: Record<string, string> = { ...HEADERS };
+  try {
+    const { data } = await supabase.auth.getSession();
+    if (data.session?.access_token) headers.Authorization = `Bearer ${data.session.access_token}`;
+  } catch {
+    // signed out, or storage unavailable: a plain visitor
+  }
   // no-store: the owner opens this seconds after publishing; a cached miss
   // would say "not published" for a minute.
-  const res = await fetch(`${FN_URL}?slug=${encodeURIComponent(slug)}`, { headers: HEADERS, cache: 'no-store' });
+  const res = await fetch(`${FN_URL}?slug=${encodeURIComponent(slug)}`, { headers, cache: 'no-store' });
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`Could not load this media kit (${res.status})`);
   return (await res.json()) as PublicKit;
