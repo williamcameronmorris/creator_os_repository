@@ -16,7 +16,11 @@ import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
  *       the app's storage (50 MB cap on the Free plan; clips are 75–250 MB).
  *
  *   create      { brandId, socialAccountIds, caption, mediaUrls, scheduledAt,
- *                 youtubeTitle?, dryRun? }
+ *                 mediaType?, youtubeTitle?, dryRun? }
+ *       mediaType is 'video' (default), 'image' or 'carousel'. It is what the
+ *       mirror rows record, and it is a guard: YouTube only takes video, so an
+ *       image post aimed at a YouTube account is refused before Post for Me
+ *       sees it. TikTok photo posts and Instagram/Threads carousels are fine.
  *       One Post for Me post for the given accounts (all must be mapped to
  *       brandId, and brandId must belong to the default user), scheduled at
  *       scheduledAt (ISO, UTC). Mirrors one content_posts row per account,
@@ -127,6 +131,11 @@ Deno.serve(async (req) => {
       if (!scheduledAt || Number.isNaN(Date.parse(scheduledAt))) throw new Error("scheduledAt must be an ISO timestamp");
       if (Date.parse(scheduledAt) < Date.now() + 5 * 60_000) throw new Error("scheduledAt must be at least 5 minutes in the future");
       const youtubeTitle = typeof body.youtubeTitle === "string" && body.youtubeTitle.trim() ? body.youtubeTitle.trim().slice(0, 90) : null;
+      const mediaType = body.mediaType === "image" || body.mediaType === "carousel" ? body.mediaType : "video";
+      if (mediaType !== "video" && accounts.some((a) => a.platform === "youtube")) {
+        throw new Error("YouTube only takes video; drop the YouTube account for image posts");
+      }
+      if (mediaType === "carousel" && mediaUrls.length < 2) throw new Error("A carousel needs at least two media URLs");
 
       const pfmBody: Record<string, unknown> = {
         caption,
@@ -153,7 +162,7 @@ Deno.serve(async (req) => {
         account_username: a.username,
         caption,
         media_urls: mediaUrls,
-        media_type: "video",
+        media_type: mediaType,
         scheduled_date: scheduledAt,
         scheduled_for: scheduledAt,
         status: "scheduled",
