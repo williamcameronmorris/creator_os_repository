@@ -8,7 +8,8 @@ import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
  * script) drops a folder of videos, and this function does what Compose and
  * Drop Zone do from the app, on the server, gated by the cron secret.
  *
- * Every call: POST { cronSecret, action, ... }. Actions:
+ * Every call: POST { action, ... } with either { cronSecret } in the body or
+ * the service-role key as a bearer token. Actions:
  *
  *   upload-url  { filename, contentType }
  *       Asks Post for Me for a direct upload URL. The caller PUTs the file
@@ -92,7 +93,13 @@ Deno.serve(async (req) => {
   } catch {
     return json({ error: "Invalid body" }, 400);
   }
-  if (!body.cronSecret || !CRON_SECRET || body.cronSecret !== CRON_SECRET) return json({ error: "Unauthorized" }, 401);
+  // Two callers: pg_cron style ({ cronSecret } in the body) and a script
+  // holding the project's service-role key as a bearer. Real key comparison,
+  // same as instagram-sync: a decoded role claim alone would be forgeable.
+  const bearer = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
+  const isCron = !!body.cronSecret && !!CRON_SECRET && body.cronSecret === CRON_SECRET;
+  const isServiceRole = bearer !== "" && !!SERVICE_KEY && bearer === SERVICE_KEY.trim();
+  if (!isCron && !isServiceRole) return json({ error: "Unauthorized" }, 401);
   if (!PFM_KEY || !DEFAULT_USER) return json({ error: "Missing Post_For_Me_API or Default_PFM_User_Id" }, 500);
 
   const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
