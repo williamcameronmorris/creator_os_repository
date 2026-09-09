@@ -28,6 +28,9 @@ import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
  *       provider 'postforme', so Schedule and Analytics see it. dryRun
  *       validates and returns the payload without calling Post for Me.
  *
+ *   status      { postIds: [...] }
+ *       Post for Me's own status and per-account results for up to 20 posts.
+ *
  *   list        { brandId }
  *       Upcoming scheduled rows for review.
  *
@@ -113,6 +116,24 @@ Deno.serve(async (req) => {
       const r = await pfm("/v1/media/create-upload-url", { method: "POST", body: JSON.stringify(payload) });
       const data = await r.json().catch(() => null);
       return json({ ok: r.ok, status: r.status, data }, r.ok ? 200 : 502);
+    }
+
+    if (action === "status") {
+      // Ground truth from Post for Me for one or more posts: status plus the
+      // per-account results, which is where a platform rejection shows up.
+      const ids = Array.isArray(body.postIds) ? (body.postIds as unknown[]).filter((x) => typeof x === "string") as string[] : [];
+      if (ids.length === 0 || ids.length > 20) throw new Error("postIds: 1 to 20 Post for Me post ids");
+      const out: Record<string, unknown>[] = [];
+      for (const id of ids) {
+        const r = await pfm(`/v1/social-posts/${encodeURIComponent(id)}`, { method: "GET" });
+        const post = await r.json().catch(() => null);
+        const rr = await pfm(`/v1/social-post-results?social_post_id=${encodeURIComponent(id)}`, { method: "GET" });
+        const results = await rr.json().catch(() => null);
+        out.push({ id, http: r.status, status: post?.status ?? null, scheduled_at: post?.scheduled_at ?? null,
+          results: Array.isArray(results?.data) ? results.data.map((x: Record<string, unknown>) => ({
+            account: x.social_account_id, success: x.success, error: x.error ?? null, platform_data: x.platform_data ?? null })) : results });
+      }
+      return json({ ok: true, posts: out });
     }
 
     if (action === "list") {
