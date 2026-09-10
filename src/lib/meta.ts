@@ -20,7 +20,11 @@ import { supabase } from './supabase';
 import { generateOAuthState } from './oauthState';
 
 const META_APP_ID = import.meta.env.VITE_META_APP_ID || '';
-const THREADS_APP_ID = import.meta.env.VITE_THREADS_APP_ID || META_APP_ID;
+// Threads is its own Meta app, not the Facebook/Instagram one. The threads-auth
+// edge function exchanges the code with THREADS_APP_ID or this same default, so
+// the two must agree; falling back to the Meta app id produced codes the
+// exchange could not redeem. App ids are public.
+const THREADS_APP_ID = import.meta.env.VITE_THREADS_APP_ID || '1433038365192458';
 const META_REDIRECT_URI =
   import.meta.env.VITE_META_REDIRECT_URI || `${window.location.origin}/auth/meta/callback`;
 const THREADS_REDIRECT_URI =

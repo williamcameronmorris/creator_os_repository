@@ -14,7 +14,7 @@ import { CheckCircle, AlertCircle, Loader } from 'lucide-react';
  * Flow:
  *   1. Extract `code` from URL params
  *   2. Call the threads-auth Supabase Edge Function to exchange code for tokens
- *   3. Show success/error and redirect to /settings
+ *   3. Show success/error and redirect to Office > Connections
  */
 export function ThreadsCallback() {
   const [searchParams] = useSearchParams();
@@ -37,14 +37,14 @@ export function ThreadsCallback() {
     if (oauthError) {
       setStatus('error');
       setMessage(errorDescription || 'Threads authorization was denied or cancelled.');
-      setTimeout(() => navigate('/settings'), 4000);
+      setTimeout(() => navigate('/office/connections'), 4000);
       return;
     }
 
     if (!code) {
       setStatus('error');
       setMessage('No authorization code received from Threads.');
-      setTimeout(() => navigate('/settings'), 4000);
+      setTimeout(() => navigate('/office/connections'), 4000);
       return;
     }
 
@@ -57,8 +57,8 @@ export function ThreadsCallback() {
       // CSRF defense: refuse callbacks whose state we didn't issue.
       if (!consumeOAuthState('threads', stateParam)) {
         setStatus('error');
-        setMessage('Security check failed (invalid OAuth state). Please start the connection again from Settings.');
-        setTimeout(() => navigate('/settings'), 5000);
+        setMessage('Security check failed (invalid OAuth state). Please start the connection again from Connections.');
+        setTimeout(() => navigate('/office/connections'), 5000);
         return;
       }
 
@@ -74,11 +74,11 @@ export function ThreadsCallback() {
             : 'Threads account connected successfully.'
         );
 
-        setTimeout(() => navigate('/settings'), 3000);
+        setTimeout(() => navigate('/office/connections'), 3000);
       } catch (err: any) {
         setStatus('error');
         setMessage((err as Error).message || 'Failed to connect Threads account. Please try again.');
-        setTimeout(() => navigate('/settings'), 5000);
+        setTimeout(() => navigate('/office/connections'), 5000);
       }
     };
 
