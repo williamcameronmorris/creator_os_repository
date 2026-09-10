@@ -27,6 +27,22 @@ export interface BookedRowForMatch {
   postforme_post_id: string | null;
   social_account_id: string | null;
   platform_post_id: string | null;
+  /** Needed only by matchByPublishWindow. */
+  scheduled_for?: string | null;
+  status?: string | null;
+}
+
+/**
+ * TikTok's post RESULT reports the publish handle ('v_pub_file~v2-…' or
+ * 'v_inbox_file~…'), not the video id the feed uses. Treat such a value as
+ * "not stamped yet" so the feed can still bind the row to the real id.
+ */
+export function isPublishHandle(id: string | null | undefined): boolean {
+  return typeof id === "string" && /^v_(pub|inbox)_/i.test(id);
+}
+
+function stampedId(row: BookedRowForMatch): string | null {
+  return row.platform_post_id && !isPublishHandle(row.platform_post_id) ? row.platform_post_id : null;
 }
 
 export interface BookedMatch<F, R> {
@@ -77,7 +93,7 @@ export function matchBookedRows<F extends FeedItemForMatch, R extends BookedRowF
 
     const candidates = (byPfmId.get(post.social_post_id) ?? []).filter((r) =>
       !claimed.has(r.id) &&
-      (r.platform_post_id == null || r.platform_post_id === post.platform_post_id)
+      (stampedId(r) == null || stampedId(r) === post.platform_post_id)
     );
     if (candidates.length === 0) continue;
 
@@ -96,5 +112,73 @@ export function matchBookedRows<F extends FeedItemForMatch, R extends BookedRowF
     out.push({ post, row });
   }
 
+  return out;
+}
+
+export interface FeedItemForWindow extends FeedItemForMatch {
+  posted_at: string | null;
+}
+
+/**
+ * Fallback for feeds that carry no social_post_id (TikTok, as observed on
+ * 2026-09-10). Pairs a feed item with the ONE booked row for the same account
+ * whose scheduled_for lies within `windowMs` of the item's posted_at. Both
+ * sides must be unambiguous: an item with two rows in its window, or a row
+ * wanted by two items, is skipped rather than guessed. Rows already stamped
+ * with a real platform id, failed rows and drafts are never candidates.
+ * `claimedRows` / `claimedPosts` let the caller exclude what the id-based
+ * matcher already paired.
+ */
+export function matchByPublishWindow<F extends FeedItemForWindow, R extends BookedRowForMatch>(
+  feed: F[],
+  rows: R[],
+  userId: string,
+  windowMs: number,
+  claimedRows: Set<string> = new Set(),
+  claimedPosts: Set<string> = new Set(),
+): BookedMatch<F, R>[] {
+  const candidates = rows.filter((r) =>
+    !claimedRows.has(r.id) &&
+    !!r.postforme_post_id &&
+    !!r.social_account_id &&
+    stampedId(r) == null &&
+    (r.status == null || r.status === "scheduled" || r.status === "publishing" || r.status === "published") &&
+    !!r.scheduled_for && Number.isFinite(new Date(r.scheduled_for).getTime())
+  );
+  if (candidates.length === 0) return [];
+
+  // item index -> rows in its window; row id -> item indexes that want it
+  const wants = new Map<number, R[]>();
+  const wantedBy = new Map<string, number[]>();
+  feed.forEach((post, i) => {
+    if (post.social_post_id || !post.platform_post_id || !post.social_account_id || !post.posted_at) return;
+    if (post.external_post_id && post.external_post_id !== userId) return;
+    if (claimedPosts.has(post.platform_post_id)) return;
+    const t = new Date(post.posted_at).getTime();
+    if (!Number.isFinite(t)) return;
+    const hits = candidates.filter((r) =>
+      r.social_account_id === post.social_account_id &&
+      Math.abs(new Date(r.scheduled_for as string).getTime() - t) <= windowMs
+    );
+    if (hits.length === 0) return;
+    wants.set(i, hits);
+    for (const r of hits) {
+      const list = wantedBy.get(r.id);
+      if (list) list.push(i);
+      else wantedBy.set(r.id, [i]);
+    }
+  });
+
+  const out: BookedMatch<F, R>[] = [];
+  const seenPosts = new Set<string>();
+  for (const [i, hits] of wants) {
+    if (hits.length !== 1) continue;
+    const row = hits[0];
+    if ((wantedBy.get(row.id) ?? []).length !== 1) continue;
+    const post = feed[i];
+    if (seenPosts.has(post.platform_post_id as string)) continue;
+    seenPosts.add(post.platform_post_id as string);
+    out.push({ post, row });
+  }
   return out;
 }

@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
-import { matchBookedRows } from "./reconcile.ts";
+import { isPublishHandle, matchBookedRows, matchByPublishWindow } from "./reconcile.ts";
 
 /**
  * postforme-sync
@@ -57,6 +57,15 @@ import { matchBookedRows } from "./reconcile.ts";
  *   fields it looked for, so every result was dropped. It now reads the real
  *   fields, marks failed posts 'failed', and never writes zero metrics over
  *   what the feed stamped.
+ *
+ *   TikTok (2026-09-10): its feed items carry no social_post_id, and its
+ *   result reports a publish handle ('v_pub_file~…'), not the video id. So
+ *   TikTok booked rows are paired by account + a 30-minute window around
+ *   scheduled_for (reconcile.ts matchByPublishWindow), and publish handles
+ *   are never written to platform_post_id.
+ *
+ *   Feeds are walked two accounts at a time with a backoff on HTTP 429; nine
+ *   in parallel had PFM rate-limiting five of them every run.
  *
  * PFM does NOT expose follower counts anywhere in its public API (verified
  * against the account object, which carries only id/platform/username/status/
@@ -165,15 +174,46 @@ function normalizeMetrics(raw: unknown): NormalizedMetrics {
   return { views, likes, comments, saves, shares, reach, engagement_rate };
 }
 
+/** How many accounts' feeds to walk at once. Nine in parallel drew HTTP 429 on five of them per run (2026-09-10). */
+const FEED_CONCURRENCY = 2;
+/** Retries per call on HTTP 429, honouring Retry-After when PFM sends one. */
+const RATE_LIMIT_RETRIES = 3;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function pfmFetch(path: string, init?: RequestInit): Promise<Response> {
-  return fetch(`${PFM_BASE}${path}`, {
-    ...(init || {}),
-    headers: {
-      Authorization: `Bearer ${POSTFORME_API_KEY}`,
-      "Content-Type": "application/json",
-      ...(init?.headers || {}),
-    },
+  for (let attempt = 0; ; attempt++) {
+    const res = await fetch(`${PFM_BASE}${path}`, {
+      ...(init || {}),
+      headers: {
+        Authorization: `Bearer ${POSTFORME_API_KEY}`,
+        "Content-Type": "application/json",
+        ...(init?.headers || {}),
+      },
+    });
+    if (res.status !== 429 || attempt >= RATE_LIMIT_RETRIES) return res;
+    // Drain the body so the connection is reusable, then back off.
+    await res.text().catch(() => "");
+    const retryAfter = Number(res.headers.get("retry-after"));
+    const waitMs = Number.isFinite(retryAfter) && retryAfter > 0
+      ? Math.min(retryAfter * 1000, 20_000)
+      : 1500 * 2 ** attempt;
+    await sleep(waitMs);
+  }
+}
+
+/** Run `fn` over `items` with at most `limit` in flight. */
+async function mapWithConcurrency<T>(items: T[], limit: number, fn: (item: T) => Promise<void>): Promise<void> {
+  let next = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (next < items.length) {
+      const item = items[next++];
+      await fn(item);
+    }
   });
+  await Promise.all(workers);
 }
 
 async function listAccounts(externalId?: string): Promise<PfmAccount[]> {
@@ -448,7 +488,16 @@ interface ExistingRow {
   social_account_id: string | null;
   provider: string | null;
   status: string | null;
+  scheduled_for: string | null;
 }
+
+/**
+ * How far a feed item's posted_at may sit from a booked row's scheduled_for
+ * for the two to be the same post when the feed carries no social_post_id
+ * (TikTok). PFM publishes within a few minutes of the slot; slots are hours
+ * apart. Ambiguity inside the window is skipped, never guessed.
+ */
+const PUBLISH_WINDOW_MS = 30 * 60_000;
 
 /**
  * Fold an older published-only import into its booked row: move the daily
@@ -486,11 +535,23 @@ async function reconcileBookedRows(
   existing: ExistingRow[],
   summary: SyncSummary,
 ): Promise<ExistingRow[]> {
-  const matches = matchBookedRows(posts, existing, userId);
+  const byId = matchBookedRows(posts, existing, userId);
+  // TikTok's feed names no social_post_id, so its booked rows are paired by
+  // account + publish window instead; the id matcher's pairs are excluded.
+  const byWindow = matchByPublishWindow(
+    posts, existing, userId, PUBLISH_WINDOW_MS,
+    new Set(byId.map((m) => m.row.id)),
+    new Set(byId.map((m) => m.post.platform_post_id as string)),
+  );
+  const matches = [...byId, ...byWindow];
   if (matches.length === 0) return existing;
 
+  // A publish handle stamped by the results pass is not a platform id; only
+  // real ids can collide with an import.
   const byPlatformPostId = new Map<string, ExistingRow>(
-    existing.filter((r) => r.platform_post_id).map((r) => [r.platform_post_id as string, r]),
+    existing
+      .filter((r) => r.platform_post_id && !isPublishHandle(r.platform_post_id))
+      .map((r) => [r.platform_post_id as string, r]),
   );
   const removed = new Set<string>();
 
@@ -598,8 +659,7 @@ async function syncForUser(userId: string): Promise<SyncSummary> {
   const snapshotRows: Record<string, unknown>[] = [];
   const feedPostsByPlatform: Record<string, AccountFeedPost[]> = {};
 
-  await Promise.all(
-    accounts.map(async (account) => {
+  await mapWithConcurrency(accounts, FEED_CONCURRENCY, async (account) => {
       try {
         const brandId = brandByAccount.get(account.id);
         if (!brandId) {
@@ -629,8 +689,7 @@ async function syncForUser(userId: string): Promise<SyncSummary> {
       } catch (err) {
         summary.errors.push(`feed ${account.platform}/${account.id}: ${(err as Error).message}`);
       }
-    }),
-  );
+  });
 
   if (snapshotRows.length > 0) {
     const { error } = await supabase.from("pfm_account_snapshots").insert(snapshotRows);
@@ -652,7 +711,7 @@ async function syncForUser(userId: string): Promise<SyncSummary> {
     // exact post timestamp catches those.
     const { data: existing, error: existingErr } = await supabase
       .from("content_posts")
-      .select("id, platform_post_id, published_at, postforme_post_id, social_account_id, provider, status")
+      .select("id, platform_post_id, published_at, postforme_post_id, social_account_id, provider, status, scheduled_for")
       .eq("user_id", userId)
       .eq("platform", platform);
     if (existingErr) {
@@ -915,23 +974,33 @@ async function syncForUser(userId: string): Promise<SyncSummary> {
     if (matchErr) summary.errors.push(`content_posts update ${result.postId}: ${matchErr}`);
     else summary.postsMatched += matched;
 
-    // Stamp the platform's id only where none is set yet. A row the feed
-    // already reconciled keeps the feed's id, so the two passes can never
-    // disagree, and a unique-index clash (an import still holding the id)
-    // is reported here and healed by the next feed pass, not fatal.
-    if (matched > 0 && updates.status === "published" && result.platformPostId) {
-      const stamp: Record<string, unknown> = { platform_post_id: result.platformPostId };
-      if (!result.publishedAt) stamp.published_at = new Date().toISOString();
-      let q = supabase
-        .from("content_posts")
-        .update(stamp)
-        .eq("postforme_post_id", result.postId)
-        .eq("user_id", userId)
-        .is("platform_post_id", null);
-      if (result.socialAccountId) q = q.eq("social_account_id", result.socialAccountId);
-      else if (result.platform) q = q.eq("platform", result.platform);
-      const { error } = await q;
-      if (error) summary.errors.push(`content_posts stamp ${result.postId}: ${error.message}`);
+    if (matched > 0 && updates.status === "published") {
+      // The same row scope as the update above.
+      const scoped = (values: Record<string, unknown>) => {
+        let q = supabase
+          .from("content_posts")
+          .update(values)
+          .eq("postforme_post_id", result.postId)
+          .eq("user_id", userId);
+        if (result.socialAccountId) q = q.eq("social_account_id", result.socialAccountId);
+        else if (result.platform) q = q.eq("platform", result.platform);
+        return q;
+      };
+      // First time we learn it published and the result carries no time: now.
+      if (!result.publishedAt) {
+        const { error } = await scoped({ published_at: new Date().toISOString() }).is("published_at", null);
+        if (error) summary.errors.push(`content_posts published_at ${result.postId}: ${error.message}`);
+      }
+      // Stamp the platform's id only where none is set yet, and never a
+      // TikTok publish handle (the feed's video id is the real key; the
+      // publish-window matcher binds it). A row the feed already reconciled
+      // keeps the feed's id, so the two passes can never disagree, and a
+      // unique-index clash (an import still holding the id) is reported here
+      // and healed by the next feed pass, not fatal.
+      if (result.platformPostId && !isPublishHandle(result.platformPostId)) {
+        const { error } = await scoped({ platform_post_id: result.platformPostId }).is("platform_post_id", null);
+        if (error) summary.errors.push(`content_posts stamp ${result.postId}: ${error.message}`);
+      }
     }
   }
 
