@@ -127,13 +127,33 @@ Deno.serve(async (req) => {
       for (const id of ids) {
         const r = await pfm(`/v1/social-posts/${encodeURIComponent(id)}`, { method: "GET" });
         const post = await r.json().catch(() => null);
-        const rr = await pfm(`/v1/social-post-results?social_post_id=${encodeURIComponent(id)}`, { method: "GET" });
+        const rr = await pfm(`/v1/social-post-results?post_id=${encodeURIComponent(id)}&limit=50`, { method: "GET" });
         const results = await rr.json().catch(() => null);
+        // The results endpoint ignores the filter and returns everything, so
+        // keep only the rows that belong to this post.
+        const all = Array.isArray(results?.data) ? results.data as Record<string, unknown>[] : [];
+        const belongs = (x: Record<string, unknown>) =>
+          x.social_post_id === id || x.post_id === id || (x.social_post as Record<string, unknown> | undefined)?.id === id;
+        const rows = all.some(belongs) ? all.filter(belongs) : all;
         out.push({ id, http: r.status, status: post?.status ?? null, scheduled_at: post?.scheduled_at ?? null,
-          results: Array.isArray(results?.data) ? results.data.map((x: Record<string, unknown>) => ({
-            account: x.social_account_id, success: x.success, error: x.error ?? null, platform_data: x.platform_data ?? null })) : results });
+          filtered: all.some(belongs), result_keys: all[0] ? Object.keys(all[0]) : [],
+          results: rows.map((x: Record<string, unknown>) => ({
+            account: x.social_account_id, success: x.success, error: x.error ?? null, details: x.details ?? null,
+            platform_data: x.platform_data ?? null, social_post_id: x.social_post_id ?? x.post_id ?? null })) });
       }
       return json({ ok: true, posts: out });
+    }
+
+    if (action === "accounts") {
+      // Connection state per account, tokens stripped. Enough to tell a dead
+      // TikTok connection from a rejected post.
+      const r = await pfm("/v1/social-accounts?limit=50", { method: "GET" });
+      const data = await r.json().catch(() => null);
+      const rows = Array.isArray(data?.data) ? data.data : [];
+      return json({ ok: r.ok, accounts: rows.map((a: Record<string, unknown>) => ({
+        id: a.id, platform: a.platform, username: a.username, status: a.status,
+        access_token_expires_at: a.access_token_expires_at, refresh_token_expires_at: a.refresh_token_expires_at,
+        metadata: a.metadata ?? null })) });
     }
 
     if (action === "list") {
