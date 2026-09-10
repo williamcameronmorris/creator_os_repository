@@ -7,7 +7,9 @@ import { useState } from 'react';
  * Renders a dismissible banner when a DIRECT platform grant the app still
  * relies on has expired. The copy names what actually stops working (see
  * src/lib/tokenHealth.ts); it never claims posting or syncing are at risk,
- * because those run through Post for Me. Links to Settings for reconnect.
+ * because those run through Post for Me. Links to Office > Connections, where
+ * the direct grants (YouTube, Threads) are reconnected; Settings has no such
+ * controls since the Post for Me migration.
  */
 export function TokenHealthBanner() {
   const navigate = useNavigate();
@@ -36,7 +38,7 @@ export function TokenHealthBanner() {
             {p.impact}
           </p>
           <button
-            onClick={() => navigate('/settings')}
+            onClick={() => navigate('/office/connections')}
             className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white transition-colors flex items-center gap-1.5 flex-shrink-0"
           >
             <RefreshCw className="w-3 h-3" />

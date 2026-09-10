@@ -2,6 +2,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
 import { PostForMeConnections } from '../components/PostForMeConnections';
 import { YouTubeAnalyticsConnect } from '../components/YouTubeAnalyticsConnect';
+import { ThreadsCommentsConnect } from '../components/ThreadsCommentsConnect';
 
 export function Connections() {
   const navigate = useNavigate();
@@ -35,6 +36,7 @@ export function Connections() {
 
       <PostForMeConnections initialFlash={initialFlash} />
       <YouTubeAnalyticsConnect />
+      <ThreadsCommentsConnect />
     </div>
   );
 }
