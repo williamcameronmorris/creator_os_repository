@@ -118,6 +118,23 @@ Deno.serve(async (req) => {
       return json({ ok: r.ok, status: r.status, data }, r.ok ? 200 : 502);
     }
 
+    // Post for Me's per-account result logs include the platform's token
+    // refresh response verbatim. Strip anything that looks like a credential
+    // before it leaves this function.
+    const redact = (v: unknown): unknown => {
+      if (Array.isArray(v)) return v.map(redact);
+      if (v && typeof v === "object") {
+        const out: Record<string, unknown> = {};
+        for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
+          if (/token|secret|refreshResponse|upload_url|upload_token/i.test(k)) { out[k] = "[redacted]"; continue; }
+          out[k] = redact(val);
+        }
+        return out;
+      }
+      if (typeof v === "string" && /upload_token=|access_token=/.test(v)) return "[redacted]";
+      return v;
+    };
+
     if (action === "status") {
       // Ground truth from Post for Me for one or more posts: status plus the
       // per-account results, which is where a platform rejection shows up.
@@ -138,7 +155,7 @@ Deno.serve(async (req) => {
         out.push({ id, http: r.status, status: post?.status ?? null, scheduled_at: post?.scheduled_at ?? null,
           filtered: all.some(belongs), result_keys: all[0] ? Object.keys(all[0]) : [],
           results: rows.map((x: Record<string, unknown>) => ({
-            account: x.social_account_id, success: x.success, error: x.error ?? null, details: x.details ?? null,
+            account: x.social_account_id, success: x.success, error: x.error ?? null, details: redact(x.details ?? null),
             platform_data: x.platform_data ?? null, social_post_id: x.social_post_id ?? x.post_id ?? null })) });
       }
       return json({ ok: true, posts: out });
