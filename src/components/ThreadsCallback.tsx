@@ -19,7 +19,7 @@ import { CheckCircle, AlertCircle, Loader } from 'lucide-react';
 export function ThreadsCallback() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
 
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [message, setMessage] = useState('Connecting your Threads account...');
@@ -48,7 +48,22 @@ export function ThreadsCallback() {
       return;
     }
 
-    if (!user) return;
+    // The session lives per origin. If this callback landed on a host the
+    // user is not signed in on (the redirect URI baked into the build differs
+    // from the domain they started on), say so instead of waiting forever on
+    // "Connecting your Threads account...".
+    if (!user) {
+      if (!authLoading) {
+        setStatus('error');
+        setMessage(
+          `You're not signed in on ${window.location.host}. Threads sent you back here, ` +
+          'but your Cliopatra session is on the domain you started from. Sign in on this ' +
+          'domain and start the connection again from Connections, or ask for the Threads ' +
+          'redirect URL to be set to the domain you use.'
+        );
+      }
+      return;
+    }
 
     if (ranOnce.current) return;
     ranOnce.current = true;
@@ -83,7 +98,7 @@ export function ThreadsCallback() {
     };
 
     handleExchange();
-  }, [code, oauthError, user]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [code, oauthError, user, authLoading]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background px-4">
