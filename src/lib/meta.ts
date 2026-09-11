@@ -27,8 +27,17 @@ const META_APP_ID = import.meta.env.VITE_META_APP_ID || '';
 const THREADS_APP_ID = import.meta.env.VITE_THREADS_APP_ID || '1433038365192458';
 const META_REDIRECT_URI =
   import.meta.env.VITE_META_REDIRECT_URI || `${window.location.origin}/auth/meta/callback`;
-const THREADS_REDIRECT_URI =
-  import.meta.env.VITE_THREADS_REDIRECT_URI || `${window.location.origin}/auth/threads/callback`;
+// On the web the Threads callback must return to the host the user is on:
+// the Supabase session and the OAuth CSRF state both live in that origin's
+// storage. Production is built with VITE_THREADS_REDIRECT_URI pinned to the
+// creatorcommandrepository.vercel.app host, so a reconnect started on
+// www.cliopatra.app landed on a host with no session and hung. The Threads
+// app whitelists both hosts, so the current origin is always valid there. The
+// env override is kept only for non-https origins (the Capacitor webview),
+// which have no routable callback of their own.
+const THREADS_REDIRECT_URI = /^https:\/\/(?!localhost)/.test(window.location.origin)
+  ? `${window.location.origin}/auth/threads/callback`
+  : import.meta.env.VITE_THREADS_REDIRECT_URI || `${window.location.origin}/auth/threads/callback`;
 
 const GRAPH_API = 'https://graph.facebook.com/v25.0';
 const THREADS_API = 'https://graph.threads.net/v1.0';
