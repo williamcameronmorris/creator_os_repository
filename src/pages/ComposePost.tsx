@@ -68,6 +68,34 @@ const PLATFORM_RULES: Record<string, PlatformRule> = {
   facebook:  { captionLimit: 63000,  mediaRequired: false, mediaMax: 10, mediaTypes: 'both' },
 };
 
+/**
+ * Supabase Storage enforces both of these on the `media` bucket, server-side.
+ * Without a pre-check the whole file uploads first and only then fails with
+ * S3's opaque "The object exceeded the maximum allowed size", which reads like
+ * an app bug instead of a file that is simply too big.
+ */
+const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
+const ALLOWED_MIME_TYPES = [
+  'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+  'video/mp4', 'video/quicktime', 'video/webm',
+];
+
+const formatBytes = (bytes: number) =>
+  bytes >= 1024 * 1024
+    ? `${(bytes / (1024 * 1024)).toFixed(bytes >= 10 * 1024 * 1024 ? 0 : 1)}MB`
+    : `${Math.max(1, Math.round(bytes / 1024))}KB`;
+
+/** Human-readable reason a file will be rejected by storage, or null if it is fine. */
+const rejectReason = (file: File): string | null => {
+  if (file.size > MAX_UPLOAD_BYTES) {
+    return `"${file.name}" is ${formatBytes(file.size)}. Max upload is ${formatBytes(MAX_UPLOAD_BYTES)}. Trim it or re-export at a lower bitrate.`;
+  }
+  if (file.type && !ALLOWED_MIME_TYPES.includes(file.type)) {
+    return `"${file.name}" is ${file.type}, which storage will not accept. Use JPG, PNG, GIF, WEBP, MP4, MOV or WEBM.`;
+  }
+  return null;
+};
+
 const PLATFORM_ICONS: Record<string, React.ElementType> = {
   instagram: Instagram,
   youtube: Youtube,
@@ -191,11 +219,24 @@ export function ComposePost() {
     const list = e.target.files;
     if (!list) return;
     const next: MediaItem[] = [...media];
+    const rejected: string[] = [];
     for (const f of Array.from(list)) {
+      const problem = rejectReason(f);
+      if (problem) {
+        rejected.push(problem);
+        continue;
+      }
       const kind: 'image' | 'video' = f.type.startsWith('video') ? 'video' : 'image';
       next.push({ file: f, preview: URL.createObjectURL(f), kind });
     }
     setMedia(next);
+    if (rejected.length > 0) {
+      setPublishState('error');
+      setErrorMsg(rejected.join(' '));
+    } else if (publishState === 'error') {
+      setPublishState('idle');
+      setErrorMsg('');
+    }
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -220,12 +261,20 @@ export function ComposePost() {
     if (!user || media.length === 0) return [];
     const urls: string[] = [];
     for (const m of media) {
+      const problem = rejectReason(m.file);
+      if (problem) throw new Error(problem);
       const ext = m.file.name.split('.').pop() || (m.kind === 'video' ? 'mp4' : 'jpg');
       const path = `${user.id}/${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${ext}`;
       const { data, error } = await supabase.storage
         .from('media')
         .upload(path, m.file, { cacheControl: '3600', upsert: false });
-      if (error) throw new Error(`Upload failed: ${error.message}`);
+      if (error) {
+        throw new Error(
+          /exceeded the maximum allowed size/i.test(error.message)
+            ? `"${m.file.name}" is ${formatBytes(m.file.size)}, over the ${formatBytes(MAX_UPLOAD_BYTES)} upload limit.`
+            : `Upload failed: ${error.message}`,
+        );
+      }
       const { data: pub } = supabase.storage.from('media').getPublicUrl(data.path);
       urls.push(pub.publicUrl);
     }
@@ -523,7 +572,7 @@ export function ComposePost() {
             <Upload className="w-5 h-5" />
             <span className="t-micro">ADD MEDIA</span>
             <span className="t-micro" style={{ fontSize: '9px' }}>
-              {requiresVideoOnly ? 'MP4, MOV' : 'JPG, PNG, MP4, MOV'}
+              {requiresVideoOnly ? 'MP4, MOV' : 'JPG, PNG, MP4, MOV'} · MAX {formatBytes(MAX_UPLOAD_BYTES)}
             </span>
           </button>
         ) : (
@@ -546,7 +595,7 @@ export function ComposePost() {
                   className="absolute bottom-1 left-1 font-mono text-[9px] px-1 py-0.5 bg-background/80 uppercase"
                   style={{ color: 'var(--muted-foreground)' }}
                 >
-                  {m.kind}
+                  {m.kind} · {formatBytes(m.file.size)}
                 </span>
               </div>
             ))}
