@@ -112,8 +112,9 @@ Deno.serve(async (req: Request) => {
     if (!userId) throw new Error("Missing required field: userId");
 
     // One brand per run. Ownership of a caller-supplied brand is verified;
-    // cron mode (no brandId) resolves to the user's default brand.
-    const brandId = await resolveBrandId(supabase, userId, null, requestedBrandId);
+    // cron mode (no brandId) resolves to the user's default brand, which
+    // resolveBrandId only does when told to.
+    const brandId = await resolveBrandId(supabase, userId, null, requestedBrandId, true);
 
     const today = new Date().toISOString().split("T")[0];
     const thirtyDaysAgo = new Date();

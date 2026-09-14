@@ -82,7 +82,10 @@ export function AnalysisStage({ workflowId, onComplete }: AnalysisStageProps) {
           .eq('brand_id', activeBrand.id)
           .eq('platform', plat)
           .eq('status', 'published')
-          .gte('published_date', ninetyDaysAgo.toISOString())
+          // published_at is what the sync writes; published_date was never
+          // set, so the baseline was always empty and every post read as
+          // "first post, no baseline yet".
+          .gte('published_at', ninetyDaysAgo.toISOString())
           .neq('id', workflow.published_post_id)
           .not('views', 'is', null)
           .limit(30);
