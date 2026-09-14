@@ -8,7 +8,7 @@ import { Plus, Pencil } from 'lucide-react';
 const ERROR_COLOR = '#B07050';
 
 const selectCls =
-  'px-2 py-1 bg-background border border-border text-foreground focus:outline-none focus:border-accent transition-colors font-mono text-[10px] uppercase tracking-[0.08em]';
+  'px-2 py-1 bg-background border border-border text-foreground focus:outline-none focus:border-accent transition-colors font-mono text-[12px] uppercase tracking-[0.08em]';
 
 const CATEGORY_LABELS: Record<string, string> = {
   opportunity: 'Opportunity',

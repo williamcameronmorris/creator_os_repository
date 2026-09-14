@@ -232,7 +232,7 @@ export function MediaKitEditor() {
               aria-label="Link"
             />
           </div>
-          <Button onClick={handleCreate} disabled={busy}>{busy ? 'CREATING…' : 'CREATE MEDIA KIT'}</Button>
+          <Button onClick={handleCreate} disabled={busy}>{busy ? 'Creating…' : 'Create media kit'}</Button>
         </div>
       </div>
     );
@@ -265,7 +265,7 @@ export function MediaKitEditor() {
             <ExternalLink className="w-3 h-3" /> OPEN
           </a>
           <Button size="sm" variant={kit.is_published ? 'secondary' : 'primary'} onClick={() => handlePublish(!kit.is_published)} disabled={busy}>
-            {kit.is_published ? 'UNPUBLISH' : 'PUBLISH'}
+            {kit.is_published ? 'Unpublish' : 'Publish'}
           </Button>
         </div>
       </div>
@@ -501,7 +501,7 @@ export function MediaKitEditor() {
       </section>
 
       <div className="flex items-center gap-4">
-        <Button onClick={handleSave} disabled={busy || !dirty}>{busy ? 'SAVING…' : 'SAVE'}</Button>
+        <Button onClick={handleSave} disabled={busy || !dirty}>{busy ? 'Saving…' : 'Save'}</Button>
         {dirty && !busy && <span className="t-micro text-muted-foreground">UNSAVED CHANGES</span>}
       </div>
 

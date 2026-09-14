@@ -45,7 +45,7 @@
     --ring:               #C8A24B;
     --sidebar-border:     #D9D2C4;
     --muted:              #EDE8DF;
-    --muted-foreground:   #8A857C;
+    --muted-foreground:   #6B665E;
     --accent:             #C8A24B;
     --accent-foreground:  #1A1816;
     --primary:            #1A1816;
@@ -159,9 +159,9 @@
     letter-spacing: -0.015em;
   }
   .t-body {
-    font-size: 14px;
+    font-size: 15px;
     font-weight: 400;
-    line-height: 1.55;
+    line-height: 1.6;
     letter-spacing: -0.005em;
     color: var(--muted-foreground);
   }
@@ -175,15 +175,15 @@
   }
   .t-micro {
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: 12px;
     font-weight: 500;
     text-transform: uppercase;
-    letter-spacing: 0.14em;
+    letter-spacing: 0.06em;
     color: var(--muted-foreground);
   }
   .t-mono {
     font-family: var(--font-mono);
-    font-size: 11px;
+    font-size: 13px;
     letter-spacing: 0.05em;
   }
 
@@ -228,11 +228,10 @@
     color: var(--foreground);
     border: 1px solid var(--border);
     padding: 0.65rem 1.5rem;
-    font-family: var(--font-mono);
-    font-size: 11px;
+    font-family: 'Switzer', system-ui, -apple-system, sans-serif;
+    font-size: 14px;
     font-weight: 500;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
+    letter-spacing: 0.01em;
     cursor: pointer;
     position: relative;
     overflow: hidden;
@@ -314,9 +313,9 @@
 
    Retrofitting .btn-ie means every existing button gets the treatment without
    touching a single call site, and new work can move to <Button> gradually.
-   The two share every mechanic below and differ only in typography — .btn-ie
-   keeps its mono uppercase label, because the ask was about shape, depth and
-   colour, not type.
+   The two share every mechanic below. Both now carry a 14px sentence-case
+   sans label and a 44px minimum height (the touch floor); .btn-ie kept its
+   mono uppercase label until the launch type-scale pass.
 
    The mechanic, identical in both themes:
      3px radius        enough to read as a control, not enough to go soft
@@ -340,6 +339,7 @@
 
   .btn, .btn-ie {
     border-radius: 3px;
+    min-height: 44px;
     transition: transform 0.06s ease, box-shadow 0.06s ease,
                 background-color 0.12s ease, border-color 0.12s ease;
   }

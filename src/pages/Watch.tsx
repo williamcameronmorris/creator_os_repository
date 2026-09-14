@@ -122,19 +122,19 @@ export function Watch() {
     <div className="max-w-md mx-auto px-4 pt-4">
       {/* header row */}
       <div className="flex items-center justify-between mb-4">
-        <span className="font-mono text-[10px] tracking-widest uppercase text-muted-foreground">
+        <span className="font-mono text-[12px] tracking-widest uppercase text-muted-foreground">
           Watching
         </span>
         {platform !== 'instagram' && niche && (
           <span className="flex items-center gap-2 min-w-0">
             {/* Whose niche this is — the Account Switcher's active account. */}
             {activeAccount?.username && (
-              <span className="font-mono text-[9px] tracking-widest uppercase text-muted-foreground truncate">
+              <span className="font-mono text-[12px] tracking-widest uppercase text-muted-foreground truncate">
                 @{activeAccount.username}
               </span>
             )}
             <span
-              className="font-mono text-[9px] tracking-widest uppercase px-2 py-1 border flex-shrink-0"
+              className="font-mono text-[12px] tracking-widest uppercase px-2 py-1 border flex-shrink-0"
               style={{ borderColor: GOLD, color: '#8a6d22' }}
             >
               {niche}
@@ -149,7 +149,7 @@ export function Watch() {
           <button
             key={p}
             onClick={() => setPlatform(p)}
-            className="relative pb-3 font-mono text-[10px] tracking-widest uppercase transition-colors"
+            className="relative pb-3 font-mono text-[12px] tracking-widest uppercase transition-colors"
             style={{ color: platform === p ? 'var(--foreground)' : undefined }}
           >
             <span className={platform === p ? '' : 'text-muted-foreground'}>{label}</span>
@@ -164,7 +164,7 @@ export function Watch() {
       </div>
 
       {loading && (
-        <div className="py-16 text-center font-mono text-[11px] tracking-wide text-muted-foreground">
+        <div className="py-16 text-center font-mono text-[12px] tracking-wide text-muted-foreground">
           {platform === 'youtube' ? 'Finding creators in your niche…' : 'Loading…'}
         </div>
       )}
@@ -183,7 +183,7 @@ export function Watch() {
           </p>
           <Link
             to="/profile"
-            className="inline-block font-mono text-[10px] tracking-widest uppercase px-3 py-2 border"
+            className="inline-block font-mono text-[12px] tracking-widest uppercase px-3 py-2 border"
             style={{ borderColor: GOLD, color: '#8a6d22' }}
           >
             Set niche in profile
@@ -194,7 +194,7 @@ export function Watch() {
       {!loading && !error && platform === 'instagram' && (
         <>
           <div className="flex items-center justify-between mb-3">
-            <span className="font-mono text-[9px] tracking-widest uppercase text-muted-foreground">
+            <span className="font-mono text-[12px] tracking-widest uppercase text-muted-foreground">
               My posts · newest first
             </span>
           </div>
@@ -228,10 +228,10 @@ export function Watch() {
                     )}
                   </div>
                   <div className="flex-1 min-w-0 flex flex-col">
-                    <p className="text-[13px] leading-snug text-foreground line-clamp-2">
+                    <p className="text-sm leading-snug text-foreground line-clamp-2">
                       {p.caption || 'Untitled post'}
                     </p>
-                    <span className="font-mono text-[10px] text-muted-foreground mt-1">
+                    <span className="font-mono text-[12px] text-muted-foreground mt-1">
                       {p.published_at
                         ? new Date(p.published_at).toLocaleDateString(undefined, {
                             month: 'short',
@@ -242,22 +242,22 @@ export function Watch() {
                     </span>
                     <div className="flex items-center gap-4 mt-auto pt-2">
                       {p.views ? (
-                        <span className="flex items-center gap-1 text-[11px] text-foreground">
+                        <span className="flex items-center gap-1 text-[12px] text-foreground">
                           <Play className="w-3 h-3 text-muted-foreground" />
                           {formatCount(p.views)}
                         </span>
                       ) : null}
-                      <span className="flex items-center gap-1 text-[11px] text-foreground">
+                      <span className="flex items-center gap-1 text-[12px] text-foreground">
                         <Heart className="w-3 h-3 text-muted-foreground" />
                         {formatCount(p.likes)}
                       </span>
-                      <span className="flex items-center gap-1 text-[11px] text-foreground">
+                      <span className="flex items-center gap-1 text-[12px] text-foreground">
                         <MessageCircle className="w-3 h-3 text-muted-foreground" />
                         {formatCount(p.comments)}
                       </span>
                       <button
                         onClick={() => remixToClio(p)}
-                        className="ml-auto flex items-center gap-1 font-mono text-[9px] tracking-wider uppercase"
+                        className="ml-auto flex items-center gap-1 font-mono text-[12px] tracking-wider uppercase"
                         style={{ color: '#8a6d22' }}
                       >
                         <Sparkles className="w-3 h-3" />
@@ -283,10 +283,10 @@ export function Watch() {
         <>
           {/* suggested creators rail */}
           <div className="flex items-center justify-between mb-3">
-            <span className="font-mono text-[9px] tracking-widest uppercase text-muted-foreground">
+            <span className="font-mono text-[12px] tracking-widest uppercase text-muted-foreground">
               Suggested creators
             </span>
-            <span className="font-mono text-[9px] tracking-widest uppercase text-muted-foreground">
+            <span className="font-mono text-[12px] tracking-widest uppercase text-muted-foreground">
               Refreshed weekly
             </span>
           </div>
@@ -308,10 +308,10 @@ export function Watch() {
                 >
                   {initials(c.title)}
                 </div>
-                <span className="text-[10px] text-center leading-tight text-foreground line-clamp-2 h-6">
+                <span className="text-sm text-center leading-tight text-foreground line-clamp-2 h-9">
                   {c.title}
                 </span>
-                <span className="font-mono text-[9px] text-muted-foreground">
+                <span className="font-mono text-[12px] text-muted-foreground">
                   {formatCount(c.subscriber_count)}
                 </span>
               </Link>
@@ -338,7 +338,7 @@ export function Watch() {
                   )}
                   {v.is_top && (
                     <span
-                      className="absolute left-2 top-2 flex items-center gap-1 px-2 py-0.5 font-mono text-[8px] font-bold tracking-widest uppercase"
+                      className="absolute left-2 top-2 flex items-center gap-1 px-2 py-0.5 font-mono text-[12px] font-bold tracking-widest uppercase"
                       style={{ background: GOLD, color: '#43340c' }}
                     >
                       <Flame className="w-2.5 h-2.5" />
@@ -360,14 +360,14 @@ export function Watch() {
                   </p>
                   <button
                     onClick={() => sendToClio(v)}
-                    className="flex-shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 border font-mono text-[9px] tracking-wider uppercase"
+                    className="flex-shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 border font-mono text-[12px] tracking-wider uppercase"
                     style={{ borderColor: GOLD, color: '#8a6d22' }}
                   >
                     <Sparkles className="w-3 h-3" />
                     My version
                   </button>
                 </div>
-                <div className="mt-1.5 text-[11px] text-muted-foreground">{v.creatorTitle}</div>
+                <div className="mt-1.5 text-sm text-muted-foreground">{v.creatorTitle}</div>
                 <WatchVideoStats video={v} niche={niche ?? 'your niche'} />
               </div>
             ))}

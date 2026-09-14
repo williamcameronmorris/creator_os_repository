@@ -446,7 +446,7 @@ export function Schedule() {
                               <SignedImg src={post.media_type === 'video' && post.thumbnail_url ? post.thumbnail_url : post.media_urls[0]} alt="" className="w-full h-full object-cover" />
                             </div>
                             {post.media_urls.length > 1 && (
-                              <div className="absolute -bottom-1 -right-1 px-1 py-0.5 bg-card border border-border text-[10px] text-muted-foreground font-semibold">
+                              <div className="absolute -bottom-1 -right-1 px-1 py-0.5 bg-card border border-border text-[12px] text-muted-foreground font-semibold">
                                 +{post.media_urls.length - 1}
                               </div>
                             )}

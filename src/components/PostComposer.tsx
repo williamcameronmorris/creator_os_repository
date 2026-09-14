@@ -593,7 +593,7 @@ export function PostComposer({ onClose, onSuccess, asPage = false, editPost }: P
                             </svg>
                           </div>
                         </div>
-                        <div className="absolute bottom-2 left-2 bg-black/60 text-white text-[10px] font-semibold px-1.5 py-0.5 rounded flex items-center gap-1">
+                        <div className="absolute bottom-2 left-2 bg-black/60 text-white text-[12px] font-semibold px-1.5 py-0.5 rounded flex items-center gap-1">
                           <Video className="w-2.5 h-2.5" />
                           Video
                         </div>
