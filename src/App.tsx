@@ -35,6 +35,10 @@ import { PostForMeCallback } from './components/PostForMeCallback';
 import { Connections } from './pages/Connections';
 import { Patra } from './pages/Patra';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { ToastProvider } from './components/ui/Toast';
+import { ConfirmProvider } from './components/ui/ConfirmDialog';
+import { Privacy, Terms } from './pages/Legal';
+import { NotFound } from './pages/NotFound';
 import { supabase, type Profile as ProfileType } from './lib/supabase';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -137,6 +141,8 @@ function AppContent() {
         <Route path="/auth" element={<Auth />} />
         {/* Public media kit: a brand opens this with no session at all. */}
         <Route path="/kit/:slug" element={<PublicMediaKit />} />
+        <Route path="/privacy" element={<Privacy />} />
+        <Route path="/terms" element={<Terms />} />
         <Route path="*" element={<Navigate to="/auth" replace />} />
       </Routes>
     );
@@ -165,6 +171,8 @@ function AppContent() {
       <Routes>
         <Route path="/onboarding" element={<Onboarding onComplete={loadProfile} />} />
         <Route path="/kit/:slug" element={<PublicMediaKit />} />
+        <Route path="/privacy" element={<Privacy />} />
+        <Route path="/terms" element={<Terms />} />
         <Route path="*" element={<Navigate to="/onboarding" replace />} />
       </Routes>
     );
@@ -220,12 +228,14 @@ function AppContent() {
       <Route path="/help" element={<ProtectedRoute><Layout><HelpPage /></Layout></ProtectedRoute>} />
       {/* Public media kit renders without Layout even for a signed-in viewer. */}
       <Route path="/kit/:slug" element={<PublicMediaKit />} />
+      <Route path="/privacy" element={<Privacy />} />
+      <Route path="/terms" element={<Terms />} />
 
       {/* Ã¢ÂÂÃ¢ÂÂ OAuth Callbacks Ã¢ÂÂÃ¢ÂÂ */}
       {/* OAuth callbacks are rendered above the auth gate (see AppContent top). */}
 
-      {/* Fallback */}
-      <Route path="*" element={<Navigate to="/" replace />} />
+      {/* Unknown path: say so, inside the shell, rather than bouncing home. */}
+      <Route path="*" element={<ProtectedRoute><Layout><NotFound /></Layout></ProtectedRoute>} />
     </Routes>
   );
 }
@@ -243,7 +253,11 @@ export default function App() {
               <BrandProvider>
               <AccountProvider>
                 <SubscriptionProvider>
-                  <AppContent />
+                  <ToastProvider>
+                    <ConfirmProvider>
+                      <AppContent />
+                    </ConfirmProvider>
+                  </ToastProvider>
                 </SubscriptionProvider>
               </AccountProvider>
               </BrandProvider>
