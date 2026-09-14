@@ -11,9 +11,9 @@ import { loadVoiceContext, loadAccountNiche } from "../_shared/voice.ts";
  *
  * Optional body.socialAccountId scopes the run to one connected account: only
  * that account's posts feed the performance context, its voice is injected
- * (falling back to the main voice), and its niche wins over
- * profiles.niche_preference. Absent → exactly the legacy user-level behavior
- * (no voice block — matching what this function did before separation).
+ * (falling back to the brand's main voice), and its niche wins over
+ * profiles.niche_preference. Absent → the brand's posts and the brand's main
+ * voice.
  *
  * Caller must be authenticated; we ignore any userId field in the body and
  * use the verified id from the bearer token instead. Deploy `--no-verify-jwt`.
@@ -92,9 +92,9 @@ Deno.serve(async (req: Request) => {
         .select("display_name, first_name, niche_preference")
         .eq("id", userId)
         .maybeSingle(),
-      // Voice only in account mode — user-level runs keep their pre-separation
-      // behavior (this function never injected voice before).
-      socialAccountId ? loadVoiceContext(supabase, userId, socialAccountId, brandId) : Promise.resolve(null),
+      // Always in the brand's voice: the account's own when one is pinned,
+      // else the brand's main voice. "All accounts" used to skip voice.
+      loadVoiceContext(supabase, userId, socialAccountId, brandId),
       loadAccountNiche(supabase, userId, socialAccountId, brandId),
     ]);
 

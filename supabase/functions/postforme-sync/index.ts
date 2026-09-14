@@ -1113,16 +1113,24 @@ Deno.serve(async (req) => {
     const summary = await syncForUser(userId);
 
     // ── Trigger caption/voice analysis (fire-and-forget) ────────────────────
-    fetch(`${SUPABASE_URL}/functions/v1/analyze-captions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-      },
-      body: JSON.stringify({ cronSecret: CRON_SECRET, userId, force: false }),
-    }).catch((err) => {
-      console.warn("analyze-captions fire-and-forget failed:", (err as Error).message);
-    });
+    // One call PER BRAND: a voice is learned from a brand's own posts, and the
+    // posts just synced are the first chance a new brand has to earn one.
+    // analyze-captions skips a brand whose voice is under 24h old.
+    const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    const { data: brandRows } = await admin.from("brands").select("id").eq("owner_id", userId);
+    const brandIds = (brandRows ?? []).map((b) => b.id as string);
+    for (const brandId of brandIds.length > 0 ? brandIds : [null]) {
+      fetch(`${SUPABASE_URL}/functions/v1/analyze-captions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+        },
+        body: JSON.stringify({ cronSecret: CRON_SECRET, userId, force: false, ...(brandId ? { brandId } : {}) }),
+      }).catch((err) => {
+        console.warn("analyze-captions fire-and-forget failed:", (err as Error).message);
+      });
+    }
 
     return new Response(JSON.stringify(summary), {
       status: 200,

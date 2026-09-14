@@ -304,11 +304,13 @@ async function generateForUser(
   force: boolean,
   socialAccountId: string | null = null,
   requestedBrandId: string | null = null,
+  allowDefaultBrand = false,
 ): Promise<"generated" | "skipped_exists" | { row: Record<string, unknown> }> {
   const briefDate = todayUtc();
   // Briefs are one row per BRAND per day. Resolve from the account when the
-  // caller scoped one, else the user's default brand (cron mode).
-  const brandId = await resolveBrandId(supabase, userId, socialAccountId, requestedBrandId);
+  // caller scoped one, else the brand the caller named; only the morning cron
+  // may fall back to the user's default brand.
+  const brandId = await resolveBrandId(supabase, userId, socialAccountId, requestedBrandId, allowDefaultBrand);
 
   if (!force) {
     const { data: existing } = await supabase
@@ -380,7 +382,7 @@ Deno.serve(async (req: Request) => {
             skipped++;
             continue;
           }
-          const result = await generateForUser(supabase, uid, !!body.force);
+          const result = await generateForUser(supabase, uid, !!body.force, null, null, true);
           if (result === "skipped_exists") skipped++;
           else generated++;
         } catch (err) {

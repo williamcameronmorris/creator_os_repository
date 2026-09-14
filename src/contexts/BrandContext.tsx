@@ -50,6 +50,8 @@ interface BrandContextValue {
   /** Map a Post for Me account to a brand, or move it to another one. */
   assignAccount: (account: AssignableAccount, brandId: string) => Promise<void>;
   refresh: () => Promise<void>;
+  /** Brands whose voice Clio is building right now (see assignAccount). */
+  voiceBuildingBrandIds: Set<string>;
 }
 
 const BrandContext = createContext<BrandContextValue>({
@@ -63,6 +65,7 @@ const BrandContext = createContext<BrandContextValue>({
   },
   assignAccount: async () => {},
   refresh: async () => {},
+  voiceBuildingBrandIds: new Set(),
 });
 
 /** Same rule as the SQL backfill: lowercase, non-alphanumerics collapse to '-'. */
@@ -77,6 +80,7 @@ export function BrandProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const [brands, setBrands] = useState<Brand[]>([]);
   const [accountBrandMap, setAccountBrandMap] = useState<AccountBrandMap>(new Map());
+  const [voiceBuildingBrandIds, setVoiceBuildingBrandIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(() => {
     try {
@@ -179,8 +183,34 @@ export function BrandProvider({ children }: { children: ReactNode }) {
     [user, refresh, setActiveBrand],
   );
 
+  // Only "Build my voice" writes a brand's voice row, so a new brand has no
+  // voice and every generator falls back to the default prompt. Build it the
+  // moment the brand gets its first account. analyze-captions answers
+  // success:false when the brand has too few synced posts; the sync retries
+  // per brand every run, and VoiceCard shows the state meanwhile.
+  const buildVoice = useCallback(async (brandId: string) => {
+    setVoiceBuildingBrandIds((prev) => new Set(prev).add(brandId));
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      await supabase.functions.invoke('analyze-captions', {
+        body: { brandId },
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+    } catch (err) {
+      console.warn('voice build failed:', (err as Error).message);
+    } finally {
+      setVoiceBuildingBrandIds((prev) => {
+        const next = new Set(prev);
+        next.delete(brandId);
+        return next;
+      });
+    }
+  }, []);
+
   const assignAccount = useCallback(
     async (account: AssignableAccount, brandId: string) => {
+      const firstAccount = ![...accountBrandMap.values()].includes(brandId);
       const { error } = await supabase.from('brand_social_accounts').upsert(
         {
           pfm_account_id: account.id,
@@ -196,13 +226,14 @@ export function BrandProvider({ children }: { children: ReactNode }) {
         next.set(account.id, brandId);
         return next;
       });
+      if (firstAccount) void buildVoice(brandId);
     },
-    [],
+    [accountBrandMap, buildVoice],
   );
 
   return (
     <BrandContext.Provider
-      value={{ brands, activeBrand, setActiveBrand, loading, accountBrandMap, createBrand, assignAccount, refresh }}
+      value={{ brands, activeBrand, setActiveBrand, loading, accountBrandMap, createBrand, assignAccount, refresh, voiceBuildingBrandIds }}
     >
       {children}
     </BrandContext.Provider>

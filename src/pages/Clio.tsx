@@ -240,6 +240,11 @@ export function Clio() {
 
   const handleSubmit = async () => {
     if (!query.trim() || isLoading) return;
+    // The server refuses a question with no brand rather than guessing one.
+    if (!activeBrand) {
+      setErrorMsg('Your brands are still loading. Try again in a moment.');
+      return;
+    }
     const question = query.trim();
     setIsLoading(true);
     setErrorMsg('');
@@ -252,7 +257,7 @@ export function Clio() {
       const res = await supabase.functions.invoke('ask-copilot', {
         body: {
           userId: user!.id,
-          brandId: activeBrand?.id,
+          brandId: activeBrand.id,
           question,
           // Prior turns so Clio keeps context across follow-ups. The edge
           // function validates + caps this at the last 12 turns anyway.

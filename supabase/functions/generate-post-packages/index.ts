@@ -31,7 +31,7 @@ const PLATFORM_SPECS: Record<string, string> = {
   instagram:
     'instagram — Reel caption, max 2200 chars, but the HOOK must land in the first 125 chars (only those show before "…more"). hashtags: 3-5, space-separated with #.',
   youtube:
-    'youtube — this is a YouTube SHORT. title: required, max 90 chars, punchy and searchable. caption: the video description, 1-3 short paragraphs. hashtags: 2-3 (they render under the title).',
+    'youtube — this is a YouTube SHORT. title: required, max 100 chars, punchy and searchable. caption: the video description, 1-3 short paragraphs. hashtags: 2-3 (they render under the title).',
   tiktok:
     "tiktok — caption max 2200 chars, conversational and native to TikTok (talk like a person, not a brand). hashtags: 3-5.",
   x:
@@ -118,13 +118,25 @@ Deno.serve(async (req: Request) => {
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
     const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split("T")[0];
 
-    const [voiceContext, profileResult, recentResult] = await Promise.all([
+    const [voiceContext, profileResult, brandResult, brandVoiceRow, recentResult] = await Promise.all([
       // The brand's main voice.
       loadVoiceContext(supabase, userId, null, brandId),
       supabase
         .from("profiles")
         .select("display_name, first_name, niche_preference")
         .eq("id", userId)
+        .maybeSingle(),
+      supabase
+        .from("brands")
+        .select("name, is_default")
+        .eq("id", brandId)
+        .maybeSingle(),
+      supabase
+        .from("user_content_profiles")
+        .select("niche")
+        .eq("user_id", userId)
+        .eq("brand_id", brandId)
+        .is("social_account_id", null)
         .maybeSingle(),
       supabase
         .from("content_posts")
@@ -138,8 +150,19 @@ Deno.serve(async (req: Request) => {
         .limit(30),
     ]);
 
-    const niche = (profileResult.data?.niche_preference || "").trim();
-    const creatorName = profileResult.data?.first_name || profileResult.data?.display_name || "the creator";
+    // Niche and name are the BRAND's, not the user's: profiles.niche_preference
+    // and display_name are one row per user, which is the default brand's
+    // niche and name for every other brand. The brand's voice row carries its
+    // niche; the profile is the fallback only when the brand has no row, or
+    // for the default brand, whose niche the profile has always described.
+    const brand = brandResult.data as { name: string; is_default: boolean } | null;
+    const brandNiche = ((brandVoiceRow.data as { niche?: string | null } | null)?.niche || "").trim();
+    const profileNiche = (profileResult.data?.niche_preference || "").trim();
+    const niche = brandNiche || (!brandVoiceRow.data || brand?.is_default ? profileNiche : "");
+    const profileName = profileResult.data?.first_name || profileResult.data?.display_name || "";
+    const creatorName = brand && !brand.is_default
+      ? brand.name
+      : profileName || brand?.name || "the creator";
 
     // Top 3 recent posts by engagement for style grounding.
     const topPosts = ((recentResult.data || []) as RecentPost[])
@@ -175,7 +198,7 @@ Return ONLY a valid JSON object, no markdown, with this exact shape:
       "platform": "one of: ${platforms.join(", ")}",
       "caption": "the full caption/description text for that platform",
       "hashtags": "space-separated with #, e.g. \\"#a #b #c\\" — or \\"\\" where the rules say empty",
-      "title": "YouTube ONLY: the Short's title, max 90 chars. Omit for other platforms.",
+      "title": "YouTube ONLY: the Short's title, max 100 chars. Omit for other platforms.",
       "notes": "1 short line: what makes this version fit this platform"
     }
   ]
@@ -242,7 +265,7 @@ Exactly one package per platform listed above (${platforms.length} total). No ex
           platform,
           caption: pkg.caption.trim(),
           hashtags: typeof pkg.hashtags === "string" ? pkg.hashtags.trim() : "",
-          title: platform === "youtube" ? (pkg.title || "").trim().slice(0, 90) : undefined,
+          title: platform === "youtube" ? (pkg.title || "").trim().slice(0, 100) : undefined,
           notes: typeof pkg.notes === "string" ? pkg.notes.trim() : "",
         };
       });

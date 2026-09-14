@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useAccount } from '../contexts/AccountContext';
@@ -48,7 +48,9 @@ function relativeTime(iso: string | null): string {
 export function VoiceCard() {
   const { user } = useAuth();
   const { accounts, activeAccount } = useAccount();
-  const { activeBrand } = useBrand();
+  const { activeBrand, voiceBuildingBrandIds } = useBrand();
+  // BrandContext builds a brand's voice on its first account; show that.
+  const autoBuilding = !!activeBrand && voiceBuildingBrandIds.has(activeBrand.id);
   // null = the user-level "Main" voice; otherwise a PFM social account id.
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [touched, setTouched] = useState(false);
@@ -67,6 +69,14 @@ export function VoiceCard() {
     if (user && activeBrand) load(selectedId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, activeBrand, selectedId]);
+
+  // When the automatic build finishes, pick up the row it wrote.
+  const wasBuilding = useRef(false);
+  useEffect(() => {
+    if (wasBuilding.current && !autoBuilding && user && activeBrand) load(selectedId);
+    wasBuilding.current = autoBuilding;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoBuilding]);
 
   const load = async (accountId: string | null) => {
     if (!user || !activeBrand) return;
@@ -204,6 +214,13 @@ export function VoiceCard() {
 
       {loading ? (
         <div className="t-body py-6">Loading your voice…</div>
+      ) : autoBuilding && !hasVoice ? (
+        <div className="border border-dashed border-border p-6 text-center">
+          <p className="t-body flex items-center justify-center gap-2">
+            <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+            No voice yet. Clio is building one from {activeBrand?.name}'s posts…
+          </p>
+        </div>
       ) : hasVoice ? (
         <div className="space-y-5">
           {signature && (
@@ -256,7 +273,7 @@ export function VoiceCard() {
             </p>
           ) : (
             <p className="t-body mb-4">
-              You don't have a voice yet. Clio will read your recent published posts and learn how you write.
+              {activeBrand?.name ?? 'This brand'} has no voice yet. Clio builds one from its published posts once a few have synced, or you can build it now.
             </p>
           )}
           <button onClick={build} disabled={building} className="btn-ie btn-ie-solid mx-auto disabled:opacity-60 disabled:cursor-not-allowed">
