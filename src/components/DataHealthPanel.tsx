@@ -48,6 +48,9 @@ export function DataHealthPanel({
     }
     fetchDataHealth(activeBrand.id)
       .then(setHealth)
+      // A failed read leaves the panel hidden rather than surfacing as an
+      // unhandled rejection; the page it sits on still renders.
+      .catch((err: unknown) => console.warn('[DataHealthPanel]', (err as Error).message))
       .finally(() => setLoading(false));
   }, [user, activeBrand]);
 
