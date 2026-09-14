@@ -40,7 +40,7 @@ export function WatchPlayer({ video, onClose, onSendToClio }: Props) {
         </div>
         <button
           onClick={() => onSendToClio(video)}
-          className="w-full mt-3 flex items-center justify-center gap-2 py-2.5 font-mono text-[10px] tracking-widest uppercase"
+          className="w-full mt-3 flex items-center justify-center gap-2 py-2.5 font-mono text-[12px] tracking-widest uppercase"
           style={{ background: GOLD, color: '#43340c' }}
         >
           <Sparkles className="w-3.5 h-3.5" />

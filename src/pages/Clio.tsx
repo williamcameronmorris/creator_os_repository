@@ -392,28 +392,28 @@ export function Clio() {
   const suggestions = [
     {
       icon: Upload,
-      label: 'DROP A VIDEO',
+      label: 'Drop a video',
       description: 'Clio preps every platform\'s post',
       action: () => navigate('/drop'),
       accent: 'var(--accent)', // gold — the headline move
     },
     {
       icon: Lightbulb,
-      label: 'GENERATE IDEAS',
+      label: 'Generate ideas',
       description: 'Get AI-powered content ideas based on your niche',
       prompt: 'Generate 5 content ideas for my next week of posts',
       accent: 'var(--accent)', // gold — primary
     },
     {
       icon: TrendingUp,
-      label: 'ANALYZE TRENDS',
+      label: 'Analyze trends',
       description: 'See what\'s working in your space right now',
       prompt: 'What content trends should I be paying attention to?',
       accent: '#7A9E89', // muted sage
     },
     {
       icon: Calendar,
-      label: 'PLAN MY WEEK',
+      label: 'Plan my week',
       description: 'Build a posting schedule that makes sense',
       prompt: 'Help me plan my content for the next 7 days',
       accent: '#B07050', // muted terracotta
@@ -456,9 +456,9 @@ export function Clio() {
               onClick={handleSubmit}
               disabled={isLoading || !query.trim()}
               className="btn-ie btn-ie-solid disabled:opacity-40 disabled:cursor-not-allowed"
-              style={{ fontSize: '10px', padding: '0.5rem 1.25rem' }}
+              style={{ padding: '0.5rem 1.25rem' }}
             >
-              <span className="btn-ie-text">{isLoading ? 'THINKING…' : 'SEND'}</span>
+              <span className="btn-ie-text">{isLoading ? 'Thinking…' : 'Send'}</span>
             </button>
           </div>
         </div>
@@ -678,11 +678,11 @@ export function Clio() {
                     onClick={handleGenerateBrief}
                     disabled={generatingBrief}
                     className="btn-ie disabled:opacity-40 disabled:cursor-not-allowed"
-                    style={{ fontSize: '10px', padding: '0.5rem 1.25rem' }}
+                    style={{ padding: '0.5rem 1.25rem' }}
                   >
                     <span className="btn-ie-text inline-flex items-center gap-2">
                       {generatingBrief && <RefreshCw className="w-3 h-3 animate-spin" />}
-                      {generatingBrief ? 'GENERATING…' : 'GENERATE NOW'}
+                      {generatingBrief ? 'Generating…' : 'Generate now'}
                     </span>
                   </button>
                 </div>

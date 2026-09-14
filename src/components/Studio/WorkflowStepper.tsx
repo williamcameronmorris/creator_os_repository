@@ -58,7 +58,7 @@ export function WorkflowStepper({ currentStage, onStageSelect, completedStages }
                     )}
                   </div>
 
-                  <span className={`font-mono text-[10px] font-bold tracking-[0.08em] uppercase whitespace-nowrap truncate max-w-[70px] sm:max-w-none ${
+                  <span className={`font-mono text-[12px] font-bold tracking-[0.08em] uppercase whitespace-nowrap truncate max-w-[70px] sm:max-w-none ${
                     isActive ? 'text-foreground' : isCompleted ? 'text-foreground' : 'text-muted-foreground'
                   }`}>
                     {stage.label}

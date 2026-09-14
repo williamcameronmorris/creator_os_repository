@@ -216,7 +216,7 @@ export function Onboarding({ onComplete }: Props) {
                 disabled={submitting}
                 className="btn-ie btn-ie-solid w-full disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
-                <span className="btn-ie-text">{submitting ? 'SAVING…' : 'CONTINUE'}</span>
+                <span className="btn-ie-text">{submitting ? 'Saving…' : 'Continue'}</span>
                 {!submitting && <ArrowRight className="w-3 h-3" />}
               </button>
             </form>
@@ -251,10 +251,10 @@ export function Onboarding({ onComplete }: Props) {
               >
                 <span className="btn-ie-text">
                   {submitting
-                    ? 'SAVING…'
+                    ? 'Saving…'
                     : hasConnected
-                    ? 'CONTINUE'
-                    : 'CONTINUE WITHOUT CONNECTING'}
+                    ? 'Continue'
+                    : 'Continue without connecting'}
                 </span>
                 {!submitting && <ArrowRight className="w-3 h-3" />}
               </button>
@@ -303,7 +303,7 @@ export function Onboarding({ onComplete }: Props) {
               disabled={submitting}
               className="btn-ie btn-ie-solid w-full disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
-              <span className="btn-ie-text">{submitting ? 'FINISHING…' : 'TAKE ME TO CLIO'}</span>
+              <span className="btn-ie-text">{submitting ? 'Finishing…' : 'Take me to Clio'}</span>
               {!submitting && <ArrowRight className="w-3 h-3" />}
             </button>
           </>

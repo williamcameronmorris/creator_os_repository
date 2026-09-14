@@ -118,7 +118,7 @@ export function ContactForm({ slug, kit }: { slug: string; kit: PublicKit['kit']
             <p className="t-micro" style={{ color: 'var(--destructive, #c44)' }}>{error}</p>
           )}
           <Button type="submit" variant="primary" disabled={busy || !form.contact_email}>
-            {busy ? 'SENDING…' : 'SEND'}
+            {busy ? 'Sending…' : 'Send'}
           </Button>
         </form>
       )}

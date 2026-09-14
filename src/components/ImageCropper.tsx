@@ -246,7 +246,7 @@ export function ImageCropper({ file, platform, onCrop, onCancel }: ImageCropperP
               }`}
             >
               <p className="text-xs font-bold whitespace-nowrap">{t.label}</p>
-              <p className="text-[10px] opacity-70 whitespace-nowrap">{t.sublabel}</p>
+              <p className="text-[12px] opacity-70 whitespace-nowrap">{t.sublabel}</p>
             </button>
           ))}
         </div>
@@ -318,7 +318,7 @@ export function ImageCropper({ file, platform, onCrop, onCancel }: ImageCropperP
         )}
 
         {!isOriginal && (
-          <p className="text-center text-[11px] text-muted-foreground pb-1">Drag to reposition</p>
+          <p className="text-center text-[12px] text-muted-foreground pb-1">Drag to reposition</p>
         )}
 
         {/* Actions */}

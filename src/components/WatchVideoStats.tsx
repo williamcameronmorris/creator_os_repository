@@ -40,7 +40,7 @@ export function WatchVideoStats({ video, niche }: { video: WatchVideo; niche: st
   return (
     <div className="mt-2 border border-border">
       <div className="px-3 py-1.5 border-b border-border">
-        <span className="font-mono text-[8px] tracking-widest uppercase text-muted-foreground">
+        <span className="font-mono text-[12px] tracking-widest uppercase text-muted-foreground">
           Why it surfaced
         </span>
       </div>
@@ -48,27 +48,27 @@ export function WatchVideoStats({ video, niche }: { video: WatchVideo; niche: st
       <div className="grid grid-cols-2">
         {/* Reach */}
         <div className="px-3 py-2 border-r border-border">
-          <div className="font-mono text-[8px] tracking-widest uppercase text-muted-foreground">
+          <div className="font-mono text-[12px] tracking-widest uppercase text-muted-foreground">
             Reach
           </div>
           <div className="text-sm font-medium text-foreground mt-1">
             {formatCount(video.view_count)} views
           </div>
-          <div className="font-mono text-[10px] text-muted-foreground mt-1">
+          <div className="font-mono text-[12px] text-muted-foreground mt-1">
             {mult != null ? `${mult.toFixed(1)}× creator avg` : 'vs niche'}
           </div>
         </div>
 
         {/* Packaging */}
         <div className="px-3 py-2">
-          <div className="font-mono text-[8px] tracking-widest uppercase text-muted-foreground">
+          <div className="font-mono text-[12px] tracking-widest uppercase text-muted-foreground">
             Packaging
           </div>
           {p != null ? (
             <>
               <div className="text-sm font-medium text-foreground mt-1">
                 {p}
-                <span className="text-muted-foreground text-[11px]"> / 100</span>
+                <span className="text-muted-foreground text-[12px]"> / 100</span>
               </div>
               <div className="relative h-1 mt-2" style={{ background: 'rgba(26,24,22,0.12)' }}>
                 <div
@@ -82,7 +82,7 @@ export function WatchVideoStats({ video, niche }: { video: WatchVideo; niche: st
                 />
               </div>
               <div
-                className="font-mono text-[10px] mt-1.5"
+                className="font-mono text-[12px] mt-1.5"
                 style={{ color: p >= 60 ? '#8a6d22' : undefined }}
               >
                 CTR pctile vs {niche} · {packagingRead(p)}
@@ -96,7 +96,7 @@ export function WatchVideoStats({ video, niche }: { video: WatchVideo; niche: st
 
       <div className="px-3 py-2 border-t border-border flex items-start gap-2">
         <Compass className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" style={{ color: GOLD }} />
-        <span className="text-[12px] leading-snug" style={{ color: CHAR }}>
+        <span className="text-sm leading-snug" style={{ color: CHAR }}>
           {surfacedRead(video)}
         </span>
       </div>

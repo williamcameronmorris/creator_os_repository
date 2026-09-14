@@ -515,7 +515,7 @@ export function ComposePost() {
                       {selected && <Check className="w-3 h-3" style={{ color: 'var(--background)' }} />}
                     </span>
                     <span
-                      className="font-mono text-[11px] uppercase tracking-widest truncate"
+                      className="font-mono text-[12px] uppercase tracking-widest truncate"
                       style={{ color: selected ? 'var(--accent)' : 'var(--foreground)' }}
                     >
                       {account.username ? `@${account.username}` : account.id}
@@ -566,12 +566,12 @@ export function ComposePost() {
           style={{ fontSize: '1.0625rem', letterSpacing: '-0.01em', lineHeight: 1.6 }}
         />
         <div className="flex justify-between mt-3 items-center">
-          <span className="t-micro text-muted-foreground" style={{ fontSize: '9px' }}>
+          <span className="t-micro text-muted-foreground">
             CAP: {effectiveLimit}
             {limitedBy && ` · LIMITED BY ${(PLATFORM_NAMES[limitedBy] ?? limitedBy).toUpperCase()}`}
           </span>
           <span
-            className="font-mono text-[11px]"
+            className="font-mono text-[12px]"
             style={{ color: overLimit ? 'var(--destructive)' : remaining < 50 ? 'var(--accent)' : 'var(--muted-foreground)' }}
           >
             {remaining}
@@ -589,7 +589,7 @@ export function ComposePost() {
             )}
           </span>
           {requiresVideoOnly && (
-            <span className="t-micro text-muted-foreground" style={{ fontSize: '9px' }}>
+            <span className="t-micro text-muted-foreground">
               VIDEO ONLY
             </span>
           )}
@@ -611,7 +611,7 @@ export function ComposePost() {
           >
             <Upload className="w-5 h-5" />
             <span className="t-micro">ADD MEDIA</span>
-            <span className="t-micro" style={{ fontSize: '9px' }}>
+            <span className="t-micro">
               {requiresVideoOnly ? 'MP4, MOV' : 'JPG, PNG, MP4, MOV'}
             </span>
           </button>
@@ -632,7 +632,7 @@ export function ComposePost() {
                   <XIcon className="w-3 h-3" />
                 </button>
                 <span
-                  className="absolute bottom-1 left-1 font-mono text-[9px] px-1 py-0.5 bg-background/80 uppercase"
+                  className="absolute bottom-1 left-1 font-mono text-[12px] px-1 py-0.5 bg-background/80 uppercase"
                   style={{ color: 'var(--muted-foreground)' }}
                 >
                   {m.kind}
@@ -645,7 +645,7 @@ export function ComposePost() {
                 className="aspect-square border border-dashed border-border flex flex-col items-center justify-center gap-1 text-muted-foreground hover:text-foreground hover:border-foreground transition-colors"
               >
                 <Upload className="w-4 h-4" />
-                <span className="t-micro" style={{ fontSize: '9px' }}>ADD</span>
+                <span className="t-micro">ADD</span>
               </button>
             )}
           </div>
@@ -662,7 +662,7 @@ export function ComposePost() {
               <button
                 key={m}
                 onClick={() => setMode(m)}
-                className="font-mono text-[10px] font-medium uppercase tracking-widest px-3 py-2 border transition-colors"
+                className="font-mono text-[12px] font-medium uppercase tracking-widest px-3 py-2 border transition-colors"
                 style={{
                   borderColor: active ? 'var(--accent)' : 'var(--border)',
                   color: active ? 'var(--accent)' : 'var(--foreground)',
@@ -682,7 +682,7 @@ export function ComposePost() {
             <div className="mb-4">
               <div className="t-micro mb-2 flex items-center justify-between">
                 <span>SUGGESTED · 03</span>
-                <span className="text-muted-foreground" style={{ fontSize: '9px' }}>
+                <span className="text-muted-foreground">
                   {suggestedSource === 'personal' ? 'BASED ON YOUR ANALYTICS' : 'BASED ON INDUSTRY RESEARCH'}
                 </span>
               </div>
@@ -691,7 +691,7 @@ export function ComposePost() {
                   <button
                     key={i}
                     onClick={() => applySuggestedTime(t)}
-                    className="font-mono text-[10px] font-medium uppercase tracking-widest px-3 py-2 border border-border text-foreground hover:bg-foreground hover:text-background transition-colors"
+                    className="font-mono text-[12px] font-medium uppercase tracking-widest px-3 py-2 border border-border text-foreground hover:bg-foreground hover:text-background transition-colors"
                   >
                     {formatSuggestedTime(t)}
                   </button>
@@ -735,14 +735,14 @@ export function ComposePost() {
       >
         <span className="btn-ie-text">
           {publishState === 'uploading'
-            ? 'UPLOADING…'
+            ? 'Uploading…'
             : publishState === 'submitting'
-            ? 'SUBMITTING…'
+            ? 'Submitting…'
             : mode === 'now'
-            ? 'PUBLISH NOW'
+            ? 'Publish now'
             : mode === 'queue'
-            ? 'ADD TO QUEUE'
-            : 'SCHEDULE POST'}
+            ? 'Add to queue'
+            : 'Schedule post'}
         </span>
         {publishState === 'idle' && <ArrowRight className="w-3 h-3" />}
       </button>

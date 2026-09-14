@@ -483,7 +483,7 @@ export function DropZone() {
         <span className="t-micro">
           {mode === 'now' ? 'PUBLISHING EVERYWHERE' : 'SCHEDULED EVERYWHERE'}
         </span>
-        <span className="t-micro text-muted-foreground" style={{ fontSize: '9px' }}>
+        <span className="t-micro text-muted-foreground">
           {String(cards.length).padStart(2, '0')} ACCOUNTS
         </span>
       </div>
@@ -560,7 +560,7 @@ export function DropZone() {
           >
             <Upload className="w-6 h-6" />
             <span className="t-micro">DROP YOUR VIDEO</span>
-            <span className="t-micro" style={{ fontSize: '9px' }}>
+            <span className="t-micro">
               MP4, MOV, WEBM — OR CLICK TO BROWSE. IMAGES WORK TOO.
             </span>
           </button>
@@ -575,7 +575,7 @@ export function DropZone() {
             </div>
             <div className="flex-1 min-w-0 py-1">
               <span className="t-micro block truncate text-foreground">{media.file.name}</span>
-              <span className="t-micro text-muted-foreground block mt-1" style={{ fontSize: '9px' }}>
+              <span className="t-micro text-muted-foreground block mt-1">
                 {media.kind.toUpperCase()} · {(media.file.size / (1024 * 1024)).toFixed(1)} MB
               </span>
             </div>
@@ -648,7 +648,7 @@ export function DropZone() {
                       {selected && <Check className="w-3 h-3" style={{ color: 'var(--background)' }} />}
                     </span>
                     <span
-                      className="font-mono text-[11px] uppercase tracking-widest truncate"
+                      className="font-mono text-[12px] uppercase tracking-widest truncate"
                       style={{ color: selected ? 'var(--accent)' : 'var(--foreground)' }}
                     >
                       {account.username ? `@${account.username}` : account.id}
@@ -676,21 +676,21 @@ export function DropZone() {
           <span className="btn-ie-text inline-flex items-center gap-2">
             {generating && <RefreshCw className="w-3 h-3 animate-spin" />}
             {generating
-              ? 'CLIO IS WORKING…'
+              ? 'Clio is working…'
               : cards.length > 0
-              ? 'REGENERATE ALL'
-              : 'LET CLIO TAKE OVER'}
+              ? 'Regenerate all'
+              : 'Let Clio take over'}
           </span>
           {!generating && <ArrowRight className="w-3 h-3" />}
         </button>
         <div className="flex justify-between mt-2">
-          <span className="t-micro text-muted-foreground" style={{ fontSize: '9px' }}>
+          <span className="t-micro text-muted-foreground">
             ONE AI CREDIT PREPS EVERY PLATFORM
           </span>
           {quota && (
             <span
               className="t-micro"
-              style={{ fontSize: '9px', color: quotaEmpty ? 'var(--destructive)' : 'var(--muted-foreground)' }}
+              style={{ color: quotaEmpty ? 'var(--destructive)' : 'var(--muted-foreground)' }}
             >
               {quotaEmpty
                 ? `NO CREDITS LEFT · ${formatResetTime(quota.resetAt).toUpperCase()}`
@@ -724,7 +724,7 @@ export function DropZone() {
                       <span className="t-micro text-muted-foreground">
                         {(PLATFORM_NAMES[card.platform] ?? card.platform).toUpperCase()}
                       </span>
-                      <span className="font-mono text-[11px] uppercase tracking-widest truncate text-foreground">
+                      <span className="font-mono text-[12px] uppercase tracking-widest truncate text-foreground">
                         {card.username ? `@${card.username}` : card.accountId}
                       </span>
                     </div>
@@ -750,9 +750,9 @@ export function DropZone() {
                     {card.platform === 'youtube' && (
                       <div className="mb-4">
                         <div className="flex justify-between mb-1">
-                          <span className="t-micro text-muted-foreground" style={{ fontSize: '9px' }}>TITLE</span>
+                          <span className="t-micro text-muted-foreground">TITLE</span>
                           <span
-                            className="font-mono text-[10px]"
+                            className="font-mono text-[12px]"
                             style={{ color: titleOver ? 'var(--destructive)' : 'var(--muted-foreground)' }}
                           >
                             {card.title.length}/{YT_TITLE_CAP}
@@ -775,11 +775,11 @@ export function DropZone() {
 
                     {/* Caption */}
                     <div className="flex justify-between mb-1">
-                      <span className="t-micro text-muted-foreground" style={{ fontSize: '9px' }}>
+                      <span className="t-micro text-muted-foreground">
                         {card.platform === 'youtube' ? 'DESCRIPTION' : 'CAPTION'}
                       </span>
                       <span
-                        className="font-mono text-[10px]"
+                        className="font-mono text-[12px]"
                         style={{ color: over ? 'var(--destructive)' : 'var(--muted-foreground)' }}
                       >
                         {count}/{cap}
@@ -798,7 +798,7 @@ export function DropZone() {
                       }}
                     />
                     {over && (
-                      <p className="t-micro mt-1" style={{ color: 'var(--destructive)', fontSize: '9px' }}>
+                      <p className="t-micro mt-1" style={{ color: 'var(--destructive)' }}>
                         OVER {(PLATFORM_NAMES[card.platform] ?? card.platform).toUpperCase()}'S {cap}-CHAR LIMIT (CAPTION + HASHTAGS)
                       </p>
                     )}
@@ -806,7 +806,7 @@ export function DropZone() {
                     {/* Hashtags */}
                     {card.platform !== 'x' && card.platform !== 'threads' && (
                       <div className="mt-3">
-                        <span className="t-micro text-muted-foreground block mb-1" style={{ fontSize: '9px' }}>HASHTAGS</span>
+                        <span className="t-micro text-muted-foreground block mb-1">HASHTAGS</span>
                         <input
                           type="text"
                           value={card.hashtags}
@@ -835,14 +835,14 @@ export function DropZone() {
                           onClick={() => sendAll(card.accountId)}
                           disabled={sending}
                           className="btn-ie disabled:opacity-40"
-                          style={{ fontSize: '10px', padding: '0.35rem 1rem' }}
+                          style={{ padding: '0.35rem 1rem' }}
                         >
-                          <span className="btn-ie-text">RETRY THIS ACCOUNT</span>
+                          <span className="btn-ie-text">Retry this account</span>
                         </button>
                       </div>
                     )}
                     {card.warn && (
-                      <p className="t-micro mt-3" style={{ color: 'var(--destructive)', fontSize: '9px' }}>
+                      <p className="t-micro mt-3" style={{ color: 'var(--destructive)' }}>
                         {card.warn}
                       </p>
                     )}
@@ -862,7 +862,7 @@ export function DropZone() {
                   <button
                     key={m}
                     onClick={() => setMode(m)}
-                    className="font-mono text-[10px] font-medium uppercase tracking-widest px-3 py-2 border transition-colors"
+                    className="font-mono text-[12px] font-medium uppercase tracking-widest px-3 py-2 border transition-colors"
                     style={{
                       borderColor: active ? 'var(--accent)' : 'var(--border)',
                       color: active ? 'var(--accent)' : 'var(--foreground)',
@@ -901,10 +901,10 @@ export function DropZone() {
           >
             <span className="btn-ie-text">
               {sending
-                ? 'SENDING…'
+                ? 'Sending…'
                 : pendingCount < cards.length
-                ? `SEND REMAINING · ${String(pendingCount).padStart(2, '0')}`
-                : `SEND TO ALL · ${String(cards.length).padStart(2, '0')}`}
+                ? `Send remaining · ${String(pendingCount).padStart(2, '0')}`
+                : `Send to all · ${String(cards.length).padStart(2, '0')}`}
             </span>
             {!sending && <ArrowRight className="w-3 h-3" />}
           </button>

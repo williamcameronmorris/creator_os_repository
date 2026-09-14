@@ -240,10 +240,10 @@ export function Auth() {
             >
               <span className="btn-ie-text">
                 {loading
-                  ? 'SENDING…'
+                  ? 'Sending…'
                   : resendCooldown > 0
-                  ? `RESEND IN ${resendCooldown}S`
-                  : 'RESEND CONFIRMATION'}
+                  ? `Resend in ${resendCooldown}s`
+                  : 'Resend confirmation'}
               </span>
             </button>
 
@@ -295,7 +295,7 @@ export function Auth() {
                 disabled={loading}
                 className="btn-ie btn-ie-solid w-full disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
-                <span className="btn-ie-text">{loading ? 'SENDING…' : 'SEND RESET INSTRUCTIONS'}</span>
+                <span className="btn-ie-text">{loading ? 'Sending…' : 'Send reset instructions'}</span>
                 {!loading && <ArrowRight className="w-3 h-3" />}
               </button>
             </form>
@@ -338,7 +338,7 @@ export function Auth() {
               disabled={loading}
               className="btn-ie btn-ie-solid w-full disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
-              <span className="btn-ie-text">{loading ? 'UPDATING…' : 'UPDATE PASSWORD'}</span>
+              <span className="btn-ie-text">{loading ? 'Updating…' : 'Update password'}</span>
               {!loading && <ArrowRight className="w-3 h-3" />}
             </button>
           </form>
@@ -418,7 +418,7 @@ export function Auth() {
                 className="btn-ie btn-ie-solid w-full disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 <span className="btn-ie-text">
-                  {loading ? 'LOADING…' : view === 'signup' ? 'CREATE ACCOUNT' : 'SIGN IN'}
+                  {loading ? 'Loading…' : view === 'signup' ? 'Create account' : 'Sign in'}
                 </span>
                 {!loading && <ArrowRight className="w-3 h-3" />}
               </button>

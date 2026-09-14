@@ -172,7 +172,7 @@ export function Media() {
       <div className="mb-8">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <p className="font-mono text-[10px] font-bold tracking-[0.08em] uppercase text-muted-foreground mb-2">
+            <p className="font-mono text-[12px] font-bold tracking-[0.08em] uppercase text-muted-foreground mb-2">
               Media Library
             </p>
             <h1 className="text-3xl sm:text-4xl font-black uppercase tracking-tight text-foreground mb-2">
@@ -185,7 +185,7 @@ export function Media() {
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={uploading}
-            className="flex items-center gap-2 font-mono text-[10px] font-bold tracking-[0.08em] uppercase border border-foreground bg-foreground text-background px-4 py-2.5 hover:bg-background hover:text-foreground transition-colors disabled:opacity-50"
+            className="flex items-center gap-2 font-mono text-[12px] font-bold tracking-[0.08em] uppercase border border-foreground bg-foreground text-background px-4 py-2.5 hover:bg-background hover:text-foreground transition-colors disabled:opacity-50"
           >
             <Upload className="w-5 h-5" />
             {uploading ? 'Uploading...' : 'Upload Media'}
@@ -249,7 +249,7 @@ export function Media() {
           </p>
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="inline-flex items-center gap-2 font-mono text-[10px] font-bold tracking-[0.08em] uppercase border border-foreground bg-foreground text-background px-4 py-2.5 hover:bg-background hover:text-foreground transition-colors"
+            className="inline-flex items-center gap-2 font-mono text-[12px] font-bold tracking-[0.08em] uppercase border border-foreground bg-foreground text-background px-4 py-2.5 hover:bg-background hover:text-foreground transition-colors"
           >
             <Upload className="w-5 h-5" />
             Upload Media
@@ -274,7 +274,7 @@ export function Media() {
                 <p className="text-sm font-medium truncate text-foreground">
                   {file.file_name}
                 </p>
-                <p className="font-mono text-[10px] font-bold tracking-[0.08em] uppercase text-muted-foreground">
+                <p className="font-mono text-[12px] font-bold tracking-[0.08em] uppercase text-muted-foreground">
                   {formatFileSize(file.file_size)}
                 </p>
               </div>
@@ -324,25 +324,25 @@ export function Media() {
               <div className="mt-4 p-4 bg-muted">
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
-                    <p className="font-mono text-[10px] font-bold tracking-[0.08em] uppercase text-muted-foreground mb-1">File Size</p>
+                    <p className="font-mono text-[12px] font-bold tracking-[0.08em] uppercase text-muted-foreground mb-1">File Size</p>
                     <p className="font-medium text-foreground">
                       {formatFileSize(selectedFile.file_size)}
                     </p>
                   </div>
                   <div>
-                    <p className="font-mono text-[10px] font-bold tracking-[0.08em] uppercase text-muted-foreground mb-1">Uploaded</p>
+                    <p className="font-mono text-[12px] font-bold tracking-[0.08em] uppercase text-muted-foreground mb-1">Uploaded</p>
                     <p className="font-medium text-foreground">
                       {format(new Date(selectedFile.uploaded_at), 'MMM d, yyyy')}
                     </p>
                   </div>
                   <div>
-                    <p className="font-mono text-[10px] font-bold tracking-[0.08em] uppercase text-muted-foreground mb-1">Type</p>
+                    <p className="font-mono text-[12px] font-bold tracking-[0.08em] uppercase text-muted-foreground mb-1">Type</p>
                     <p className="font-medium text-foreground">
                       {selectedFile.file_type}
                     </p>
                   </div>
                   <div>
-                    <p className="font-mono text-[10px] font-bold tracking-[0.08em] uppercase text-muted-foreground mb-1">URL</p>
+                    <p className="font-mono text-[12px] font-bold tracking-[0.08em] uppercase text-muted-foreground mb-1">URL</p>
                     <a
                       href={selectedUrl || undefined}
                       target="_blank"
