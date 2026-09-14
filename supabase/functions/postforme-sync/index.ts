@@ -70,8 +70,15 @@ import { isPublishHandle, matchBookedRows, matchByPublishWindow } from "./reconc
  * PFM does NOT expose follower counts anywhere in its public API (verified
  * against the account object, which carries only id/platform/username/status/
  * tokens/profile_photo_url/metadata). followers_count therefore stays owned by
- * instagram-sync and youtube-sync, and this function deliberately omits it
- * from its platform_metrics writes so it never clobbers theirs.
+ * instagram-sync and youtube-sync. This function CARRIES the newest known
+ * count forward when it opens a new day's row (2026-09-14): the column
+ * defaults to 0, so the midnight run used to create the row at 0 and every
+ * follower surface summed zeros until the direct syncs patched it at 03:00.
+ *
+ * An account whose feed comes back 2xx with no posts, or with posts but no
+ * metrics block, is reported in summary.errors (2026-09-14). Gibsunday's
+ * Instagram feed returned an empty page for ten days while every run said
+ * success; the snapshot is still written so the raw payload can be inspected.
  *
  * What it writes:
  *
@@ -668,6 +675,18 @@ async function syncForUser(userId: string): Promise<SyncSummary> {
         }
         const feed = await getAccountFeed(account.id);
         if (!feed) return;
+        // A 2xx with nothing usable in it is not a successful sync. Report it
+        // here, per account, so the roll-up below cannot quietly skip a
+        // platform whose feed went dark.
+        const usable = feed.posts.filter((p) => p.metrics && p.platform_post_id).length;
+        if (usable === 0) {
+          const who = account.username ? `@${account.username}` : account.id;
+          summary.errors.push(
+            feed.posts.length === 0
+              ? `feed ${account.platform}/${who}: feed returned no posts (HTTP 200, ${feed.pagesFetched} page${feed.pagesFetched === 1 ? "" : "s"})`
+              : `feed ${account.platform}/${who}: ${feed.posts.length} posts but none carried metrics`,
+          );
+        }
         snapshotRows.push({
           user_id: userId,
           brand_id: brandId,
@@ -1009,36 +1028,78 @@ async function syncForUser(userId: string): Promise<SyncSummary> {
   // isolated, so two brands on Instagram must never share a row. The unique key
   // is (brand_id, platform, date, social_account_key) as of the brands migration.
   const agg = new Map<string, { brand_id: string; platform: string; n: number;
-    views: number; likes: number; comments: number; shares: number; saves: number; er: number }>();
+    views: number; likes: number; comments: number; shares: number; saves: number;
+    interactions: number; denominator: number }>();
   for (const posts of Object.values(feedPostsByPlatform)) {
     for (const p of posts) {
       if (!p.metrics) continue;
       const key = `${p.brand_id}:${p.platform}`;
       const a = agg.get(key) ?? { brand_id: p.brand_id, platform: p.platform, n: 0,
-        views: 0, likes: 0, comments: 0, shares: 0, saves: 0, er: 0 };
+        views: 0, likes: 0, comments: 0, shares: 0, saves: 0, interactions: 0, denominator: 0 };
       const m = p.metrics;
       a.n += 1; a.views += m.views; a.likes += m.likes; a.comments += m.comments;
-      a.shares += m.shares; a.saves += m.saves; a.er += m.engagement_rate;
+      a.shares += m.shares; a.saves += m.saves;
+      // Same definition as normalizeMetrics, summed rather than averaged:
+      // interactions over reach where the platform reports reach, else views.
+      // A plain mean of per-post rates let a 30-view post with two likes
+      // count as much as a 2M-view one.
+      a.interactions += m.likes + m.comments + m.saves + m.shares;
+      a.denominator += m.reach > 0 ? m.reach : m.views;
       agg.set(key, a);
     }
   }
-  const metricRows = Array.from(agg.values()).map((a) => ({
-    user_id: userId,
-    brand_id: a.brand_id,
-    platform: a.platform,
-    date: today,
-    social_account_id: null,
-    // total_* only. views/likes/comments/shares/saves are GENERATED ALWAYS
-    // from these; writing them raises 428C9 and kills the whole upsert.
-    total_views: a.views,
-    total_likes: a.likes,
-    total_comments: a.comments,
-    total_shares: a.shares,
-    total_saves: a.saves,
-    avg_engagement_rate: a.er / a.n,
-    // followers_count and total_posts are deliberately omitted. PFM exposes
-    // neither, and naming them here would null out what the follower syncs wrote.
-  }));
+
+  // Newest known follower count (and post count) per brand/platform, so a
+  // fresh day's row starts from the last real value instead of the column
+  // default of 0. Includes today, so a count the direct sync already wrote
+  // is carried back unchanged.
+  const carried = new Map<string, { followers_count: number; total_posts: number }>();
+  if (agg.size > 0) {
+    const ninetyDaysAgo = new Date(Date.now() - 90 * 86_400_000).toISOString().slice(0, 10);
+    const { data: prior, error: priorErr } = await supabase
+      .from("platform_metrics")
+      .select("brand_id, platform, date, followers_count, total_posts")
+      .in("brand_id", Array.from(new Set(Array.from(agg.values()).map((a) => a.brand_id))))
+      .in("platform", Array.from(new Set(Array.from(agg.values()).map((a) => a.platform))))
+      .is("social_account_id", null)
+      .gt("followers_count", 0)
+      .gte("date", ninetyDaysAgo)
+      .order("date", { ascending: false })
+      .limit(1000);
+    if (priorErr) summary.errors.push(`platform_metrics prior lookup: ${priorErr.message}`);
+    for (const r of prior ?? []) {
+      const key = `${r.brand_id}:${r.platform}`;
+      if (!carried.has(key)) {
+        carried.set(key, {
+          followers_count: Number(r.followers_count) || 0,
+          total_posts: Number(r.total_posts) || 0,
+        });
+      }
+    }
+  }
+
+  const metricRows = Array.from(agg.values()).map((a) => {
+    const prev = carried.get(`${a.brand_id}:${a.platform}`);
+    return {
+      user_id: userId,
+      brand_id: a.brand_id,
+      platform: a.platform,
+      date: today,
+      social_account_id: null,
+      // total_* only. views/likes/comments/shares/saves are GENERATED ALWAYS
+      // from these; writing them raises 428C9 and kills the whole upsert.
+      total_views: a.views,
+      total_likes: a.likes,
+      total_comments: a.comments,
+      total_shares: a.shares,
+      total_saves: a.saves,
+      avg_engagement_rate: a.denominator > 0 ? (a.interactions / a.denominator) * 100 : 0,
+      // PFM exposes neither of these. Carry the newest known value forward;
+      // 0 only when nothing positive exists for this brand/platform yet.
+      followers_count: prev?.followers_count ?? 0,
+      total_posts: prev?.total_posts ?? 0,
+    };
+  });
 
   if (metricRows.length > 0) {
     const { error } = await supabase
@@ -1113,16 +1174,24 @@ Deno.serve(async (req) => {
     const summary = await syncForUser(userId);
 
     // ── Trigger caption/voice analysis (fire-and-forget) ────────────────────
-    fetch(`${SUPABASE_URL}/functions/v1/analyze-captions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-      },
-      body: JSON.stringify({ cronSecret: CRON_SECRET, userId, force: false }),
-    }).catch((err) => {
-      console.warn("analyze-captions fire-and-forget failed:", (err as Error).message);
-    });
+    // One call PER BRAND: a voice is learned from a brand's own posts, and the
+    // posts just synced are the first chance a new brand has to earn one.
+    // analyze-captions skips a brand whose voice is under 24h old.
+    const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    const { data: brandRows } = await admin.from("brands").select("id").eq("owner_id", userId);
+    const brandIds = (brandRows ?? []).map((b) => b.id as string);
+    for (const brandId of brandIds.length > 0 ? brandIds : [null]) {
+      fetch(`${SUPABASE_URL}/functions/v1/analyze-captions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+        },
+        body: JSON.stringify({ cronSecret: CRON_SECRET, userId, force: false, ...(brandId ? { brandId } : {}) }),
+      }).catch((err) => {
+        console.warn("analyze-captions fire-and-forget failed:", (err as Error).message);
+      });
+    }
 
     return new Response(JSON.stringify(summary), {
       status: 200,

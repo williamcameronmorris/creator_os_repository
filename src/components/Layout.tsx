@@ -295,9 +295,9 @@ export function Layout({ children }: LayoutProps) {
                 </div>
                 <div>
                   <div className="font-mono text-[11px] font-bold tracking-widest uppercase text-foreground group-hover:text-accent transition-colors">
-                    Quick post
+                    Write a post
                   </div>
-                  <div className="t-micro mt-0.5">Write &amp; publish now</div>
+                  <div className="t-micro mt-0.5">You write the caption</div>
                 </div>
               </button>
               <button
@@ -311,7 +311,7 @@ export function Layout({ children }: LayoutProps) {
                   <div className="font-mono text-[11px] font-bold tracking-widest uppercase text-foreground group-hover:text-accent transition-colors">
                     Drop a video
                   </div>
-                  <div className="t-micro mt-0.5">Turn footage into posts</div>
+                  <div className="t-micro mt-0.5">Clio writes the captions</div>
                 </div>
               </button>
             </div>

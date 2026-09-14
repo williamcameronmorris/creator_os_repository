@@ -167,12 +167,22 @@ export function SchedulingStage({ workflowId, contentType, onComplete }: Schedul
       // was never picked up and silently never published.
       const utc = localInputToUtc(scheduledDate, timezone);
 
+      // The workflow's own platform. This was hardcoded to Instagram, so a
+      // YouTube or TikTok idea was scheduled as an Instagram post and that
+      // wrong row was what the Retro then measured.
+      const { data: workflow } = await supabase
+        .from('content_workflow_stages')
+        .select('platform')
+        .eq('id', workflowId)
+        .maybeSingle();
+      const platform = workflow?.platform || 'instagram';
+
       const { data: post, error: insertError } = await supabase
         .from('content_posts')
         .insert({
           user_id: user.id,
           brand_id: activeBrand.id,
-          platform: 'instagram',
+          platform,
           content_type: contentType,
           caption: caption,
           media_urls: mediaUrl ? [mediaUrl] : [],

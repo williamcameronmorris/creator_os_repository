@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase, type AIContentSuggestion } from '../../lib/supabase';
 import { useAccount } from '../../contexts/AccountContext';
 import { useBrand } from '../../contexts/BrandContext';
@@ -8,9 +8,11 @@ import { useToast } from '../ui/Toast';
 interface IdeationStageProps {
   onIdeaSelected: (idea: AIContentSuggestion) => void;
   prefilledIdea?: AIContentSuggestion;
+  /** A post from Analytics to make more of: ideas are four variations of its angle. */
+  sourcePost?: { id: string; platform: string; type: string };
 }
 
-export function IdeationStage({ onIdeaSelected, prefilledIdea }: IdeationStageProps) {
+export function IdeationStage({ onIdeaSelected, prefilledIdea, sourcePost }: IdeationStageProps) {
   const { activeAccount } = useAccount();
   const { activeBrand } = useBrand();
   const toast = useToast();
@@ -22,10 +24,25 @@ export function IdeationStage({ onIdeaSelected, prefilledIdea }: IdeationStagePr
   const [manualFormat, setManualFormat] = useState('reel');
   const [submitting, setSubmitting] = useState(false);
   const [selectingId, setSelectingId] = useState<string | null>(null);
+  // True when the last generate call handed back today's unused ideas
+  // instead of calling the model; the next click is then an explicit
+  // "again", which does spend a credit.
+  const [cachedNotice, setCachedNotice] = useState(false);
+  const generatedForSource = useRef<string | null>(null);
 
   useEffect(() => {
     if (mode === 'ai') { loadSuggestions(); }
   }, [mode, activeBrand]);
+
+  // "Make more like this" from Analytics: ask for the variations as soon as
+  // the brand is known. The ref keeps a re-render from asking twice.
+  useEffect(() => {
+    if (!sourcePost?.id || !activeBrand) return;
+    if (generatedForSource.current === sourcePost.id) return;
+    generatedForSource.current = sourcePost.id;
+    setMode('ai');
+    generateIdeas({ sourcePostId: sourcePost.id });
+  }, [sourcePost?.id, activeBrand]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadSuggestions = async () => {
     if (!activeBrand) return;
@@ -43,7 +60,7 @@ export function IdeationStage({ onIdeaSelected, prefilledIdea }: IdeationStagePr
     setLoading(false);
   };
 
-  const generateIdeas = async () => {
+  const generateIdeas = async (opts: { sourcePostId?: string; force?: boolean } = {}) => {
     if (!activeBrand) return;
     setGenerating(true);
     try {
@@ -58,13 +75,19 @@ export function IdeationStage({ onIdeaSelected, prefilledIdea }: IdeationStagePr
           // Account Switcher scope: ideas grounded in this account's posts,
           // voice, and niche. Omitted under "All accounts" (legacy behavior).
           ...(activeAccount ? { socialAccountId: activeAccount.id } : {}),
+          // Pin a source post: the ideas come back as variations of its angle.
+          ...(opts.sourcePostId ? { sourcePostId: opts.sourcePostId } : {}),
+          // Without force, today's unused ideas come back with no model call.
+          ...(opts.force ? { force: true } : {}),
         },
         headers: { Authorization: `Bearer ${session.access_token}` },
       });
       if (error) { throw new Error(error.message || 'Failed to generate ideas'); }
-      if (result?.suggestions && result.suggestions.length > 0) {
-        setSuggestions(prev => [...result.suggestions, ...prev]);
+      const fresh: AIContentSuggestion[] = result?.suggestions ?? [];
+      if (fresh.length > 0) {
+        setSuggestions(prev => [...fresh.filter(s => !prev.some(p => p.id === s.id)), ...prev]);
       }
+      setCachedNotice(result?.cached === true);
     } catch (err) {
       console.error('Error generating ideas:', err);
       toast.error((err as Error).message || 'Could not generate ideas. Try again.');
@@ -237,18 +260,32 @@ export function IdeationStage({ onIdeaSelected, prefilledIdea }: IdeationStagePr
             </div>
           )}
 
+          {sourcePost && (
+            <div className="flex items-center gap-2 mb-2">
+              <Zap className="w-3.5 h-3.5" style={{ color: 'var(--accent)' }} />
+              <span className="t-micro" style={{ color: 'var(--accent)' }}>
+                Variations on your {sourcePost.platform} {sourcePost.type}
+              </span>
+            </div>
+          )}
+
           <div className="text-center py-8">
             <button
-              onClick={generateIdeas}
+              onClick={() => generateIdeas({ force: cachedNotice })}
               disabled={generating}
               className="btn-ie btn-ie-solid mx-auto disabled:opacity-60 disabled:cursor-not-allowed"
             >
               <span className="btn-ie-text flex items-center gap-2">
                 {generating
-                  ? <><span className="w-4 h-4 border-2 border-background border-t-transparent rounded-full animate-spin" /> Analyzing performance…</>
-                  : <><Bot className="w-4 h-4" /> Generate new ideas</>}
+                  ? <><span className="w-4 h-4 border-2 border-background border-t-transparent rounded-full animate-spin" /> {sourcePost ? 'Making more like this…' : 'Analyzing performance…'}</>
+                  : <><Bot className="w-4 h-4" /> {cachedNotice ? 'Generate again' : 'Generate new ideas'}</>}
               </span>
             </button>
+            {cachedNotice && !generating && (
+              <p className="t-micro text-muted-foreground mt-3">
+                These are today's unused ideas. Generating again spends a credit.
+              </p>
+            )}
           </div>
 
           <div className="grid gap-4">

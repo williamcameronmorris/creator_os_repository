@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useBrand } from '../contexts/BrandContext';
+import { useAccount } from '../contexts/AccountContext';
+import { useSubscription } from '../contexts/SubscriptionContext';
 import { supabase } from '../lib/supabase';
 import { mediaRef } from '../lib/mediaUrls';
 import {
@@ -9,15 +11,23 @@ import {
   Instagram, Youtube, Facebook, Twitter, Sparkles, AtSign, Cloud, Globe,
 } from 'lucide-react';
 import {
-  listPostForMeAccounts,
   createPostForMePost,
-  listConnectedAccounts,
   type PostForMeAccount,
   POSTFORME_PLATFORMS,
 } from '../lib/postforme';
 import { getAIQuota, formatResetTime, type AIQuotaInfo } from '../lib/aiQuota';
 import { useTimezone } from '../hooks/useTimezone';
-import { localInputToUtc } from '../lib/timezone';
+import { localInputToUtc, utcToLocalInput } from '../lib/timezone';
+import {
+  fileTooLargeMessage,
+  readVideoDuration,
+  youtubeContentType,
+  YOUTUBE_TITLE_LIMIT,
+  MIN_SCHEDULE_LEAD_MINUTES,
+  scheduleLeadTimeMessage,
+  scheduleCapMessage,
+  countScheduledPosts,
+} from '../lib/postingRules';
 
 /**
  * DropZone — drop a finished video, Clio preps every platform's post.
@@ -44,6 +54,8 @@ interface MediaItem {
   file: File;
   preview: string;
   kind: 'image' | 'video';
+  /** Seconds, once the metadata has been read; null when unreadable. */
+  durationSeconds?: number | null;
 }
 
 interface PostPackage {
@@ -72,14 +84,14 @@ interface AccountCard {
 // (hashtags are appended to the caption on send, and X's 280 is a TOTAL).
 const DROP_CAPS: Record<string, number> = {
   instagram: 2200,
-  youtube: 5000, // description; the title has its own 90 cap
+  youtube: 5000, // description; the title has its own cap (YOUTUBE_TITLE_LIMIT)
   tiktok: 2200,
   x: 280,
   threads: 500,
   facebook: 2200,
   bluesky: 300,
 };
-const YT_TITLE_CAP = 90;
+const YT_TITLE_CAP = YOUTUBE_TITLE_LIMIT;
 
 const PLATFORM_ICONS: Record<string, React.ElementType> = {
   instagram: Instagram,
@@ -125,7 +137,12 @@ async function fnErrorMessage(err: unknown): Promise<string> {
 
 export function DropZone() {
   const { user } = useAuth();
-  const { activeBrand } = useBrand();
+  const { activeBrand, accountBrandMap } = useBrand();
+  // Brand-filtered: only the active brand's accounts are offered, and a brand
+  // switch resets the selection below.
+  const { accounts: connectedAccounts, loading: loadingAccounts } = useAccount();
+  const { tier } = useSubscription();
+  const isPremium = tier === 'paid';
   const navigate = useNavigate();
   const { timezone } = useTimezone();
 
@@ -139,11 +156,10 @@ export function DropZone() {
   // (retries included — never re-upload).
   const uploadedUrls = useRef<string[] | null>(null);
 
-  const [accounts, setAccounts] = useState<PostForMeAccount[]>([]);
-  const [loadingAccounts, setLoadingAccounts] = useState(true);
   const [selectedAccountIds, setSelectedAccountIds] = useState<string[]>([]);
 
   const [media, setMedia] = useState<MediaItem | null>(null);
+  const [fileError, setFileError] = useState('');
   const [dragActive, setDragActive] = useState(false);
   const [description, setDescription] = useState('');
 
@@ -163,17 +179,19 @@ export function DropZone() {
 
   useEffect(() => {
     if (!user) return;
-    listPostForMeAccounts(user.id, false)
-      .then((s) => {
-        setAccounts(s.accounts);
-        // Default: ALL connected accounts checked — Drop Zone's whole point is
-        // "everywhere at once".
-        setSelectedAccountIds(listConnectedAccounts(s.accounts).map((a) => a.id));
-      })
-      .catch(() => setAccounts([]))
-      .finally(() => setLoadingAccounts(false));
     getAIQuota(user.id).then(setQuota).catch(() => setQuota(null));
   }, [user]);
+
+  // Default: ALL of the brand's connected accounts checked — Drop Zone's whole
+  // point is "everywhere at once". A brand switch changes the account list, so
+  // the selection and any generated cards start over for the new brand.
+  const accountsKey = connectedAccounts.map((a) => a.id).join(',');
+  useEffect(() => {
+    setSelectedAccountIds(connectedAccounts.map((a) => a.id));
+    setCards([]);
+    setPackages(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeBrand?.id, accountsKey]);
 
   useEffect(() => {
     return () => {
@@ -182,15 +200,28 @@ export function DropZone() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const connectedAccounts = listConnectedAccounts(accounts);
   const selectedAccounts = connectedAccounts.filter((a) => selectedAccountIds.includes(a.id));
   const selectedPlatforms = [...new Set(selectedAccounts.map((a) => a.platform))];
 
   const setFile = (file: File) => {
+    // The bucket refuses anything over the cap; say so now, not after a long
+    // upload fails.
+    const tooLarge = fileTooLargeMessage(file);
+    if (tooLarge) {
+      setFileError(tooLarge);
+      return;
+    }
+    setFileError('');
     if (media) URL.revokeObjectURL(media.preview);
     const kind: 'image' | 'video' = file.type.startsWith('video') ? 'video' : 'image';
     setMedia({ file, preview: URL.createObjectURL(file), kind });
     uploadedUrls.current = null; // a new file must be uploaded fresh
+    if (kind === 'video') {
+      // Decides Short vs video for YouTube once the metadata is in.
+      readVideoDuration(file).then((d) => {
+        setMedia((prev) => (prev && prev.file === file ? { ...prev, durationSeconds: d } : prev));
+      });
+    }
   };
 
   const onFilesPicked = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -249,7 +280,9 @@ export function DropZone() {
 
   const generate = async () => {
     if (genInFlight.current) return;
-    if (!user || !media || selectedAccounts.length === 0) return;
+    // activeBrand is null until the brand context has loaded; the server
+    // refuses a request with no brand rather than guessing one.
+    if (!user || !activeBrand || !media || selectedAccounts.length === 0) return;
     genInFlight.current = true;
     setGenerating(true);
     setGenError('');
@@ -257,7 +290,7 @@ export function DropZone() {
     try {
       const { data, error } = await supabase.functions.invoke('generate-post-packages', {
         body: {
-          brandId: activeBrand?.id,
+          brandId: activeBrand.id,
           description: description.trim() || undefined,
           platforms: selectedPlatforms,
           mediaType: media.kind,
@@ -313,8 +346,7 @@ export function DropZone() {
     setSendError('');
 
     try {
-      const mediaUrls = await uploadOnce();
-
+      // Everything that can refuse the batch is checked BEFORE the upload.
       let scheduledAt: string | undefined;
       let scheduledForRow: string;
       if (mode === 'now') {
@@ -325,15 +357,32 @@ export function DropZone() {
         // (same as ComposePost) — new Date(...) would use the browser TZ.
         scheduledAt = localInputToUtc(scheduleAt, timezone);
         scheduledForRow = scheduledAt;
+        const tooSoon = scheduleLeadTimeMessage(scheduledAt);
+        if (tooSoon) throw new Error(tooSoon);
       }
 
       const targets = cards.filter(
         (c) => c.status !== 'done' && (!onlyAccountId || c.accountId === onlyAccountId),
       );
 
+      if (mode === 'schedule') {
+        const scheduledCount = await countScheduledPosts(user.id, activeBrand.id);
+        const capped = scheduleCapMessage(scheduledCount, targets.length, isPremium);
+        if (capped) throw new Error(capped);
+      }
+
+      const mediaUrls = await uploadOnce();
+
       for (const card of targets) {
         updateCard(card.accountId, { status: 'sending', error: undefined, warn: undefined });
         try {
+          // Never stamp another brand's account with this brand id: refuse
+          // before anything reaches Post for Me, so nothing goes live unmirrored.
+          if (accountBrandMap.get(card.accountId) !== activeBrand.id) {
+            throw new Error(
+              `${card.username ? `@${card.username}` : card.platform} is not part of ${activeBrand.name}. Switch brand or move the account under Connections.`,
+            );
+          }
           const finalCaption = buildFinalCaption(card);
           // One PFM post PER ACCOUNT: captions differ per account, and PFM's
           // createPost takes a single caption for a whole set of accounts.
@@ -343,9 +392,10 @@ export function DropZone() {
             mediaUrls,
             socialAccountIds: [card.accountId],
             scheduledAt,
+            // YouTube gets a real title; the caption is its description.
             platformConfigurations:
               card.platform === 'youtube' && card.title.trim()
-                ? { youtube: { title: card.title.trim() } }
+                ? { youtube: { title: card.title.trim(), description: finalCaption } }
                 : undefined,
           });
 
@@ -358,6 +408,7 @@ export function DropZone() {
             social_account_id: card.accountId,
             account_username: card.username,
             caption: finalCaption,
+            title: card.platform === 'youtube' ? card.title.trim() : null,
             media_urls: mediaUrls,
             media_type: media.kind === 'video' ? 'video' : 'image',
             scheduled_date: scheduledForRow,
@@ -365,7 +416,7 @@ export function DropZone() {
             status: mode === 'now' ? 'publishing' : 'scheduled',
             provider: 'postforme',
             postforme_post_id: post.id,
-            content_type: card.platform === 'youtube' ? 'short' : 'post',
+            content_type: card.platform === 'youtube' ? youtubeContentType(media.durationSeconds) : 'post',
           });
 
           if (insertErr) {
@@ -391,7 +442,8 @@ export function DropZone() {
       setCards((latest) => {
         if (latest.length > 0 && latest.every((c) => c.status === 'done')) {
           setAllSent(true);
-          setTimeout(() => navigate('/office'), 1600);
+          // Schedule shows what just went out; /office redirects to Patra.
+          setTimeout(() => navigate('/schedule'), 1600);
         }
         return latest;
       });
@@ -400,7 +452,11 @@ export function DropZone() {
 
   // ── Derived validation ─────────────────────────────────────────────────────
   const quotaEmpty = quota !== null && quota.requestsRemaining <= 0;
-  const canGenerate = !!media && selectedAccounts.length > 0 && !generating && !quotaEmpty;
+  const canGenerate = !!activeBrand && !!media && selectedAccounts.length > 0 && !generating && !quotaEmpty;
+  const minScheduleAt = utcToLocalInput(
+    new Date(Date.now() + MIN_SCHEDULE_LEAD_MINUTES * 60_000).toISOString(),
+    timezone,
+  );
 
   const cardProblems = cards.some((c) => {
     const cap = DROP_CAPS[c.platform] ?? 2200;
@@ -531,6 +587,11 @@ export function DropZone() {
               <XIcon className="w-3.5 h-3.5" />
             </button>
           </div>
+        )}
+        {fileError && (
+          <p className="t-micro mt-2" style={{ color: 'var(--destructive)' }}>
+            {fileError}
+          </p>
         )}
       </div>
 
@@ -820,6 +881,7 @@ export function DropZone() {
               <input
                 type="datetime-local"
                 value={scheduleAt}
+                min={minScheduleAt}
                 onChange={(e) => setScheduleAt(e.target.value)}
                 className="w-full bg-transparent border border-border px-3 py-2 font-mono text-sm text-foreground outline-none focus:border-accent transition-colors"
               />

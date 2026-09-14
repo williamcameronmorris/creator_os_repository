@@ -1,13 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
 import { Calendar, ChevronDown } from 'lucide-react';
+import {
+  type DateRange,
+  isoDate,
+  parseInputDate,
+  presetRange,
+  previousPeriod as previousUtcPeriod,
+} from '../../lib/analyticsMath';
 
 export type RangePreset = 'last_7d' | 'last_30d' | 'last_90d' | 'custom';
 export type ComparisonPreset = 'previous_period' | 'none';
 
-export interface DateRange {
-  start: Date;
-  end: Date;
-}
+// Every Date in a range is UTC midnight: the metrics tables are keyed on the
+// UTC date the sync wrote, so local midnights were off by a day for anyone
+// outside Greenwich. See src/lib/analyticsMath.ts.
+export type { DateRange };
 
 export interface DateComparisonValue {
   range: DateRange;
@@ -216,35 +223,23 @@ function summarize(v: DateComparisonValue): string {
 }
 
 function formatShort(d: Date): string {
-  return `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear().toString().slice(-2)}`;
+  return `${d.getUTCMonth() + 1}/${d.getUTCDate()}/${d.getUTCFullYear().toString().slice(-2)}`;
 }
 
 function toInputDate(d: Date): string {
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${d.getFullYear()}-${m}-${day}`;
+  return isoDate(d);
 }
 
 function fromInputDate(s: string): Date {
-  const [y, m, d] = s.split('-').map(Number);
-  return new Date(y, (m ?? 1) - 1, d ?? 1);
+  return parseInputDate(s);
 }
 
 export function computePresetRange(preset: Exclude<RangePreset, 'custom'>): DateRange {
-  const end = new Date();
-  end.setHours(23, 59, 59, 999);
-  const start = new Date(end);
-  const days = preset === 'last_7d' ? 7 : preset === 'last_30d' ? 30 : 90;
-  start.setDate(start.getDate() - days + 1);
-  start.setHours(0, 0, 0, 0);
-  return { start, end };
+  return presetRange(preset);
 }
 
 export function previousPeriod(range: DateRange): DateRange {
-  const ms = range.end.getTime() - range.start.getTime();
-  const end = new Date(range.start.getTime() - 1);
-  const start = new Date(end.getTime() - ms);
-  return { start, end };
+  return previousUtcPeriod(range);
 }
 
 export function defaultDateComparison(): DateComparisonValue {
