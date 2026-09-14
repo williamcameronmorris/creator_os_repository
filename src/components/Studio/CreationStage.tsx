@@ -1,6 +1,11 @@
 import { useState } from 'react';
 import { supabase } from '../../lib/supabase';
+import { mediaRef } from '../../lib/mediaUrls';
+import { useAuth } from '../../contexts/AuthContext';
+import { useSignedMediaUrl } from '../ui/SignedMedia';
 import { Upload, CheckCircle2, Smartphone, Video, AlertTriangle } from 'lucide-react';
+
+const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 
 interface CreationStageProps {
   workflowId: string;
@@ -10,9 +15,11 @@ interface CreationStageProps {
 }
 
 export function CreationStage({ workflowId, contentType, onComplete, onSkip }: CreationStageProps) {
+  const { user } = useAuth();
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
   const [mediaUrl, setMediaUrl] = useState<string | null>(null);
+  const mediaHref = useSignedMediaUrl(mediaUrl);
 
   const isMobileFormat = ['reel', 'story', 'short', 'tiktok'].includes(contentType);
 
@@ -35,10 +42,21 @@ export function CreationStage({ workflowId, contentType, onComplete, onSkip }: C
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
 
-    setUploading(true);
     const file = e.target.files[0];
+    if (!user) {
+      setError('Sign in again to upload.');
+      return;
+    }
+    if (file.size > MAX_UPLOAD_BYTES) {
+      setError(`${file.name} is over the 50 MB limit.`);
+      return;
+    }
+    setUploading(true);
+    setError('');
     const fileExt = file.name.split('.').pop();
-    const fileName = `${workflowId}/${Math.random()}.${fileExt}`;
+    // The bucket's insert policy requires the uploader's id as the first
+    // folder; the workflow id keeps a project's takes together under it.
+    const fileName = `${user.id}/${workflowId}/${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${fileExt}`;
 
     const { error: uploadError } = await supabase.storage
       .from('media')
@@ -46,16 +64,14 @@ export function CreationStage({ workflowId, contentType, onComplete, onSkip }: C
 
     if (uploadError) {
       console.error(uploadError);
+      setError(`Upload failed: ${uploadError.message}`);
       setUploading(false);
       return;
     }
 
-    const { data: { publicUrl } } = supabase.storage
-      .from('media')
-      .getPublicUrl(fileName);
+    const publicUrl = mediaRef(fileName);
 
     setMediaUrl(publicUrl);
-    setError('');
 
     // Persist the media link — if this write fails, the upload isn't saved and
     // would be lost on reload, so surface it instead of showing false success.
@@ -109,7 +125,7 @@ export function CreationStage({ workflowId, contentType, onComplete, onSkip }: C
                 <CheckCircle2 className="w-5 h-5 text-accent" />
               </div>
               <p className="text-foreground mb-1" style={{ fontWeight: 500 }}>Media uploaded</p>
-              <a href={mediaUrl} target="_blank" rel="noreferrer" className="t-micro text-accent hover:underline block mb-4">View file</a>
+              <a href={mediaHref || undefined} target="_blank" rel="noreferrer" className="t-micro text-accent hover:underline block mb-4">View file</a>
               <label className="btn-ie inline-block cursor-pointer">
                 <span className="btn-ie-text">Replace file</span>
                 <input type="file" className="hidden" accept="video/*,image/*" onChange={handleUpload} />

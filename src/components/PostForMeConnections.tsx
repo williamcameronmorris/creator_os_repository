@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useConnectionStatus } from '../contexts/ConnectionStatusContext';
 import { useBrand } from '../contexts/BrandContext';
 import { supabase } from '../lib/supabase';
+import { useConfirm } from './ui/ConfirmDialog';
 import {
   POSTFORME_PLATFORMS,
   initPostForMeConnect,
@@ -26,6 +27,7 @@ export function PostForMeConnections({ initialFlash }: Props) {
   const { user } = useAuth();
   const ctx = useConnectionStatus();
   const { brands, activeBrand, accountBrandMap, assignAccount, refresh: refreshBrands } = useBrand();
+  const confirm = useConfirm();
   // Seed from the global ConnectionStatusProvider so we don't double-fetch
   // PFM's account list on every mount. The provider already loaded this
   // when the user signed in. Only fall back to a local fetch if the
@@ -79,9 +81,14 @@ export function PostForMeConnections({ initialFlash }: Props) {
     // new rows under the new brand and everything already written stays put.
     // "With history" also re-files what the account has produced so far, in one
     // transaction (move_account_history).
-    const withHistory = window.confirm(
-      `Move ${label} to ${target}.\n\nAlso move its existing posts, metrics, snapshots and tasks?\n\nOK = move everything. Cancel = only from now on.`
-    );
+    const withHistory = await confirm({
+      title: `Move ${label} to ${target}?`,
+      message: 'Also move its existing posts, metrics, snapshots and tasks? Otherwise only what happens from now on files under the new brand.',
+      confirmLabel: 'Move everything',
+      cancelLabel: 'Only from now on',
+      dismissLabel: 'Keep it where it is',
+    });
+    if (withHistory === null) return;
     try {
       if (withHistory) {
         const { data, error } = await supabase.rpc('move_account_history', {
@@ -122,7 +129,10 @@ export function PostForMeConnections({ initialFlash }: Props) {
     }
   };
 
-  const handleConnect = async (platform: PostForMePlatformId) => {
+  // `reconnectId` is set when a disconnected row's Reconnect button starts
+  // the flow: Post for Me may hand the same account id back as connected
+  // rather than minting a new one, so completion is detected either way.
+  const handleConnect = async (platform: PostForMePlatformId, reconnectId?: string) => {
     if (!user) return;
     setBusyPlatform(platform);
     setError(null);
@@ -150,12 +160,15 @@ export function PostForMeConnections({ initialFlash }: Props) {
         try {
           const state = await listPostForMeAccounts(user.id, true);
           const newAccount = state.accounts.find(
-            (a) => a.platform === platform && !before.has(a.id) && a.status !== 'disconnected'
+            (a) =>
+              a.platform === platform &&
+              a.status !== 'disconnected' &&
+              (!before.has(a.id) || a.id === reconnectId)
           );
           if (newAccount) {
             setAccounts(state.accounts);
             setBusyPlatform(null);
-            setFlash(`Connected ${platform.toUpperCase()}.`);
+            setFlash(`${reconnectId ? 'Reconnected' : 'Connected'} ${platform.toUpperCase()}.`);
             // Keep the global ConnectionStatusProvider in sync so the
             // gate banner disappears immediately on other pages too.
             ctx.refresh();
@@ -175,9 +188,12 @@ export function PostForMeConnections({ initialFlash }: Props) {
 
   const handleDisconnect = async (account: PostForMeAccount) => {
     if (!user) return;
-    const confirmed = window.confirm(
-      `Disconnect ${account.platform.toUpperCase()} (${account.username || account.id})?\n\nYou can reconnect anytime, but scheduled posts to this account will fail until you do.`
-    );
+    const confirmed = await confirm({
+      title: `Disconnect ${account.platform.toUpperCase()} (${account.username || account.id})?`,
+      message: 'You can reconnect any time. Scheduled posts to this account will fail until you do.',
+      confirmLabel: 'Disconnect',
+      danger: true,
+    });
     if (!confirmed) return;
     setBusyAccountId(account.id);
     setError(null);
@@ -195,9 +211,10 @@ export function PostForMeConnections({ initialFlash }: Props) {
   };
 
   const supportedIds = new Set(POSTFORME_PLATFORMS.map((p) => p.id));
-  const supportedAccounts = accounts.filter(
-    (a) => supportedIds.has(a.platform as PostForMePlatformId) && a.status !== 'disconnected'
-  );
+  // Disconnected rows stay listed: a revoked grant is something to fix, not
+  // something to hide. The count only reads the ones that still work.
+  const supportedAccounts = accounts.filter((a) => supportedIds.has(a.platform as PostForMePlatformId));
+  const connectedCount = supportedAccounts.filter((a) => a.status !== 'disconnected').length;
   // Every PFM platform stays connectable — multi-account means you can add a
   // second (third, …) account to a platform that already has one.
   const availablePlatforms = POSTFORME_PLATFORMS;
@@ -217,7 +234,7 @@ export function PostForMeConnections({ initialFlash }: Props) {
 
       <div className="mb-12">
         <div className="flex items-center justify-between pb-3 border-b border-border mb-1">
-          <span className="t-micro">CONNECTED · {String(supportedAccounts.length).padStart(2, '0')}</span>
+          <span className="t-micro">CONNECTED · {String(connectedCount).padStart(2, '0')}</span>
           {!loading && (
             <button
               onClick={refresh}
@@ -243,10 +260,10 @@ export function PostForMeConnections({ initialFlash }: Props) {
                 <span className="t-micro">{account.platform.toUpperCase()}</span>
                 <div>
                   <div className="text-foreground font-medium" style={{ fontSize: '14.5px', lineHeight: 1.35 }}>
-                    {account.username ? `@${account.username}` : account.displayName || account.id}
+                    {account.username ? `@${account.username}` : account.id}
                   </div>
-                  <div className="t-micro mt-0.5">
-                    {account.isActive === false ? 'INACTIVE' : 'ACTIVE'} · VIA POST FOR ME
+                  <div className="t-micro mt-0.5" style={account.status === 'disconnected' ? { color: 'var(--destructive)' } : undefined}>
+                    {account.status === 'disconnected' ? 'DISCONNECTED' : 'ACTIVE'} · VIA POST FOR ME
                     {' · '}
                     {brands.length > 1 ? (
                       <select
@@ -265,13 +282,27 @@ export function PostForMeConnections({ initialFlash }: Props) {
                     )}
                   </div>
                 </div>
-                <button
-                  onClick={() => handleDisconnect(account)}
-                  disabled={busyAccountId === account.id}
-                  className="t-micro text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
-                >
-                  {busyAccountId === account.id ? 'DISCONNECTING…' : 'DISCONNECT'}
-                </button>
+                {account.status === 'disconnected' ? (
+                  <button
+                    onClick={() => handleConnect(account.platform as PostForMePlatformId, account.id)}
+                    disabled={busyPlatform === account.platform}
+                    className="t-micro text-foreground hover:text-accent transition-colors flex items-center gap-2 disabled:opacity-50"
+                  >
+                    {busyPlatform === account.platform ? 'OPENING…' : (
+                      <>
+                        RECONNECT <ArrowRight className="w-3 h-3" />
+                      </>
+                    )}
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => handleDisconnect(account)}
+                    disabled={busyAccountId === account.id}
+                    className="t-micro text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+                  >
+                    {busyAccountId === account.id ? 'DISCONNECTING…' : 'DISCONNECT'}
+                  </button>
+                )}
               </div>
             ))}
           </div>

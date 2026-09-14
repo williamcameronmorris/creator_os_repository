@@ -32,6 +32,21 @@ describe('kit link preview', () => {
     expect(out).toContain('</head><body>');
   });
 
+  it('drops the shell\'s own og: and twitter: tags so a crawler reads the kit\'s', () => {
+    const shell =
+      '<!doctype html><html><head><title>Cliopatra Social</title>' +
+      '<meta property="og:title" content="Cliopatra Social" />' +
+      '<meta property="og:image" content="https://cliopatra.app/og.png" />' +
+      '<meta name="twitter:card" content="summary_large_image" />' +
+      '<meta name="theme-color" content="#1A1816" />' +
+      '</head><body></body></html>';
+    const out = injectHead(shell, buildMeta(payload, 'https://x/kit/g'));
+    expect(out).not.toContain('https://cliopatra.app/og.png');
+    expect(out.match(/property="og:image"/g)).toHaveLength(1);
+    expect(out.match(/name="twitter:card"/g)).toHaveLength(1);
+    expect(out).toContain('name="theme-color"');
+  });
+
   it('keeps the description short and compacts numbers', () => {
     expect(describeKit(payload).length).toBeLessThanOrEqual(200);
     expect(compact(9500)).toBe('9.5K');

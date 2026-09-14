@@ -16,11 +16,11 @@ import {
   Tag,
   Lightbulb,
   Search,
-  Filter,
   X,
   ArrowRight,
 } from 'lucide-react';
 import { format } from 'date-fns';
+import { useConfirm } from './ui/ConfirmDialog';
 
 interface SavedIdea {
   id: string;
@@ -49,6 +49,7 @@ const platformIcons: Record<string, any> = {
 export function SavedIdeas() {
   const { user } = useAuth();
   const { activeBrand } = useBrand();
+  const confirm = useConfirm();
   const navigate = useNavigate();
   const [ideas, setIdeas] = useState<SavedIdea[]>([]);
   const [loading, setLoading] = useState(true);
@@ -171,7 +172,7 @@ export function SavedIdeas() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Delete this content idea?')) return;
+    if (!(await confirm({ title: 'Delete this idea?', message: 'It goes for good. Archive it instead if you might want it back.', danger: true }))) return;
 
     const { error } = await supabase
       .from('saved_content_ideas')

@@ -75,8 +75,11 @@ export function buildMeta(p: KitPayloadLite, pageUrl: string): string {
 
 /** Replace the shell's generic title/description and add the kit's tags before </head>. */
 export function injectHead(html: string, metaFragment: string): string {
+  // The shell carries its own og:/twitter: tags for the app itself; a kit
+  // page must show the kit, so those go too, or a crawler reads the first.
   const stripped = html
     .replace(/<title>[\s\S]*?<\/title>\s*/i, '')
-    .replace(/<meta\s+name="description"[^>]*\/?>\s*/i, '');
+    .replace(/<meta\s+name="description"[^>]*\/?>\s*/i, '')
+    .replace(/<meta\s+(?:property|name)="(?:og|twitter):[^"]*"[^>]*\/?>\s*/gi, '');
   return stripped.replace(/<\/head>/i, `    ${metaFragment}\n  </head>`);
 }

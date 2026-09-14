@@ -3,6 +3,7 @@ import { supabase, type AIContentSuggestion } from '../../lib/supabase';
 import { useAccount } from '../../contexts/AccountContext';
 import { useBrand } from '../../contexts/BrandContext';
 import { Sparkles, Bot, ThumbsDown, ArrowRight, PenTool, Lightbulb, Zap } from 'lucide-react';
+import { useToast } from '../ui/Toast';
 
 interface IdeationStageProps {
   onIdeaSelected: (idea: AIContentSuggestion) => void;
@@ -14,6 +15,7 @@ interface IdeationStageProps {
 export function IdeationStage({ onIdeaSelected, prefilledIdea, sourcePost }: IdeationStageProps) {
   const { activeAccount } = useAccount();
   const { activeBrand } = useBrand();
+  const toast = useToast();
   const [mode, setMode] = useState<'ai' | 'manual'>('ai');
   const [suggestions, setSuggestions] = useState<AIContentSuggestion[]>([]);
   const [loading, setLoading] = useState(false);
@@ -88,7 +90,7 @@ export function IdeationStage({ onIdeaSelected, prefilledIdea, sourcePost }: Ide
       setCachedNotice(result?.cached === true);
     } catch (err) {
       console.error('Error generating ideas:', err);
-      alert((err as Error).message || 'Failed to generate ideas. Please try again.');
+      toast.error((err as Error).message || 'Could not generate ideas. Try again.');
     } finally {
       setGenerating(false);
     }

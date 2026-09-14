@@ -131,6 +131,32 @@ export async function loadVoiceContext(
  * row / no niche set — callers then fall back to profiles.niche_preference
  * exactly as before.
  */
+/**
+ * loadBrandNiche
+ *
+ * The brand's main voice row (social_account_id NULL) carries a niche too.
+ * It sits between the account row and profiles.niche_preference in the
+ * Watch resolution order, so a brand whose voice has been built watches its
+ * own niche even when the active account has none of its own, and a second
+ * brand never inherits the first one's.
+ */
+export async function loadBrandNiche(
+  supabase: SupabaseClient,
+  userId: string,
+  brandId?: string | null,
+): Promise<string | null> {
+  if (!brandId) return null;
+  const { data } = await supabase
+    .from("user_content_profiles")
+    .select("niche")
+    .eq("user_id", userId)
+    .eq("brand_id", brandId)
+    .is("social_account_id", null)
+    .maybeSingle();
+  const niche = ((data as { niche?: string | null } | null)?.niche || "").trim();
+  return niche || null;
+}
+
 export async function loadAccountNiche(
   supabase: SupabaseClient,
   userId: string,

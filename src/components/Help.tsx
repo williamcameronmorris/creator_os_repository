@@ -63,7 +63,7 @@ export const HELP_SECTIONS: HelpSection[] = [
     name: 'Studio',
     tagline: 'Idea to published, in five stations.',
     body: [
-      'Ideate holds AI suggestions, your saved ideas and the 30-day challenge. Script writes in your voice, with templates. Create is your media library and the Drop Zone. Schedule is the calendar. Analyze is your analytics.',
+      'Ideate holds AI suggestions, your saved ideas and the 30-day challenge. Script writes in your voice. Create is your media library and the Drop Zone. Schedule is the calendar. Analyze is your analytics.',
       'Each station hands to the next, so an idea can become a script, a post and a verdict without leaving Studio.',
     ],
     find: 'Bottom nav, second tab',
@@ -71,7 +71,6 @@ export const HELP_SECTIONS: HelpSection[] = [
       { label: 'Open Studio', to: '/studio' },
       { label: 'Saved ideas', to: '/saved-ideas' },
       { label: '30-day challenge', to: '/studio/challenge' },
-      { label: 'Templates', to: '/studio/templates' },
     ],
   },
   {
@@ -128,7 +127,7 @@ export const HELP_SECTIONS: HelpSection[] = [
     name: 'Watch',
     tagline: 'What is working in your niche right now.',
     body: [
-      'Creators and posts worth watching on YouTube, TikTok and Instagram, chosen for the niche of the account you are acting as. Use it for formats and hooks, not for copying.',
+      'YouTube creators and Shorts worth studying, chosen for the niche of the account and brand you are acting as, plus your own Instagram posts under My posts, ready to remix. Use it for formats and hooks, not for copying.',
     ],
     find: 'Bottom nav, fourth tab',
     links: [{ label: 'Open Watch', to: '/watch' }],

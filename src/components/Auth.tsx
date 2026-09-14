@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, ArrowRight } from 'lucide-react';
 
 type AuthView = 'signin' | 'signup' | 'check-email' | 'forgot' | 'reset';
@@ -25,7 +25,7 @@ function friendlyAuthError(message: string, _view: AuthView): string {
     return 'Please check your inbox and confirm your email before signing in.';
   }
   if (m.includes('password should be at least')) {
-    return 'Password must be at least 6 characters.';
+    return 'Use at least 10 characters for your password.';
   }
   if (m.includes('unable to validate email address') || m.includes('invalid email')) {
     return 'Please enter a valid email address.';
@@ -70,6 +70,14 @@ export function Auth() {
     setLoading(true);
     try {
       if (view === 'signup') {
+        if (password.length < 10) {
+          setError('Use at least 10 characters for your password.');
+          return;
+        }
+        if (password !== confirmPassword) {
+          setError('Passwords do not match.');
+          return;
+        }
         await signUp(email, password);
         // Transition to the "check your inbox" screen. If the Supabase project
         // has email confirmation OFF, the AuthContext session listener will
@@ -78,6 +86,7 @@ export function Auth() {
         // see while waiting on the link.
         setSubmittedEmail(email);
         setPassword('');
+        setConfirmPassword('');
         setView('check-email');
         setResendCooldown(60); // Supabase's stock rate-limit window
       } else if (view === 'signin') {
@@ -134,8 +143,8 @@ export function Auth() {
       setError('Passwords do not match');
       return;
     }
-    if (newPassword.length < 6) {
-      setError('Password must be at least 6 characters');
+    if (newPassword.length < 10) {
+      setError('Use at least 10 characters for your password.');
       return;
     }
     setLoading(true);
@@ -306,7 +315,7 @@ export function Auth() {
                 className={inputClass}
                 placeholder="••••••••"
                 required
-                minLength={6}
+                minLength={10}
               />
             </div>
             <div>
@@ -319,7 +328,7 @@ export function Auth() {
                 className={inputClass}
                 placeholder="••••••••"
                 required
-                minLength={6}
+                minLength={10}
               />
             </div>
             {error && <p className="t-micro" style={{ color: 'var(--destructive, #c44)' }}>{error}</p>}
@@ -373,9 +382,32 @@ export function Auth() {
                   className={inputClass}
                   placeholder="••••••••"
                   required
-                  minLength={6}
+                  autoComplete={view === 'signup' ? 'new-password' : 'current-password'}
+                  minLength={view === 'signup' ? 10 : undefined}
                 />
+                {view === 'signup' && (
+                  <p className="t-micro mt-2 text-muted-foreground" style={{ textTransform: 'none', letterSpacing: 0 }}>
+                    10 characters or more. A short sentence works well.
+                  </p>
+                )}
               </div>
+
+              {view === 'signup' && (
+                <div>
+                  <label htmlFor="confirm-signup-password" className="t-micro block mb-2">CONFIRM PASSWORD</label>
+                  <input
+                    id="confirm-signup-password"
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className={inputClass}
+                    placeholder="••••••••"
+                    required
+                    autoComplete="new-password"
+                    minLength={10}
+                  />
+                </div>
+              )}
 
               {error && <p className="t-micro" style={{ color: 'var(--destructive, #c44)' }}>{error}</p>}
               {success && <p className="t-micro" style={{ color: 'var(--accent)' }}>✓ {success}</p>}
@@ -407,9 +439,11 @@ export function Auth() {
           </>
         )}
 
-        {/* Footer brand mark */}
-        <div className="mt-12 t-micro text-muted-foreground">
-          CLIOPATRA SOCIAL · v1
+        {/* Footer: brand mark and the two pages every platform review asks for */}
+        <div className="mt-12 flex flex-wrap items-center gap-x-4 gap-y-2 t-micro text-muted-foreground">
+          <span>CLIOPATRA SOCIAL · v1</span>
+          <Link to="/privacy" className="hover:text-foreground transition-colors">PRIVACY</Link>
+          <Link to="/terms" className="hover:text-foreground transition-colors">TERMS</Link>
         </div>
 
       </div>

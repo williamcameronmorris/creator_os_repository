@@ -6,6 +6,7 @@ import { TokenHealthBanner } from './TokenHealthBanner';
 import { ConnectionGateBanner } from './ConnectionGateBanner';
 import { AccountSwitcher } from './AccountSwitcher';
 import { BrandSwitcher } from './BrandSwitcher';
+import { ErrorBoundary } from './ErrorBoundary';
 import {
   Settings as SettingsIcon,
   LogOut,
@@ -195,7 +196,11 @@ export function Layout({ children }: LayoutProps) {
 
       {/* Main content */}
       <main className="flex-1 pb-20">
-        {children}
+        {/* A crash on one screen keeps the header and nav; the key resets the
+            boundary when the person navigates somewhere else. */}
+        <ErrorBoundary variant="page" key={location.pathname}>
+          {children}
+        </ErrorBoundary>
       </main>
 
       {/* Bottom nav */}

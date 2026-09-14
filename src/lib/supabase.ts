@@ -49,6 +49,9 @@ export type Profile = {
   payment_terms: string;
   onboarding_completed: boolean;
   onboarding_step: 'name_niche' | 'connect' | 'walkthrough' | 'done';
+  /** IANA zone chosen in Settings; null means follow the device. */
+  timezone?: string | null;
+  subscription_tier?: string | null;
   first_name?: string;
   last_name?: string;
   niche_preference?: string;

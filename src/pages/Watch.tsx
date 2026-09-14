@@ -8,7 +8,6 @@ import {
   ensureWatchNiche,
   formatCount,
   clioParams,
-  WATCH_NICHE,
   type SuggestedCreator,
   type WatchVideo,
   type MyPost,
@@ -21,7 +20,15 @@ import { useBrand } from '../contexts/BrandContext';
 const GOLD = '#C8A24B';
 const ACCENTS = ['#B07050', '#7A9E89', '#C8A24B', '#1A1816'];
 
-type Platform = 'youtube' | 'tiktok' | 'instagram';
+type Platform = 'youtube' | 'instagram';
+
+// YouTube is the discovery feed; the second tab is the person's own Instagram
+// posts to remix, so it says that. TikTok discovery is not built yet and has
+// no tab until it is.
+const TABS: { id: Platform; label: string }[] = [
+  { id: 'youtube', label: 'YouTube' },
+  { id: 'instagram', label: 'My posts' },
+];
 
 function initials(title: string): string {
   return title
@@ -59,9 +66,10 @@ export function Watch() {
     (async () => {
       try {
         if (platform === 'youtube') {
-          // Resolve the niche per active account (account profile.niche →
-          // profiles.niche_preference); discovery runs on demand for a cold niche.
-          const resolved = await ensureWatchNiche(activeAccount?.id ?? null);
+          // Resolve the niche for the active account, falling back to the
+          // brand's voice row, then the profile; discovery runs on demand for
+          // a cold niche.
+          const resolved = await ensureWatchNiche(activeAccount?.id ?? null, activeBrand?.id ?? null);
           if (!active) return;
           setNiche(resolved.niche);
           if (resolved.needsNiche || !resolved.niche) {
@@ -117,7 +125,7 @@ export function Watch() {
         <span className="font-mono text-[10px] tracking-widest uppercase text-muted-foreground">
           Watching
         </span>
-        {platform !== 'instagram' && (niche || !needsNiche) && (
+        {platform !== 'instagram' && niche && (
           <span className="flex items-center gap-2 min-w-0">
             {/* Whose niche this is — the Account Switcher's active account. */}
             {activeAccount?.username && (
@@ -129,7 +137,7 @@ export function Watch() {
               className="font-mono text-[9px] tracking-widest uppercase px-2 py-1 border flex-shrink-0"
               style={{ borderColor: GOLD, color: '#8a6d22' }}
             >
-              {niche ?? WATCH_NICHE}
+              {niche}
             </span>
           </span>
         )}
@@ -137,14 +145,14 @@ export function Watch() {
 
       {/* platform tabs */}
       <div className="flex gap-6 border-b border-border mb-4">
-        {(['youtube', 'tiktok', 'instagram'] as Platform[]).map((p) => (
+        {TABS.map(({ id: p, label }) => (
           <button
             key={p}
             onClick={() => setPlatform(p)}
             className="relative pb-3 font-mono text-[10px] tracking-widest uppercase transition-colors"
             style={{ color: platform === p ? 'var(--foreground)' : undefined }}
           >
-            <span className={platform === p ? '' : 'text-muted-foreground'}>{p}</span>
+            <span className={platform === p ? '' : 'text-muted-foreground'}>{label}</span>
             {platform === p && (
               <span
                 className="absolute left-0 right-0 -bottom-px h-0.5"
@@ -180,13 +188,6 @@ export function Watch() {
           >
             Set niche in profile
           </Link>
-        </div>
-      )}
-
-      {!loading && !error && platform === 'tiktok' && (
-        <div className="py-16 text-center">
-          <p className="text-sm text-foreground mb-1">TikTok is coming next</p>
-          <p className="text-xs text-muted-foreground">Watch creators from TikTok here soon.</p>
         </div>
       )}
 
@@ -367,7 +368,7 @@ export function Watch() {
                   </button>
                 </div>
                 <div className="mt-1.5 text-[11px] text-muted-foreground">{v.creatorTitle}</div>
-                <WatchVideoStats video={v} niche={niche ?? WATCH_NICHE} />
+                <WatchVideoStats video={v} niche={niche ?? 'your niche'} />
               </div>
             ))}
           </div>

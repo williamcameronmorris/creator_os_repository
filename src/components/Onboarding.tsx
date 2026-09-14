@@ -16,8 +16,7 @@ import { PostForMeConnections } from './PostForMeConnections';
  *   2. connect     — encourage at least one Post for Me connection. Stub
  *                    today (Continue →); replaced in the connection-gate
  *                    task with the real connection list + skip logic.
- *   3. walkthrough — quick "here's what Clio does" pitch. Stub today;
- *                    replaced with sample-prompt + dismiss card later.
+ *   3. walkthrough — a short "here's what Clio does" card, then into the app.
  *
  * Each step writes to profiles + advances `onboarding_step`, then calls
  * `onComplete` so App.tsx re-fetches the profile and re-renders this
@@ -54,6 +53,10 @@ export function Onboarding({ onComplete }: Props) {
         // Pre-fill if the user already typed something and bounced
         if (data.first_name) setFirstName(data.first_name);
         if (data.niche_preference) setNiche(data.niche_preference);
+      } else {
+        // No row yet: the sign-up trigger did not run, or the account predates
+        // it. Start at step one; the first save creates the row.
+        setProfile({});
       }
       setLoading(false);
     })();
@@ -64,10 +67,11 @@ export function Onboarding({ onComplete }: Props) {
     setSubmitting(true);
     setError(null);
     try {
+      // Upsert, not update: an update against a missing row matches nothing,
+      // reports no error, and leaves the person on the same step forever.
       const { error: updateError } = await supabase
         .from('profiles')
-        .update(updates)
-        .eq('id', user.id);
+        .upsert({ id: user.id, ...updates }, { onConflict: 'id' });
       if (updateError) throw updateError;
 
       // Mirror the DB update into our local profile state so this component
@@ -77,7 +81,7 @@ export function Onboarding({ onComplete }: Props) {
       // ~every 20s) bumps the `user` reference and re-fires our [user]
       // useEffect. That's why "swiping desktops unsticks the page" —
       // visibilitychange triggers Supabase to re-emit the session.
-      setProfile((prev) => (prev ? { ...prev, ...updates } : prev));
+      setProfile((prev) => ({ ...(prev ?? {}), ...updates }));
 
       // Still notify App.tsx so its routing (step==='done' → unmount us)
       // sees the latest state. Awaited because the 'done' transition
@@ -132,7 +136,7 @@ export function Onboarding({ onComplete }: Props) {
     minHeight: '100vh',
   };
 
-  if (loading || !profile) {
+  if (loading) {
     return (
       <div style={pageStyle} className="flex items-center justify-center">
         <div className="w-1.5 h-1.5 bg-foreground animate-pulse" />
@@ -140,7 +144,7 @@ export function Onboarding({ onComplete }: Props) {
     );
   }
 
-  const step = profile.onboarding_step ?? 'name_niche';
+  const step = profile?.onboarding_step ?? 'name_niche';
 
   // 0/3 → 3/3 progress label
   const stepNumber =
@@ -272,13 +276,22 @@ export function Onboarding({ onComplete }: Props) {
             >
               Meet <em style={{ fontStyle: 'normal', color: 'var(--accent)' }}>Clio.</em>
             </h1>
-            <p className="t-body mb-10" style={{ maxWidth: '38ch' }}>
-              Clio is your content brain. Ask for video ideas, write scripts, plan your week — all powered by your niche.
+            <p className="t-body mb-8" style={{ maxWidth: '38ch' }}>
+              Clio is your content brain. Each morning it reads your recent posts and numbers and writes you a short brief. Ask it anything underneath.
             </p>
 
-            <p className="t-micro mb-6 text-muted-foreground" style={{ textTransform: 'none', letterSpacing: 0 }}>
-              Walkthrough is wiring up next. For now, finish onboarding and you&rsquo;ll land on Clio&rsquo;s home screen.
-            </p>
+            <ul className="mb-10 space-y-3" style={{ maxWidth: '40ch' }}>
+              {[
+                ['Clio', 'A daily brief, and a place to ask in plain words.'],
+                ['Studio', 'Ideas, scripts in your voice, media, schedule, analytics.'],
+                ['Watch', 'Creators in your niche worth studying.'],
+              ].map(([name, what]) => (
+                <li key={name} className="flex gap-3 text-sm">
+                  <span className="t-micro text-foreground pt-0.5 w-14 flex-shrink-0">{name.toUpperCase()}</span>
+                  <span className="text-muted-foreground">{what}</span>
+                </li>
+              ))}
+            </ul>
 
             {error && (
               <p className="t-micro mb-6" style={{ color: 'var(--destructive, #c44)' }}>{error}</p>

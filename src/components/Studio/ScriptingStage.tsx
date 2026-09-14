@@ -126,7 +126,8 @@ export function ScriptingStage({ workflowId, contentType, onComplete, onSkip }: 
       if (!user) throw new Error('Not authenticated');
 
       const quota = await getAIQuota(user.id);
-      if (quota && quota.requestsRemaining <= 0) {
+      if (quota.unavailable) throw new Error('Could not check your AI credits. Try again in a moment.');
+      if (quota.requestsRemaining <= 0) {
         throw new Error('Daily AI quota exceeded. Resets at midnight.');
       }
 

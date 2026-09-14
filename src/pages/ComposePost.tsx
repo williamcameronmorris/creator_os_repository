@@ -5,6 +5,7 @@ import { useBrand } from '../contexts/BrandContext';
 import { useAccount } from '../contexts/AccountContext';
 import { useSubscription } from '../contexts/SubscriptionContext';
 import { supabase } from '../lib/supabase';
+import { mediaRef } from '../lib/mediaUrls';
 import {
   ArrowLeft, ArrowRight, Check, Upload, X as XIcon,
   Instagram, Youtube, Facebook, Twitter, Sparkles, AtSign, Cloud, Globe,
@@ -262,8 +263,7 @@ export function ComposePost() {
         .from('media')
         .upload(path, m.file, { cacheControl: '3600', upsert: false });
       if (error) throw new Error(`Upload failed: ${error.message}`);
-      const { data: pub } = supabase.storage.from('media').getPublicUrl(data.path);
-      urls.push(pub.publicUrl);
+      urls.push(mediaRef(data.path));
     }
     return urls;
   };

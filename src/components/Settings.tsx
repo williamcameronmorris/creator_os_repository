@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { supabase, type Profile } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
-import { Save, TrendingUp, DollarSign, AlertCircle, CheckCircle, Link2, Palette, Sun, Moon, User, ArrowRight, HelpCircle } from 'lucide-react';
+import { Save, TrendingUp, DollarSign, AlertCircle, CheckCircle, Link2, Palette, Sun, Moon, User, ArrowRight, HelpCircle, Clock } from 'lucide-react';
+import { COMMON_TIMEZONES, detectBrowserTimezone } from '../lib/timezone';
 import { PostForMeConnections } from './PostForMeConnections';
 import { VoiceCard } from './VoiceCard';
 
@@ -199,6 +200,28 @@ export function Settings() {
             )}
           </button>
         </div>
+      </div>
+
+      <div className="p-6 bg-card border border-border">
+        <h3 className="text-lg font-black uppercase tracking-tight text-foreground mb-2 flex items-center gap-2">
+          <Clock className="w-5 h-5" />
+          <span className="text-xs font-mono tracking-[0.08em]">Timezone</span>
+        </h3>
+
+        <p className="text-muted-foreground text-sm mb-6">
+          Scheduled times are shown and saved in this zone. Leave it on your device to follow wherever you are.
+        </p>
+
+        <select
+          value={profile.timezone ?? ''}
+          onChange={(e) => setProfile({ ...profile, timezone: e.target.value || null })}
+          className="w-full px-3 py-2 bg-background border border-border text-foreground text-sm focus:outline-none focus:border-accent transition-colors"
+        >
+          <option value="">Use my device ({detectBrowserTimezone()})</option>
+          {COMMON_TIMEZONES.map((tz) => (
+            <option key={tz.value} value={tz.value}>{tz.label}</option>
+          ))}
+        </select>
       </div>
 
       <div className="p-6 bg-card border border-border">
@@ -417,6 +440,12 @@ export function Settings() {
             {loading ? 'Saving…' : 'Save settings'}
           </span>
         </button>
+      </div>
+
+      <div className="pt-6 border-t border-border flex flex-wrap items-center gap-x-4 gap-y-2 text-xs font-mono uppercase tracking-[0.08em] text-muted-foreground">
+        <span>Cliopatra Social · v1</span>
+        <Link to="/privacy" className="hover:text-foreground transition-colors">Privacy</Link>
+        <Link to="/terms" className="hover:text-foreground transition-colors">Terms</Link>
       </div>
     </div>
   );

@@ -3,11 +3,30 @@ import { AlertTriangle, RotateCw } from 'lucide-react';
 
 interface Props {
   children: ReactNode;
+  /**
+   * 'app' (default) covers the whole screen and is mounted once around the
+   * router. 'page' sits inside Layout so a crash on one screen keeps the
+   * header and bottom nav, and navigating away clears it.
+   */
+  variant?: 'app' | 'page';
   fallback?: (error: Error, reset: () => void) => ReactNode;
 }
 
 interface State {
   error: Error | null;
+}
+
+/**
+ * Log a caught render error somewhere useful without leaking anything to the
+ * screen. Console only for now; the message and component stack are enough
+ * to find the cause in DevTools or the mobile shell's log.
+ *
+ * TODO(sentry): forward to Sentry once a DSN is set. Keep the user-facing copy
+ * generic either way; error.message is for us, not for them.
+ */
+function reportError(error: Error, info: ErrorInfo) {
+  console.error('[ErrorBoundary]', error.name, error.message);
+  if (info.componentStack) console.error(info.componentStack);
 }
 
 export class ErrorBoundary extends Component<Props, State> {
@@ -18,7 +37,7 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error('[ErrorBoundary]', error, info.componentStack);
+    reportError(error, info);
   }
 
   reset = () => this.setState({ error: null });
@@ -29,25 +48,35 @@ export class ErrorBoundary extends Component<Props, State> {
 
     if (this.props.fallback) return this.props.fallback(error, this.reset);
 
+    const page = this.props.variant === 'page';
+
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background px-4">
-        <div className="w-full max-w-md bg-card border border-border rounded-2xl p-8 text-center shadow-lg">
+      <div className={page ? 'px-4 py-16 flex items-center justify-center' : 'min-h-screen flex items-center justify-center bg-background px-4'}>
+        <div className="w-full max-w-md bg-card border border-border p-8 text-center">
           <div className="flex items-center justify-center mb-6">
-            <div className="w-16 h-16 rounded-2xl bg-destructive/10 flex items-center justify-center">
-              <AlertTriangle className="w-8 h-8 text-destructive" />
+            <div className="w-12 h-12 border border-border flex items-center justify-center">
+              <AlertTriangle className="w-5 h-5" style={{ color: 'var(--destructive)' }} />
             </div>
           </div>
-          <h2 className="text-xl font-bold text-foreground mb-2">Something went wrong</h2>
-          <p className="text-sm text-muted-foreground leading-relaxed mb-6">
-            {error.message || 'An unexpected error occurred. Try again, and if the problem persists, refresh the page.'}
+          <h2 className="text-foreground mb-2" style={{ fontSize: '1.375rem', fontWeight: 500, letterSpacing: '-0.02em' }}>
+            Something went wrong
+          </h2>
+          <p className="t-body mb-6">
+            {page
+              ? 'This screen hit a problem. Try again, or open another tab and come back.'
+              : 'The app hit a problem it could not recover from. Try again, and if it keeps happening, reload the page.'}
           </p>
-          <button
-            onClick={this.reset}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-foreground text-background text-sm font-medium hover:opacity-90 transition-opacity min-h-[44px]"
-          >
-            <RotateCw className="w-4 h-4" />
-            Try again
-          </button>
+          <div className="flex items-center justify-center gap-3">
+            <button onClick={this.reset} className="btn-ie btn-ie-solid inline-flex items-center gap-2">
+              <RotateCw className="w-3 h-3" />
+              <span className="btn-ie-text">Try again</span>
+            </button>
+            {!page && (
+              <a href="/" className="t-micro text-muted-foreground hover:text-foreground transition-colors">
+                Reload
+              </a>
+            )}
+          </div>
         </div>
       </div>
     );

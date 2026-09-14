@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase';
 import { useBrand } from '../../contexts/BrandContext';
 import { Image as ImageIcon, Sparkles, Clock, AlertTriangle } from 'lucide-react';
 import { DateTimePicker } from '../DateTimePicker';
+import { SignedImg, SignedVideo } from '../ui/SignedMedia';
 import { useTimezone } from '../../hooks/useTimezone';
 import { localInputToUtc } from '../../lib/timezone';
 
@@ -228,9 +229,9 @@ export function SchedulingStage({ workflowId, contentType, onComplete }: Schedul
           <div className="bg-foreground overflow-hidden aspect-[9/16] relative flex items-center justify-center">
             {mediaUrl ? (
               contentType === 'reel' || contentType === 'tiktok' || mediaUrl.match(/\.(mp4|mov|webm)$/i) ? (
-                <video src={mediaUrl} controls className="w-full h-full object-cover" />
+                <SignedVideo src={mediaUrl} controls className="w-full h-full object-cover" />
               ) : (
-                <img src={mediaUrl} alt="Preview" className="w-full h-full object-cover" />
+                <SignedImg src={mediaUrl} alt="Preview" className="w-full h-full object-cover" />
               )
             ) : (
               <div className="text-background/40 flex flex-col items-center">

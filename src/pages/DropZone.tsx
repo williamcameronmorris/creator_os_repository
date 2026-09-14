@@ -5,6 +5,7 @@ import { useBrand } from '../contexts/BrandContext';
 import { useAccount } from '../contexts/AccountContext';
 import { useSubscription } from '../contexts/SubscriptionContext';
 import { supabase } from '../lib/supabase';
+import { mediaRef } from '../lib/mediaUrls';
 import {
   ArrowLeft, ArrowRight, Check, Upload, X as XIcon, RefreshCw,
   Instagram, Youtube, Facebook, Twitter, Sparkles, AtSign, Cloud, Globe,
@@ -327,8 +328,7 @@ export function DropZone() {
       .from('media')
       .upload(path, media.file, { cacheControl: '3600', upsert: false });
     if (error) throw new Error(`Upload failed: ${error.message}`);
-    const { data: pub } = supabase.storage.from('media').getPublicUrl(data.path);
-    uploadedUrls.current = [pub.publicUrl];
+    uploadedUrls.current = [mediaRef(data.path)];
     return uploadedUrls.current;
   };
 

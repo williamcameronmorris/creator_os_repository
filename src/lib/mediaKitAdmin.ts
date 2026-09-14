@@ -167,17 +167,19 @@ export function centsToDollars(cents: number | null): string {
 
 /**
  * The creator image: a logo for a brand like Gibsunday, a headshot for a
- * personal one. Goes to the public `media` bucket under the user's folder,
- * same as the media library, and the returned URL is what the kit stores.
+ * personal one. A kit page is public and has no session, so this goes to the
+ * public `avatars` bucket (images only, 5 MB) under the user's folder, and
+ * the returned URL is what the kit stores. The `media` bucket is private and
+ * would need a signed link a brand could not get.
  */
 export async function uploadKitAvatar(userId: string, brandId: string, file: File): Promise<string> {
-  if (!file.type.startsWith('image/')) throw new Error('Choose an image file.');
+  if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) throw new Error('Choose a JPG, PNG or WebP image.');
   if (file.size > 5 * 1024 * 1024) throw new Error('Keep the image under 5 MB.');
   const ext = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
   const path = `${userId}/kit/${brandId}-${Date.now()}.${ext}`;
-  const { data, error } = await supabase.storage.from('media').upload(path, file, { cacheControl: '3600', upsert: false });
+  const { data, error } = await supabase.storage.from('avatars').upload(path, file, { cacheControl: '3600', upsert: false });
   if (error) throw new Error(error.message);
-  return supabase.storage.from('media').getPublicUrl(data.path).data.publicUrl;
+  return supabase.storage.from('avatars').getPublicUrl(data.path).data.publicUrl;
 }
 
 export function kitUrl(slug: string): string {

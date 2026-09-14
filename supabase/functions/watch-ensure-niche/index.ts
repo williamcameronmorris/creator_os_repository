@@ -2,7 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { requireUser, corsHeaders } from "../_shared/auth.ts";
 import { canonicalNiche } from "../_shared/niche.ts";
-import { loadAccountNiche } from "../_shared/voice.ts";
+import { loadAccountNiche, loadBrandNiche } from "../_shared/voice.ts";
 
 /**
  * watch-ensure-niche Edge Function
@@ -18,11 +18,13 @@ import { loadAccountNiche } from "../_shared/voice.ts";
  * If the canonical niche has no creators yet, run discovery for it inline, then
  * report ready. User-authed (verifies the caller's JWT).
  *
- * Optional body.socialAccountId: resolve the niche per account —
- * user_content_profiles.niche for that account first, then
- * profiles.niche_preference as the fallback. Absent → legacy behavior
- * (profile niche only). @gibsunday can watch guitar while @heycam watches
- * creator coaching.
+ * Resolution order, first hit wins:
+ *   1. body.socialAccountId → that account's user_content_profiles.niche
+ *   2. body.brandId         → the brand's main voice row (social_account_id null)
+ *   3. profiles.niche_preference
+ * Both body fields are optional; older clients that send neither get the
+ * profile niche. @gibsunday can watch guitar while @heycam watches creator
+ * coaching, and a second brand never inherits the first one's niche.
  */
 
 function json(body: unknown, status = 200) {
@@ -46,24 +48,28 @@ Deno.serve(async (req: Request) => {
   const userId = auth.userId;
 
   // Optional per-account scope (empty body / no JSON is fine — legacy clients).
-  const body = await req.json().catch(() => ({} as { socialAccountId?: unknown }));
+  const body = await req.json().catch(() => ({} as { socialAccountId?: unknown; brandId?: unknown }));
   const socialAccountId: string | null =
     typeof body.socialAccountId === "string" && body.socialAccountId.trim()
       ? body.socialAccountId.trim()
       : null;
+  const brandId: string | null =
+    typeof body.brandId === "string" && body.brandId.trim() ? body.brandId.trim() : null;
 
   try {
-    const [{ data: profile }, accountNiche] = await Promise.all([
+    const [{ data: profile }, accountNiche, brandNiche] = await Promise.all([
       supabase
         .from("profiles")
         .select("niche_preference")
         .eq("id", userId)
         .maybeSingle(),
-      // Niche resolution order: account profile.niche → profiles.niche_preference.
-      loadAccountNiche(supabase, userId, socialAccountId),
+      // Account row → brand's main voice row → profiles.niche_preference.
+      // Both lookups are pinned to userId, so a foreign id resolves to null.
+      loadAccountNiche(supabase, userId, socialAccountId, brandId),
+      loadBrandNiche(supabase, userId, brandId),
     ]);
 
-    const niche = canonicalNiche(accountNiche || profile?.niche_preference || "");
+    const niche = canonicalNiche(accountNiche || brandNiche || profile?.niche_preference || "");
     if (!niche) return json({ niche: null, ready: false, needsNiche: true });
 
     const { count } = await supabase
