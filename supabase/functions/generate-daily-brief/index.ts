@@ -18,11 +18,11 @@ import { loadVoiceContext, loadAccountNiche } from "../_shared/voice.ts";
  *      is Clio's "Generate now" button. Counts against the user's AI quota.
  *
  *   2. Cron mode — `{ "cronSecret": "..." }` in the body, matched against the
- *      `Cron_Secret` project secret. Generates briefs for EVERY user who has
- *      finished onboarding (profiles.onboarding_step = 'done') and has at
- *      least one content_posts row. Users are processed sequentially and
- *      per-user failures are collected — one bad user never kills the run.
- *      System-generated, so it does NOT consume anyone's AI quota.
+ *      `Cron_Secret` project secret. Generates briefs for EVERY brand of every
+ *      user who has finished onboarding (profiles.onboarding_step = 'done'),
+ *      skipping brands with no content_posts row. Brands are processed
+ *      sequentially and per-brand failures are collected — one bad brand never
+ *      kills the run. System-generated, so it does NOT consume anyone's AI quota.
  *
  *      NOTE: requireUserOrCron isn't used here because it binds cron mode to
  *      a single userId; the brief cron fans out to all eligible users. The
@@ -77,8 +77,18 @@ type PostRow = {
   published_at: string | null;
 };
 
-/** Ranking score for "top performer": views when the platform reports them,
- * likes+comments when it doesn't (views=0 is common on synced IG posts). */
+/** A top performer as the Analytics page scores it: post_performance's multiple
+ * of the creator's own trailing median. views_multiple is null when there is
+ * not enough history to judge. */
+type TopPost = PostRow & {
+  views_multiple: number | null;
+  lane_name: string | null;
+  outlier_metric: string | null;
+};
+
+/** Fallback ranking when nothing is scored yet: views when the platform
+ * reports them, likes+comments when it doesn't (views=0 is common on synced
+ * IG posts). */
 function postScore(p: PostRow): number {
   const views = p.views || 0;
   return views > 0 ? views : (p.likes || 0) + (p.comments || 0);
@@ -86,6 +96,29 @@ function postScore(p: PostRow): number {
 
 function postLabel(p: PostRow): string {
   return (p.title || p.caption || "Untitled post").slice(0, 120);
+}
+
+/** An IANA zone Intl accepts, else UTC. profiles.timezone is free text. */
+function safeTimeZone(tz: string | null | undefined): string {
+  if (!tz) return "UTC";
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: tz }).format(new Date());
+    return tz;
+  } catch {
+    return "UTC";
+  }
+}
+
+/** Hour of day (0-23) of an instant in the given zone. */
+function hourInZone(iso: string, tz: string): number | null {
+  const t = new Date(iso);
+  if (Number.isNaN(t.getTime())) return null;
+  const part = new Intl.DateTimeFormat("en-US", { timeZone: tz, hour: "numeric", hourCycle: "h23" })
+    .formatToParts(t)
+    .find((p) => p.type === "hour")?.value;
+  const hour = Number(part);
+  if (!Number.isFinite(hour)) return null;
+  return hour % 24;
 }
 
 async function gatherUserData(
@@ -125,35 +158,52 @@ async function gatherUserData(
     .eq("status", "published")
     .not("published_at", "is", null)
     .gte("published_at", ninetyDaysAgo);
+  // Scored posts, ranked the way the Analytics verdict ranks them, so the
+  // brief can never praise a post the page marks 0.4x.
+  let scoredQuery = supabase
+    .from("post_performance")
+    .select("title, caption, platform, content_type, views, likes, comments, engagement_rate, published_at, views_multiple, lane_name, outlier_metric")
+    .eq("brand_id", brandId)
+    .gte("published_at", sevenDaysAgo);
   if (socialAccountId) {
     recentQuery = recentQuery.eq("social_account_id", socialAccountId);
     priorCountQuery = priorCountQuery.eq("social_account_id", socialAccountId);
     historyQuery = historyQuery.eq("social_account_id", socialAccountId);
+    scoredQuery = scoredQuery.eq("social_account_id", socialAccountId);
   }
 
-  const [profileRes, recentRes, priorCountRes, historyRes, accountNiche] = await Promise.all([
+  const [profileRes, recentRes, priorCountRes, historyRes, scoredRes, accountNiche] = await Promise.all([
     supabase
       .from("profiles")
-      .select("display_name, first_name, niche_preference")
+      .select("display_name, first_name, niche_preference, timezone")
       .eq("id", userId)
       .maybeSingle(),
     recentQuery.order("published_at", { ascending: false }).limit(50),
     priorCountQuery,
     historyQuery.order("published_at", { ascending: false }).limit(200),
+    scoredQuery.order("views_multiple", { ascending: false, nullsFirst: false }).limit(3),
     // Niche resolution order: account profile.niche → profiles.niche_preference.
     loadAccountNiche(supabase, userId, socialAccountId, brandId),
   ]);
 
   const recent = (recentRes.data || []) as PostRow[];
-  const topPosts = [...recent].sort((a, b) => postScore(b) - postScore(a)).slice(0, 3);
+  const scored = ((scoredRes.data || []) as TopPost[]).filter((p) => p.views_multiple !== null);
+  const topPosts: TopPost[] = scored.length > 0
+    ? scored
+    : [...recent].sort((a, b) => postScore(b) - postScore(a)).slice(0, 3)
+        .map((p) => ({ ...p, views_multiple: null, lane_name: null, outlier_metric: null }));
 
   // ── Best posting hour: weight each published hour by likes+comments (+1 so
   //    zero-engagement posts still count as frequency), pick the heaviest.
+  //    Bucketed in the creator's own zone: the field is called hour_local and
+  //    the card shows it as a clock time, so a UTC bucket told anyone outside
+  //    UTC the wrong hour.
+  const timeZone = safeTimeZone(profileRes.data?.timezone);
   const hourWeights = new Map<number, number>();
   for (const p of (historyRes.data || []) as PostRow[]) {
     if (!p.published_at) continue;
-    const hour = new Date(p.published_at).getUTCHours();
-    if (Number.isNaN(hour)) continue;
+    const hour = hourInZone(p.published_at, timeZone);
+    if (hour === null) continue;
     const weight = (p.likes || 0) + (p.comments || 0) + 1;
     hourWeights.set(hour, (hourWeights.get(hour) || 0) + weight);
   }
@@ -202,6 +252,7 @@ async function gatherUserData(
     voiceContext,
     bestHour,
     hasHourData: bestWeight > 0,
+    timeZone,
   };
 }
 
@@ -219,8 +270,8 @@ async function generateBriefContent(
 
   const performanceBlock = data.recentPosts.length > 0
     ? `Posts published in the last 7 days: ${data.postCountThisWeek} (prior 7 days: ${data.postCountPriorWeek})
-Top performers this week:
-${data.topPosts.map((p, i) => `${i + 1}. [${p.platform || "?"}] "${postLabel(p)}" — ${p.views || 0} views, ${p.likes || 0} likes, ${p.comments || 0} comments`).join("\n")}`
+Top performers this week${data.topPosts.some((p) => p.views_multiple !== null) ? " (ranked by views against the creator's own median for that format; a multiple below 1.0 is BELOW their normal)" : ""}:
+${data.topPosts.map((p, i) => `${i + 1}. [${p.platform || "?"}] "${postLabel(p)}" — ${p.views || 0} views, ${p.likes || 0} likes, ${p.comments || 0} comments${p.views_multiple !== null ? `, ${p.views_multiple}x their median${p.lane_name ? `, lane: ${p.lane_name}` : ""}${p.outlier_metric && p.outlier_metric !== "views" ? `, strongest on ${p.outlier_metric}` : ""}` : ""}`).join("\n")}`
     : `No posts published in the last 7 days (prior 7 days: ${data.postCountPriorWeek}). Nudge them to get one out today — kindly, not guilt-trippy.`;
 
   const trendBlock = data.trendVideos.length > 0
@@ -235,7 +286,7 @@ ${performanceBlock}
 
 ${trendBlock}
 
-Best posting hour from their history (UTC, from post timestamps): ${data.hasHourData ? data.bestHour : "no data — default to 18:00"}
+Best posting hour from their history (local time in ${data.timeZone}, from post timestamps): ${data.hasHourData ? data.bestHour : "no data — default to 18:00"}
 
 Write today's brief. Return ONLY a JSON object with this exact shape:
 {
@@ -369,27 +420,42 @@ Deno.serve(async (req: Request) => {
 
       let generated = 0;
       let skipped = 0;
-      const errors: { userId: string; error: string }[] = [];
+      const errors: { userId: string; brandId?: string; error: string }[] = [];
 
       for (const profile of profiles || []) {
         const uid = profile.id as string;
-        try {
-          const { count } = await supabase
-            .from("content_posts")
-            .select("id", { count: "exact", head: true })
-            .eq("user_id", uid);
-          if (!count) {
-            skipped++;
-            continue;
+        // Briefs are per BRAND per day. Calling the generator with no brand
+        // resolved to the default one, so every other brand a user owns
+        // (Hey Cam: 226 published posts) never got a brief.
+        const { data: brands, error: brandsErr } = await supabase
+          .from("brands")
+          .select("id")
+          .eq("owner_id", uid);
+        if (brandsErr) {
+          errors.push({ userId: uid, error: `brand list: ${brandsErr.message}` });
+          continue;
+        }
+        for (const brand of brands || []) {
+          const bid = brand.id as string;
+          try {
+            const { count } = await supabase
+              .from("content_posts")
+              .select("id", { count: "exact", head: true })
+              .eq("user_id", uid)
+              .eq("brand_id", bid);
+            if (!count) {
+              skipped++;
+              continue;
+            }
+            const result = await generateForUser(supabase, uid, !!body.force, null, bid);
+            if (result === "skipped_exists") skipped++;
+            else generated++;
+          } catch (err) {
+            // Collect and continue — one bad brand never kills the morning run.
+            const message = err instanceof Error ? err.message : String(err);
+            console.error(`daily-brief failed for ${uid}/${bid}:`, message);
+            errors.push({ userId: uid, brandId: bid, error: message });
           }
-          const result = await generateForUser(supabase, uid, !!body.force, null, null, true);
-          if (result === "skipped_exists") skipped++;
-          else generated++;
-        } catch (err) {
-          // Collect and continue — one bad user never kills the morning run.
-          const message = err instanceof Error ? err.message : String(err);
-          console.error(`daily-brief failed for ${uid}:`, message);
-          errors.push({ userId: uid, error: message });
         }
       }
 

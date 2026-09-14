@@ -36,7 +36,15 @@ Deno.serve(async (req: Request) => {
     const auth = await requireUser(req, supabase);
     if (!auth.ok) return auth.response;
     const userId = auth.userId;
-    const { workflowId, topic, contentType, mode, socialAccountId: rawAccountId, brandId: rawBrandId } = await req.json();
+    const { workflowId, topic, contentType, mode, hook: rawHook, reasoning: rawReasoning, socialAccountId: rawAccountId, brandId: rawBrandId } = await req.json();
+    // The hook and reasoning the creator picked the idea for. Optional: the
+    // Ideation and deep-link paths carry them, older callers send only topic.
+    const ideaHook: string = typeof rawHook === "string" ? rawHook.trim().slice(0, 300) : "";
+    const ideaReasoning: string = typeof rawReasoning === "string" ? rawReasoning.trim().slice(0, 600) : "";
+    const ideaContext = [
+      ideaHook ? `Chosen hook (open with this, or something very close to it): "${ideaHook}"` : "",
+      ideaReasoning ? `Why this idea was chosen: ${ideaReasoning}` : "",
+    ].filter(Boolean).join("\n");
     const socialAccountId: string | null =
       typeof rawAccountId === "string" && rawAccountId.trim() ? rawAccountId.trim() : null;
     const requestedBrandId: string | null =
@@ -113,7 +121,7 @@ Deno.serve(async (req: Request) => {
       userPrompt = `You are a content script writer for ${formatContext}.
 
 Topic: "${topic || "Creator content best practices"}"
-Creator: ${creatorName}${nicheLine}
+${ideaContext ? `${ideaContext}\n` : ""}Creator: ${creatorName}${nicheLine}
 ${topPostsBlock}
 
 Write a concise content outline in plain text (not JSON). Include:
@@ -128,7 +136,7 @@ Keep it punchy and practical. Max 200 words. No markdown headers, just plain tex
       userPrompt = `You are a content script writer for ${formatContext}.
 
 Topic: "${topic || "Creator content best practices"}"
-Creator: ${creatorName}${nicheLine}
+${ideaContext ? `${ideaContext}\n` : ""}Creator: ${creatorName}${nicheLine}
 ${topPostsBlock}
 
 Write a complete structured script. Return ONLY a valid JSON object with this exact shape:

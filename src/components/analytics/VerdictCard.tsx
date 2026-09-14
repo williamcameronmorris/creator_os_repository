@@ -1,4 +1,5 @@
 import { format, parseISO } from 'date-fns';
+import { Link } from 'react-router-dom';
 import { ExternalLink } from 'lucide-react';
 import { Takeaway, StatNumber } from '../ui/tac';
 import { formatCompact } from './format';
@@ -26,8 +27,26 @@ function permalink(p: PostPerformance): string | null {
   }
 }
 
+/**
+ * Deep link into Studio with this post pinned as the source: generate-ideas
+ * then returns four variations of its angle. Offered only on posts that beat
+ * the creator's own median by a clear margin; "more like this" on a 0.4x
+ * post is bad advice.
+ */
+export function makeMoreLink(p: PostPerformance): string | null {
+  if (p.views_multiple === null || p.views_multiple < 1.5) return null;
+  const params = new URLSearchParams({
+    autostart: '1',
+    sourcePostId: p.id,
+    platform: p.platform,
+    type: p.media_type ?? 'post',
+  });
+  return `/studio/workflow?${params.toString()}`;
+}
+
 export function VerdictCard({ post }: { post: PostPerformance }) {
   const link = permalink(post);
+  const more = makeMoreLink(post);
   const text = (post.title || post.caption || '').trim();
   const scored = post.views_multiple !== null;
 
@@ -92,6 +111,17 @@ export function VerdictCard({ post }: { post: PostPerformance }) {
         <StatNumber value={`${post.engagement_rate.toFixed(1)}%`} label="engagement" />
       </div>
 
+      {more && (
+        <div className="px-5 pb-5">
+          <Link
+            to={more}
+            className="t-micro inline-flex items-center border border-foreground bg-foreground text-primary-foreground px-3 py-1.5 hover:bg-accent hover:border-accent hover:text-accent-foreground"
+          >
+            Make more like this
+          </Link>
+        </div>
+      )}
+
       <Takeaway>{verdictSentence(post)}</Takeaway>
     </div>
   );
@@ -103,6 +133,7 @@ export function VerdictRow({ post }: { post: PostPerformance }) {
   const scored = post.views_multiple !== null;
   const strong = scored && post.views_multiple! >= 1.2;
   const weak = scored && post.views_multiple! <= 0.6;
+  const more = makeMoreLink(post);
 
   return (
     <li className="flex items-center gap-3 px-5 py-3 border-b border-border last:border-b-0">
@@ -132,6 +163,11 @@ export function VerdictRow({ post }: { post: PostPerformance }) {
           {scored ? fmtMultiple(post.views_multiple!) : '—'}
         </div>
         <div className="t-micro">{formatCompact(post.views)} views</div>
+        {more && (
+          <Link to={more} className="t-micro block mt-1 hover:text-accent" style={{ color: 'var(--accent)' }}>
+            Make more like this
+          </Link>
+        )}
       </div>
     </li>
   );

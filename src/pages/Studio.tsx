@@ -21,6 +21,9 @@ export function Studio() {
   const [showSuccess, setShowSuccess] = useState(false);
   const [aiQuota, setAiQuota] = useState<AIQuotaInfo | null>(null);
   const [prefilledIdea, setPrefilledIdea] = useState<AIContentSuggestion | null>(null);
+  // A post handed in from Analytics ("Make more like this"): Ideation asks
+  // generate-ideas for four variations of its angle and shows them to pick from.
+  const [sourcePost, setSourcePost] = useState<{ id: string; platform: string; type: string } | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const [bootstrapping, setBootstrapping] = useState(() => searchParams.has('idea') && searchParams.has('autostart'));
 
@@ -40,6 +43,16 @@ export function Studio() {
   // Ideation stage and let the user confirm.
   useEffect(() => {
     if (!activeBrand) return;
+    const sourcePostId = searchParams.get('sourcePostId');
+    if (sourcePostId) {
+      setSourcePost({
+        id: sourcePostId,
+        platform: searchParams.get('platform') || 'instagram',
+        type: searchParams.get('type') || 'reel',
+      });
+      setSearchParams({}, { replace: true });
+      return;
+    }
     const ideaParam = searchParams.get('idea');
     if (!ideaParam) return;
     const autostart = searchParams.get('autostart') === '1';
@@ -51,6 +64,7 @@ export function Studio() {
       suggested_topic: ideaParam,
       suggested_format: searchParams.get('hook') || ideaParam,
       reasoning: searchParams.get('reasoning') || 'From your Daily Brief',
+      hook_text: searchParams.get('hook') || undefined,
       confidence_score: Number(searchParams.get('confidence') || 85),
       status: 'accepted',
       created_at: new Date().toISOString(),
@@ -69,35 +83,53 @@ export function Studio() {
       if (!user) { alert('You must be logged in to start a project.'); return; }
       if (!activeBrand) { alert('No active brand selected.'); return; }
 
-      if (idea.id) {
-        await supabase
-          .from('ai_content_suggestions')
-          .update({ status: 'accepted' })
-          .eq('id', idea.id);
-      }
-
-      const { data, error } = await supabase
+      const now = new Date().toISOString();
+      const base = {
+        user_id: user.id,
+        brand_id: activeBrand.id,
+        platform: idea.platform,
+        content_type: idea.content_type,
+        current_stage: 'scripting',
+        idea_content: idea.suggested_topic,
+        idea_completed_at: now,
+      };
+      // The hook and reasoning the creator picked the idea for travel with
+      // the workflow so the script opens on them. Older databases without
+      // the two columns fall back to the bare row rather than failing.
+      const extras = {
+        idea_hook: idea.hook_text || null,
+        idea_reasoning: idea.reasoning || null,
+      };
+      let { data, error } = await supabase
         .from('content_workflow_stages')
-        .insert({
-          user_id: user.id,
-          brand_id: activeBrand.id,
-          platform: idea.platform,
-          content_type: idea.content_type,
-          current_stage: 'scripting',
-          idea_content: idea.suggested_topic,
-          idea_completed_at: new Date().toISOString()
-        })
+        .insert({ ...base, ...extras })
         .select()
         .maybeSingle();
+      if (error && (error.code === '42703' || error.code === 'PGRST204')) {
+        ({ data, error } = await supabase
+          .from('content_workflow_stages')
+          .insert(base)
+          .select()
+          .maybeSingle());
+      }
 
       if (error) { console.error('Error creating workflow:', error); alert('Failed to create workflow. Please try again.'); return; }
 
       if (data) {
+        // Provenance: which idea became which workflow, and when. Every
+        // suggestion used to be accepted with these left null.
+        if (idea.id) {
+          await supabase
+            .from('ai_content_suggestions')
+            .update({ status: 'accepted', created_workflow_id: data.id, acted_on_at: now })
+            .eq('id', idea.id);
+        }
         setActiveWorkflowId(data.id);
         setActiveContentType(data.content_type);
         setCompletedStages(['ideation']);
         setActiveStage('scripting');
         setPrefilledIdea(null);
+        setSourcePost(null);
       } else {
         alert('Failed to create workflow. Please try again.');
       }
@@ -177,6 +209,7 @@ export function Studio() {
               <IdeationStage
                 onIdeaSelected={handleIdeaSelected}
                 prefilledIdea={prefilledIdea ?? undefined}
+                sourcePost={sourcePost ?? undefined}
               />
             ) : activeStage === 'scripting' && activeWorkflowId ? (
               <ScriptingStage
