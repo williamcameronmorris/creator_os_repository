@@ -80,7 +80,6 @@ export function StudioHub() {
       sub: 'Draft your hook, body, and CTA — blank page or Clio first draft.',
       cta: 'Open editor',
       to: '/studio/script',
-      subs: [{ label: 'Templates', to: '/studio/templates' }],
     },
     {
       index: '03',
