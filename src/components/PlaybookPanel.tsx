@@ -327,11 +327,11 @@ export function PlaybookPanel() {
                               onClick={() => draftIt(task)}
                               disabled={draftingId !== null}
                               className="btn-ie disabled:opacity-40 disabled:cursor-not-allowed"
-                              style={{ fontSize: '10px', padding: '0.4rem 1rem' }}
+                              style={{ padding: '0.4rem 1rem' }}
                             >
                               <span className="btn-ie-text inline-flex items-center gap-2">
                                 {draftingId === task.id && <RefreshCw className="w-3 h-3 animate-spin" />}
-                                {draftingId === task.id ? 'DRAFTING…' : 'DRAFT IT'}
+                                {draftingId === task.id ? 'Drafting…' : 'Draft it'}
                               </span>
                             </button>
                           </div>

@@ -320,7 +320,7 @@ export function InvoicesPanel() {
                 <span className="t-mono text-foreground flex-shrink-0">{fmt(inv.invoice_amount || 0)}</span>
                 {!inv.payment_received_date && (
                   <button onClick={() => markPaid(inv)} className="btn-ie !px-3 !py-1.5 flex-shrink-0">
-                    <span className="btn-ie-text" style={{ fontSize: '9px' }}>
+                    <span className="btn-ie-text">
                       Mark paid
                     </span>
                   </button>

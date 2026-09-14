@@ -154,7 +154,7 @@ export function Layout({ children }: LayoutProps) {
                 Cliopatra
               </span>
               <span
-                className="font-mono text-[9px] font-medium tracking-widest text-muted-foreground uppercase"
+                className="font-mono text-[12px] font-medium tracking-widest text-muted-foreground uppercase"
                 style={{ letterSpacing: '0.1em' }}
               >
                 v0.5
@@ -168,21 +168,21 @@ export function Layout({ children }: LayoutProps) {
               <AccountSwitcher />
               <button
                 onClick={toggleTheme}
-                className="w-7 h-7 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+                className="w-10 h-10 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
                 aria-label="Toggle theme"
               >
                 {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
               </button>
               <Link
                 to="/settings"
-                className="w-7 h-7 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+                className="w-10 h-10 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
               >
                 <SettingsIcon className="w-4 h-4" />
               </Link>
               {user && (
                 <button
                   onClick={() => signOut()}
-                  className="w-7 h-7 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+                  className="w-10 h-10 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
                   aria-label="Sign out"
                 >
                   <LogOut className="w-4 h-4" />
@@ -210,7 +210,7 @@ export function Layout({ children }: LayoutProps) {
             }`}
           >
             <MessageCircle className="w-5 h-5" />
-            <span className="font-mono text-[8px] font-bold tracking-widest uppercase">Clio</span>
+            <span className="font-mono text-[11px] font-bold">Clio</span>
           </Link>
 
           {/* Studio */}
@@ -221,7 +221,7 @@ export function Layout({ children }: LayoutProps) {
             }`}
           >
             <PlayCircle className="w-5 h-5" />
-            <span className="font-mono text-[8px] font-bold tracking-widest uppercase">Studio</span>
+            <span className="font-mono text-[11px] font-bold">Studio</span>
           </Link>
 
           {/* Compose — opens a small action sheet (Quick post / Drop a video) */}
@@ -238,7 +238,7 @@ export function Layout({ children }: LayoutProps) {
             >
               <Plus className="w-4 h-4" />
             </div>
-            <span className="font-mono text-[8px] font-bold tracking-widest uppercase opacity-0">+</span>
+            <span className="font-mono text-[11px] font-bold opacity-0">+</span>
           </button>
 
           {/* Watch */}
@@ -249,7 +249,7 @@ export function Layout({ children }: LayoutProps) {
             }`}
           >
             <Eye className="w-5 h-5" />
-            <span className="font-mono text-[8px] font-bold tracking-widest uppercase">Watch</span>
+            <span className="font-mono text-[11px] font-bold">Watch</span>
           </Link>
 
           {/* Patra */}
@@ -260,7 +260,7 @@ export function Layout({ children }: LayoutProps) {
             }`}
           >
             <Handshake className="w-5 h-5" />
-            <span className="font-mono text-[8px] font-bold tracking-widest uppercase">Patra</span>
+            <span className="font-mono text-[11px] font-bold">Patra</span>
           </Link>
 
         </div>
@@ -289,7 +289,7 @@ export function Layout({ children }: LayoutProps) {
                   <SquarePen className="w-4 h-4 text-foreground" />
                 </div>
                 <div>
-                  <div className="font-mono text-[11px] font-bold tracking-widest uppercase text-foreground group-hover:text-accent transition-colors">
+                  <div className="font-mono text-[12px] font-bold tracking-widest uppercase text-foreground group-hover:text-accent transition-colors">
                     Quick post
                   </div>
                   <div className="t-micro mt-0.5">Write &amp; publish now</div>
@@ -303,7 +303,7 @@ export function Layout({ children }: LayoutProps) {
                   <Video className="w-4 h-4 text-foreground" />
                 </div>
                 <div>
-                  <div className="font-mono text-[11px] font-bold tracking-widest uppercase text-foreground group-hover:text-accent transition-colors">
+                  <div className="font-mono text-[12px] font-bold tracking-widest uppercase text-foreground group-hover:text-accent transition-colors">
                     Drop a video
                   </div>
                   <div className="t-micro mt-0.5">Turn footage into posts</div>

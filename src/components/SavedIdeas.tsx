@@ -227,7 +227,7 @@ export function SavedIdeas() {
         </div>
         <button
           onClick={() => setShowAddModal(true)}
-          className="inline-flex items-center gap-2 font-mono text-[10px] font-medium tracking-[0.08em] uppercase border border-foreground bg-foreground text-background px-4 py-2.5 hover:bg-background hover:text-foreground transition-colors"
+          className="inline-flex items-center gap-2 font-mono text-[12px] font-medium tracking-[0.08em] uppercase border border-foreground bg-foreground text-background px-4 py-2.5 hover:bg-background hover:text-foreground transition-colors"
         >
           <Plus className="w-4 h-4" />
           Save new idea
@@ -294,7 +294,7 @@ export function SavedIdeas() {
           {!showArchived && !searchQuery && filterPlatform === 'all' && (
             <button
               onClick={() => setShowAddModal(true)}
-              className="inline-flex items-center gap-2 font-mono text-[10px] font-medium tracking-[0.08em] uppercase border border-foreground bg-foreground text-background px-4 py-2.5 hover:bg-background hover:text-foreground transition-colors"
+              className="inline-flex items-center gap-2 font-mono text-[12px] font-medium tracking-[0.08em] uppercase border border-foreground bg-foreground text-background px-4 py-2.5 hover:bg-background hover:text-foreground transition-colors"
             >
               <Lightbulb className="w-4 h-4" />
               Save your first idea
@@ -544,7 +544,7 @@ export function SavedIdeas() {
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 px-6 py-3 font-mono text-[10px] font-bold tracking-[0.08em] uppercase border border-foreground bg-foreground text-background hover:bg-background hover:text-foreground transition-colors"
+                  className="flex-1 px-6 py-3 font-mono text-[12px] font-bold tracking-[0.08em] uppercase border border-foreground bg-foreground text-background hover:bg-background hover:text-foreground transition-colors"
                 >
                   {editingIdea ? 'Update Idea' : 'Save Idea'}
                 </button>

@@ -142,7 +142,7 @@ export function Studio() {
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center animate-fade-in">
           <div className="mb-6">
-            <span className="font-mono text-[10px] font-bold tracking-[0.08em] uppercase text-foreground">Complete</span>
+            <span className="font-mono text-[12px] font-bold tracking-[0.08em] uppercase text-foreground">Complete</span>
           </div>
           <h2 className="text-3xl font-bold text-foreground mb-2">Workflow Complete!</h2>
           <p className="text-muted-foreground">Your insight has been saved and loop closed.</p>
@@ -162,7 +162,7 @@ export function Studio() {
         <div className="flex-1 bg-card border border-border h-full flex flex-col overflow-hidden">
           <div className="p-4 lg:p-6 border-b border-border flex justify-between items-center">
             <div>
-              <h2 className="font-mono text-[10px] font-bold tracking-[0.08em] uppercase text-foreground mb-2">{activeStage}</h2>
+              <h2 className="font-mono text-[12px] font-bold tracking-[0.08em] uppercase text-foreground mb-2">{activeStage}</h2>
               <p className="text-sm text-muted-foreground t-body">
                 {activeStage === 'ideation' && "Analyze performance and generate winning ideas."}
                 {activeStage === 'scripting' && "Draft your hook, body, and CTA."}
@@ -216,7 +216,7 @@ export function Studio() {
             <div className="p-4 border-b border-border flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Bot className="w-5 h-5 text-foreground" />
-                <span className="font-mono text-[10px] font-medium tracking-[0.08em] uppercase text-foreground">AI Assistant</span>
+                <span className="font-mono text-[12px] font-medium tracking-[0.08em] uppercase text-foreground">AI Assistant</span>
               </div>
               <div className={`text-xs px-2 py-1 font-medium border ${
                 aiQuota

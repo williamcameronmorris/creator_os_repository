@@ -78,7 +78,7 @@ export function WatchCreator() {
 
   if (loading) {
     return (
-      <div className="max-w-md mx-auto px-4 py-16 text-center font-mono text-[11px] tracking-wide text-muted-foreground">
+      <div className="max-w-md mx-auto px-4 py-16 text-center font-mono text-[12px] tracking-wide text-muted-foreground">
         Loading…
       </div>
     );
@@ -105,7 +105,7 @@ export function WatchCreator() {
       {/* back */}
       <button
         onClick={() => navigate(-1)}
-        className="flex items-center gap-1.5 mb-4 font-mono text-[10px] tracking-widest uppercase text-muted-foreground"
+        className="flex items-center gap-1.5 mb-4 font-mono text-[12px] tracking-widest uppercase text-muted-foreground"
       >
         <ArrowLeft className="w-4 h-4" />
         Watch
@@ -121,7 +121,7 @@ export function WatchCreator() {
         </div>
         <div className="min-w-0">
           <p className="text-base font-semibold text-foreground truncate">{creator.title}</p>
-          <p className="font-mono text-[11px] text-muted-foreground">
+          <p className="font-mono text-[12px] text-muted-foreground">
             {formatCount(creator.subscriber_count)} subs
             {creator.avg_views ? ` · ${formatCount(creator.avg_views)} avg views` : ''}
           </p>
@@ -129,7 +129,7 @@ export function WatchCreator() {
         <button
           onClick={toggleTrack}
           disabled={savingTrack}
-          className="ml-auto flex items-center gap-1.5 px-3 py-2 border font-mono text-[9px] tracking-widest uppercase disabled:opacity-60"
+          className="ml-auto flex items-center gap-1.5 px-3 py-2 border font-mono text-[12px] tracking-widest uppercase disabled:opacity-60"
           style={
             tracked
               ? { borderColor: GOLD, background: GOLD, color: '#43340c' }
@@ -142,7 +142,7 @@ export function WatchCreator() {
       </div>
 
       {/* videos */}
-      <p className="font-mono text-[9px] tracking-widest uppercase text-muted-foreground my-3">
+      <p className="font-mono text-[12px] tracking-widest uppercase text-muted-foreground my-3">
         Recent · top first
       </p>
 
@@ -170,7 +170,7 @@ export function WatchCreator() {
                 )}
                 {v.is_top && (
                   <span
-                    className="absolute left-1.5 top-1.5 flex items-center gap-1 px-1.5 py-0.5 font-mono text-[7px] font-bold tracking-widest uppercase"
+                    className="absolute left-1.5 top-1.5 flex items-center gap-1 px-1.5 py-0.5 font-mono text-[12px] font-bold tracking-widest uppercase"
                     style={{ background: GOLD, color: '#43340c' }}
                   >
                     <Flame className="w-2 h-2" />
@@ -186,9 +186,9 @@ export function WatchCreator() {
                   </span>
                 </span>
               </button>
-              <p className="text-[12px] leading-snug text-foreground mt-1.5 line-clamp-2">{v.title}</p>
+              <p className="text-sm leading-snug text-foreground mt-1.5 line-clamp-2">{v.title}</p>
               <div className="flex items-center justify-between mt-1">
-                <span className="font-mono text-[9px] text-muted-foreground">
+                <span className="font-mono text-[12px] text-muted-foreground">
                   {formatCount(v.view_count)} views
                   {v.packaging_percentile != null && (
                     <span style={v.packaging_percentile >= 60 ? { color: '#8a6d22' } : undefined}>
@@ -198,7 +198,7 @@ export function WatchCreator() {
                 </span>
                 <button
                   onClick={() => sendToClio(v)}
-                  className="flex items-center gap-1 font-mono text-[9px] tracking-wider uppercase"
+                  className="flex items-center gap-1 font-mono text-[12px] tracking-wider uppercase"
                   style={{ color: '#8a6d22' }}
                 >
                   <Sparkles className="w-3 h-3" />

@@ -131,7 +131,7 @@ export function CalendarView({ posts, timezone, onPostClick, granularity = 'mont
         </div>
         <div className="grid grid-cols-7 border-b border-border">
           {DAY_NAMES_SHORT.map(d => (
-            <div key={d} className="py-2 text-center text-[11px] font-semibold text-muted-foreground uppercase">{d}</div>
+            <div key={d} className="py-2 text-center text-[12px] font-semibold text-muted-foreground uppercase">{d}</div>
           ))}
         </div>
         <div className="grid grid-cols-7">
@@ -152,14 +152,14 @@ export function CalendarView({ posts, timezone, onPostClick, granularity = 'mont
                     const color = PLATFORM_COLORS[post.platform] || 'bg-gray-500';
                     return (
                       <button key={post.id} onClick={() => onPostClick(post)}
-                        className={`w-full flex items-center gap-1 px-1.5 py-1 rounded text-left text-[10px] font-medium text-white truncate ${color} hover:opacity-90 transition-opacity`}
+                        className={`w-full flex items-center gap-1 px-1.5 py-1 rounded text-left text-[12px] font-medium text-white truncate ${color} hover:opacity-90 transition-opacity`}
                         title={post.caption || post.platform}>
                         <Icon className="w-2.5 h-2.5 flex-shrink-0" />
                         <span className="truncate">{post.caption?.slice(0, 18) || post.platform}</span>
                       </button>
                     );
                   })}
-                  {overflow > 0 && <p className="text-[10px] text-muted-foreground pl-1">+{overflow} more</p>}
+                  {overflow > 0 && <p className="text-[12px] text-muted-foreground pl-1">+{overflow} more</p>}
                 </div>
               </div>
             );
@@ -205,7 +205,7 @@ export function CalendarView({ posts, timezone, onPostClick, granularity = 'mont
             const isToday = toLocalDateKey(d) === todayKeyTz;
             return (
               <div key={d.toISOString()} className={`py-2 flex flex-col items-center gap-0.5 ${isToday ? 'bg-primary/5' : ''}`}>
-                <span className="text-[10px] font-semibold text-muted-foreground uppercase">{DAY_NAMES_SHORT[d.getDay()]}</span>
+                <span className="text-[12px] font-semibold text-muted-foreground uppercase">{DAY_NAMES_SHORT[d.getDay()]}</span>
                 <span className={`text-sm font-bold w-7 h-7 flex items-center justify-center rounded-full ${isToday ? 'bg-primary text-primary-foreground' : 'text-foreground'}`}>
                   {d.getDate()}
                 </span>
@@ -223,7 +223,7 @@ export function CalendarView({ posts, timezone, onPostClick, granularity = 'mont
               <div key={key} className={`min-h-[160px] p-1.5 ${isToday ? 'bg-primary/5' : 'bg-card'}`}>
                 {dayPosts.length === 0 ? (
                   <div className="h-full flex items-center justify-center">
-                    <span className="text-[10px] text-muted-foreground/40">—</span>
+                    <span className="text-[12px] text-muted-foreground/40">—</span>
                   </div>
                 ) : (
                   <div className="space-y-1">
@@ -240,9 +240,9 @@ export function CalendarView({ posts, timezone, onPostClick, granularity = 'mont
                           title={post.caption || post.platform}>
                           <div className="flex items-center gap-1 w-full">
                             <Icon className="w-2.5 h-2.5 flex-shrink-0 text-white" />
-                            <span className="text-[10px] font-medium text-white truncate">{post.caption?.slice(0, 14) || post.platform}</span>
+                            <span className="text-[12px] font-medium text-white truncate">{post.caption?.slice(0, 14) || post.platform}</span>
                           </div>
-                          {time && <span className="text-[9px] text-white/70">{time}</span>}
+                          {time && <span className="text-[12px] text-white/70">{time}</span>}
                         </button>
                       );
                     })}
