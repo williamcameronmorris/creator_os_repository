@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { resolveBrandId } from "../_shared/auth.ts";
 
 /**
  * generate-insights Edge Function
@@ -14,10 +15,16 @@ import { createClient } from "npm:@supabase/supabase-js@2";
  *      Supabase secret. Pass `userId` in the body to target a specific user,
  *      or omit it to default to Default_PFM_User_Id (single-tenant ops).
  *
+ * Every read is scoped to ONE brand: body.brandId (ownership verified) or
+ * the user's default brand. It used to read by user id alone, so Gibsunday,
+ * Hey Cam and "My Brand" landed in one insight set. social_insights itself
+ * has no brand column, so cron mode covers the default brand only.
+ *
  * Deploy with `--no-verify-jwt`. Auth is enforced internally by this handler.
  *
  * Request body:
  *   userId      - Supabase user ID (required for user mode, optional for cron)
+ *   brandId     - optional, the brand to analyze (default brand when absent)
  *   platform    - optional, filter to specific platform
  *   cronSecret  - cron mode only
  */
@@ -60,7 +67,7 @@ Deno.serve(async (req: Request) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    let body: { userId?: string; platform?: string; cronSecret?: string } = {};
+    let body: { userId?: string; brandId?: string; platform?: string; cronSecret?: string } = {};
     try {
       const raw = await req.text();
       if (raw) body = JSON.parse(raw);
@@ -68,6 +75,8 @@ Deno.serve(async (req: Request) => {
       // empty / invalid body is fine
     }
     const { platform: filterPlatform } = body;
+    const requestedBrandId: string | null =
+      typeof body.brandId === "string" && body.brandId.trim() ? body.brandId.trim() : null;
     let userId = body.userId;
 
     // Authenticate. Cron path takes precedence so scheduled jobs don't need a user JWT.
@@ -102,6 +111,10 @@ Deno.serve(async (req: Request) => {
 
     if (!userId) throw new Error("Missing required field: userId");
 
+    // One brand per run. Ownership of a caller-supplied brand is verified;
+    // cron mode (no brandId) resolves to the user's default brand.
+    const brandId = await resolveBrandId(supabase, userId, null, requestedBrandId);
+
     const today = new Date().toISOString().split("T")[0];
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
@@ -118,6 +131,7 @@ Deno.serve(async (req: Request) => {
       .from("platform_metrics")
       .select("platform, followers_count, avg_engagement_rate, total_views, total_likes, date")
       .eq("user_id", userId)
+      .eq("brand_id", brandId)
       .gte("date", thirtyDaysAgoStr)
       .order("date", { ascending: false })
       .limit(60);
@@ -130,6 +144,7 @@ Deno.serve(async (req: Request) => {
       .from("content_posts")
       .select("id, platform, content_type, title, views, likes, comments, engagement_rate, published_at, saves, caption")
       .eq("user_id", userId)
+      .eq("brand_id", brandId)
       .eq("status", "published")
       .gte("published_at", thirtyDaysAgoStr)
       .order("engagement_rate", { ascending: false })

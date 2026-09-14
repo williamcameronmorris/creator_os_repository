@@ -173,7 +173,11 @@ Deno.serve(async (req: Request) => {
     if (socialAccountId) {
       topPostsQuery = topPostsQuery.eq("social_account_id", socialAccountId);
       recentPostsQuery = recentPostsQuery.eq("social_account_id", socialAccountId);
-      metricsQuery = metricsQuery.eq("social_account_id", socialAccountId);
+      // platform_metrics is a brand-level roll-up: postforme-sync and the
+      // follower syncs write every row with social_account_id NULL. A strict
+      // account filter matched nothing and Clio said "no follower data" on a
+      // page showing 143k. Same filter the Analytics page uses.
+      metricsQuery = metricsQuery.or(`social_account_id.eq.${socialAccountId},social_account_id.is.null`);
     }
 
     const [profileResult, metricsResult, postsResult, recentPostsResult, deals, pfmContext, inspirationResult, inspirationCountsResult, voiceContext, accountNiche] = await Promise.all([
@@ -215,11 +219,17 @@ Deno.serve(async (req: Request) => {
       const cur = latestSnapshotByPlatform[m.platform];
       if (!cur || (m.date && m.date > cur.date)) {
         latestSnapshotByPlatform[m.platform] = {
-          followers: m.followers_count || 0,
+          followers: cur?.followers ?? 0,
           avgEng: Number(m.avg_engagement_rate) || 0,
           date: m.date || "",
         };
       }
+      // Followers: the newest row that actually carries a count. A day's row
+      // can exist with followers_count 0 before the follower sync fills it,
+      // and 0 is not a reading — same rule as the Analytics Followers KPI.
+      const followers = Number(m.followers_count) || 0;
+      const slot = latestSnapshotByPlatform[m.platform];
+      if (followers > 0 && slot.followers === 0) slot.followers = followers;
     }
 
     const recentPostsForRollup = recentPostsResult.data || [];
