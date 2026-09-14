@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { requireUser, corsHeaders } from "../_shared/auth.ts";
+import { requireUser, corsHeaders, resolveBrandId } from "../_shared/auth.ts";
 
 /**
  * generate-analysis Edge Function
@@ -11,6 +11,7 @@ import { requireUser, corsHeaders } from "../_shared/auth.ts";
  *
  * Request body:
  *   userId      - Supabase user ID
+ *   brandId     - the active brand (the workflow's own brand wins when set)
  *   workflowId  - content_workflow_stages ID
  *   postId      - content_posts ID (the published post)
  *   platform    - platform string
@@ -36,7 +37,9 @@ Deno.serve(async (req: Request) => {
     const auth = await requireUser(req, supabase);
     if (!auth.ok) return auth.response;
     const userId = auth.userId;
-    const { workflowId, postId, platform, contentType, metrics } = await req.json();
+    const { workflowId, postId, platform, contentType, metrics, brandId: rawBrandId } = await req.json();
+    const requestedBrandId: string | null =
+      typeof rawBrandId === "string" && rawBrandId.trim() ? rawBrandId.trim() : null;
 
     // ── Check quota ──────────────────────────────────────────────────────────
     const { data: reserved, error: quotaError } = await supabase
@@ -50,10 +53,15 @@ Deno.serve(async (req: Request) => {
     // ── Pull workflow context ────────────────────────────────────────────────
     const { data: workflow } = await supabase
       .from("content_workflow_stages")
-      .select("idea_content, script_content")
+      .select("idea_content, script_content, brand_id")
       .eq("id", workflowId)
       .eq("user_id", userId)
       .maybeSingle();
+
+    // Every read below is scoped to ONE brand: the workflow's own brand, else
+    // the caller's active brand (ownership verified). Never the default.
+    const brandId: string = (workflow?.brand_id as string | null)
+      ?? await resolveBrandId(supabase, userId, null, requestedBrandId);
 
     const ideaTopic = workflow?.idea_content || "Unknown topic";
     const scriptContent = workflow?.script_content as any;
@@ -71,6 +79,7 @@ Deno.serve(async (req: Request) => {
         .select("views, likes, comments, engagement_rate")
         .eq("id", postId)
         .eq("user_id", userId)
+        .eq("brand_id", brandId)
         .maybeSingle();
       if (postError) console.error("content_posts fetch failed:", postError.message);
       serverMetrics = postRow || null;

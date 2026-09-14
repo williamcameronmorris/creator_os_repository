@@ -82,13 +82,17 @@ export const INDUSTRY_DEFAULT_TIMES: Record<string, SuggestedTime[]> = {
  */
 export async function getSuggestedTimes(
   userId: string,
-  platform: string
+  platform: string,
+  brandId: string,
 ): Promise<SuggestedTimesResult> {
   try {
+    // The cache is per brand (migration 20260914100000): two brands on the
+    // same platform post at different times.
     const { data } = await supabase
       .from('suggested_times_cache')
       .select('best_times, source, computed_at')
       .eq('user_id', userId)
+      .eq('brand_id', brandId)
       .eq('platform', platform)
       .maybeSingle();
 
@@ -125,6 +129,42 @@ export function suggestedTimeToDate(time: SuggestedTime, fromDate = new Date()):
   result.setDate(result.getDate() + daysAhead);
   result.setHours(time.hour, 0, 0, 0);
   return result;
+}
+
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const pad = (n: number) => String(n).padStart(2, '0');
+
+/**
+ * The next future slot matching a SuggestedTime, as a `datetime-local` value
+ * in the given IANA timezone. The value is later read back with
+ * localInputToUtc(value, tz), so it must be built in that same timezone;
+ * suggestedTimeToDate() uses the browser clock, which is the wrong hour
+ * whenever the browser and the profile timezone differ.
+ */
+export function suggestedTimeToLocalInput(time: SuggestedTime, tz: string, now: Date = new Date()): string {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz,
+    weekday: 'short',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    hour12: false,
+  }).formatToParts(now);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
+  const currentDayIdx = Math.max(0, WEEKDAYS.indexOf(get('weekday')));
+  const currentHour = Number(get('hour')) % 24;
+
+  const targetDayIdx = DAYS.indexOf(time.day);
+  let daysAhead = targetDayIdx - currentDayIdx;
+  if (daysAhead < 0) daysAhead += 7;
+  // Same day but the hour has passed: next week.
+  if (daysAhead === 0 && currentHour >= time.hour) daysAhead = 7;
+
+  // Add days on the timezone's calendar date with UTC arithmetic, so a DST
+  // change in between cannot shift the date.
+  const target = new Date(Date.UTC(Number(get('year')), Number(get('month')) - 1, Number(get('day')) + daysAhead));
+  return `${target.getUTCFullYear()}-${pad(target.getUTCMonth() + 1)}-${pad(target.getUTCDate())}T${pad(time.hour)}:00`;
 }
 
 /**

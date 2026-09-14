@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useBrand } from '../contexts/BrandContext';
+import { fileTooLargeMessage } from '../lib/postingRules';
 import { supabase } from '../lib/supabase';
 import { Image as ImageIcon, Video, Upload, Trash2, Download, X } from 'lucide-react';
 import { format } from 'date-fns';
@@ -59,6 +60,12 @@ export function Media() {
     setUploading(true);
 
     for (const file of files) {
+      // The bucket refuses anything over the cap; say so before uploading.
+      const tooLarge = fileTooLargeMessage(file);
+      if (tooLarge) {
+        alert(tooLarge);
+        continue;
+      }
       try {
         const fileExt = file.name.split('.').pop();
         const fileName = `${user!.id}/${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;

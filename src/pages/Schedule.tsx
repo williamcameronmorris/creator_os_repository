@@ -25,6 +25,8 @@ interface Post {
   published_at: string | null;
   thumbnail_url?: string | null;
   media_type?: string | null;
+  /** 'postforme' for rows Post for Me publishes; only content_posts carries it. */
+  provider?: string | null;
 }
 
 type CalGranularity = 'monthly' | 'weekly' | 'daily';
@@ -69,13 +71,13 @@ export function Schedule() {
     // `content_posts_unified`. Query both and dedupe by id so neither set
     // gets dropped — without this, all 19 IG posts written through Compose
     // are invisible to the Schedule page.
-    const fetchFrom = (table: string) => ({
-      active: supabase.from(table).select(selectCols)
+    const fetchFrom = (table: string, cols: string) => ({
+      active: supabase.from(table).select(cols)
         .eq('user_id', user.id)
         .eq('brand_id', activeBrand.id)
         .in('status', ['scheduled', 'draft'])
         .order('scheduled_for', { ascending: true, nullsFirst: false }),
-      published: supabase.from(table).select(selectCols)
+      published: supabase.from(table).select(cols)
         .eq('user_id', user.id)
         .eq('brand_id', activeBrand.id)
         .eq('status', 'published')
@@ -83,8 +85,10 @@ export function Schedule() {
         .range(0, 199),
     });
 
-    const unified = fetchFrom('content_posts_unified');
-    const modern = fetchFrom('content_posts');
+    // The view has no provider column; the base table does, and its rows
+    // win in the merge below, so Post for Me posts keep their provider.
+    const unified = fetchFrom('content_posts_unified', selectCols);
+    const modern = fetchFrom('content_posts', `${selectCols}, provider`);
 
     const [
       { data: activeUnified },
@@ -94,8 +98,13 @@ export function Schedule() {
     ] = await Promise.all([unified.active, modern.active, unified.published, modern.published]);
 
     const byId = new Map<string, Post>();
-    for (const p of [...(activeUnified || []), ...(activeModern || []), ...(publishedUnified || []), ...(publishedModern || [])]) {
-      byId.set(p.id, p as Post);
+    // The select strings are built at runtime, so supabase-js cannot type the
+    // rows; they are the Post shape by construction.
+    const rows = [
+      ...(activeUnified || []), ...(activeModern || []), ...(publishedUnified || []), ...(publishedModern || []),
+    ] as unknown as Post[];
+    for (const p of rows) {
+      byId.set(p.id, p);
     }
     setPosts(Array.from(byId.values()));
     setLoading(false);
@@ -114,7 +123,15 @@ export function Schedule() {
     loadPosts();
   };
 
-  const handleEdit = (post: Post) => navigate(`/schedule/edit/${post.id}`);
+  const handleEdit = (post: Post) => {
+    // The composer only updates Clio's row; Post for Me would still publish
+    // the original. Until edits go through to Post for Me, refuse them.
+    if (post.provider === 'postforme') {
+      alert('This post was scheduled through Post for Me and cannot be edited here yet. Delete it and write it again.');
+      return;
+    }
+    navigate(`/schedule/edit/${post.id}`);
+  };
 
   const getPlatformIcon = (platform: string) => {
     switch (platform) {

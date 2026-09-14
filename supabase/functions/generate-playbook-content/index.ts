@@ -73,7 +73,7 @@ Deno.serve(async (req: Request) => {
     // ── Fetch the task (owner-scoped: id + user_id must both match) ─────────
     const { data: task, error: taskError } = await supabase
       .from("playbook_tasks")
-      .select("id, user_id, content_post_id, platform, account_username, task_type, title, body, status")
+      .select("id, user_id, brand_id, content_post_id, platform, account_username, task_type, title, body, status")
       .eq("id", taskId)
       .eq("user_id", userId)
       .maybeSingle();
@@ -117,7 +117,9 @@ Deno.serve(async (req: Request) => {
       postTitle = (post?.title || "").slice(0, 200);
     }
 
-    const voiceContext = await loadVoiceContext(supabase, userId);
+    // The task belongs to a brand; draft in THAT brand's voice. Without the
+    // brand, a two-brand user's single-row voice query errored into silence.
+    const voiceContext = await loadVoiceContext(supabase, userId, null, task.brand_id as string);
 
     // ── Build the prompt ─────────────────────────────────────────────────────
     const platform = task.platform || "instagram";

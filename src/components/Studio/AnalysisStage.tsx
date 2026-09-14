@@ -112,7 +112,7 @@ export function AnalysisStage({ workflowId, onComplete }: AnalysisStageProps) {
   };
 
   const handleGenerateAnalysis = async () => {
-    if (!postId) return;
+    if (!postId || !activeBrand) return;
     setGenerating(true);
     setAiError(null);
 
@@ -123,6 +123,7 @@ export function AnalysisStage({ workflowId, onComplete }: AnalysisStageProps) {
       const { data: fnData, error: fnError } = await supabase.functions.invoke('generate-analysis', {
         body: {
           userId: user.id,
+          brandId: activeBrand.id,
           workflowId,
           postId,
           platform,

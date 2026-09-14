@@ -247,8 +247,9 @@ Deno.serve(async (req: Request) => {
     const userId = auth.userId;
 
     // Comments arrive through the direct Meta / Google / Threads grants on the
-    // profile (one per user), which v1 attributes to the default brand.
-    const brandId = await resolveBrandId(supabase, userId);
+    // profile (one per user), which v1 attributes to the default brand. That
+    // is deliberate, so the default-brand fallback is opted into here.
+    const brandId = await resolveBrandId(supabase, userId, null, null, true);
 
     const { platforms } = await req.json().catch(() => ({}));
 
