@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { signMediaUrls } from "../_shared/media.ts";
 
 /**
  * publish-scheduled-posts Edge Function
@@ -230,11 +231,14 @@ Deno.serve(async (req: Request) => {
 
     for (const post of duePosts) {
       const { id: postId, user_id: userId, platform, caption, media_urls: mediaUrls, content_type: postContentType } = post;
-      const urls: string[] = Array.isArray(mediaUrls) ? mediaUrls : [];
+      const storedUrls: string[] = Array.isArray(mediaUrls) ? mediaUrls : [];
 
       console.log(`Publishing post ${postId} to ${platform}...`);
 
       try {
+        // The media bucket is private and the platform fetches the file
+        // itself, so hand it a 24-hour signed URL. Foreign URLs pass through.
+        const urls = await signMediaUrls(supabase, storedUrls);
         let platformPostId: string;
 
         switch (platform) {

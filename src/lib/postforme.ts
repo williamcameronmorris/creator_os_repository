@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { signMediaUrls, PUBLISH_TTL } from './mediaUrls';
 
 export interface PostForMeAccount {
   id: string;
@@ -49,7 +50,7 @@ async function proxy<T>(method: string, path: string, body?: unknown, query?: Re
   if (!data) throw new Error('Empty response from postforme-proxy');
   if (data.status >= 400) {
     const msg = (data.data && typeof data.data === 'object' && 'message' in (data.data as object))
-      ? String((data.data as { message: unknown }).message)
+      ? String((data.data as unknown as { message: unknown }).message)
       : `Post for Me ${data.status}`;
     throw new Error(msg);
   }
@@ -154,8 +155,12 @@ export async function createPostForMePost(input: CreatePostInput): Promise<PostF
     social_accounts: input.socialAccountIds,
     external_id: input.userId,
   };
-  if (input.mediaUrls.length > 0) {
-    body.media = input.mediaUrls.map((url) => ({ url }));
+  // Post for Me fetches each file itself, on its own schedule. Our bucket is
+  // private, so a stored reference becomes a 24-hour signed URL here; a URL
+  // that is not ours passes through unchanged.
+  const mediaUrls = await signMediaUrls(input.mediaUrls, PUBLISH_TTL);
+  if (mediaUrls.length > 0) {
+    body.media = mediaUrls.map((url) => ({ url }));
   }
   if (input.scheduledAt) body.scheduled_at = input.scheduledAt;
   if (input.platformConfigurations) body.platform_configurations = input.platformConfigurations;

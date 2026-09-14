@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useBrand } from '../contexts/BrandContext';
 import { Check, Copy, RefreshCw, X, Image as ImageIcon } from 'lucide-react';
+import { SignedImg } from './ui/SignedMedia';
 
 /**
  * PlaybookPanel — "Today's Plays"
@@ -235,7 +236,7 @@ export function PlaybookPanel() {
                     style={{ width: 40, height: 40 }}
                   >
                     {thumb ? (
-                      <img
+                      <SignedImg
                         src={thumb}
                         alt=""
                         loading="lazy"

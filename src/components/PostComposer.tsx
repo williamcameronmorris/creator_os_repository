@@ -10,8 +10,10 @@ import { ImageCropper } from './ImageCropper';
 import { PostPreview } from './PostPreview';
 import { DateTimePicker } from './DateTimePicker';
 import { useTimezone } from '../hooks/useTimezone';
-import { utcToLocalInput, localInputToUtc, nowAsLocalInput } from '../lib/timezone';
+import { utcToLocalInput, localInputToUtc } from '../lib/timezone';
 import { getDraft, setDraft, clearDraft as clearDraftStorage } from '../lib/draftStorage';
+import { mediaRef } from '../lib/mediaUrls';
+import { useSignedMediaUrls } from './ui/SignedMedia';
 
 interface PostComposerProps {
   onClose: () => void;
@@ -179,6 +181,9 @@ export function PostComposer({ onClose, onSuccess, asPage = false, editPost }: P
   );
   const [mediaFiles,      setMediaFiles]      = useState<File[]>([]);
   const [mediaUrls,       setMediaUrls]       = useState<string[]>(editPost?.media_urls || []);
+  // Stored references stay in mediaUrls (that is what the row keeps); the
+  // previews need signed URLs for anything in our private bucket.
+  const mediaUrlsDisplay = useSignedMediaUrls(mediaUrls);
   const [videoThumbs,     setVideoThumbs]     = useState<Record<number, string>>({});
   const [uploading,       setUploading]       = useState(false);
   const [saving,          setSaving]          = useState(false);
@@ -304,7 +309,7 @@ export function PostComposer({ onClose, onSuccess, asPage = false, editPost }: P
         .from('media')
         .upload(fileName, file, { cacheControl: '3600', upsert: false });
       if (error) throw new Error(getUploadError(error, file.name));
-      const { data: { publicUrl } } = supabase.storage.from('media').getPublicUrl(data.path);
+      const publicUrl = mediaRef(data.path);
       uploadedUrls.push(publicUrl);
       await supabase.from('media_library').insert({
         user_id:   user.id,
@@ -564,9 +569,9 @@ export function PostComposer({ onClose, onSuccess, asPage = false, editPost }: P
           )}
           {(mediaUrls.length > 0 || mediaFiles.length > 0) && (
             <div className="grid grid-cols-2 gap-3">
-              {mediaUrls.map((url, index) => (
+              {mediaUrls.map((_url, index) => (
                 <div key={`url-${index}`} className="relative aspect-square rounded-xl overflow-hidden group border border-border">
-                  <img src={url} alt="" className="w-full h-full object-cover" />
+                  {mediaUrlsDisplay[index] ? <img src={mediaUrlsDisplay[index]} alt="" className="w-full h-full object-cover" /> : null}
                   <button
                     onClick={() => removeMedia(index, true)}
                     className="absolute top-2 right-2 p-2 bg-red-500 hover:bg-red-600 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-all shadow-lg"
@@ -726,7 +731,7 @@ export function PostComposer({ onClose, onSuccess, asPage = false, editPost }: P
             <PostPreview
               platform={previewPlatform}
               caption={caption}
-              mediaUrls={mediaUrls}
+              mediaUrls={mediaUrlsDisplay.filter(Boolean)}
               mediaFiles={mediaFiles}
               username={displayUsername}
             />

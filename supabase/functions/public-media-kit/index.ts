@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
+import { signMediaUrls } from "../_shared/media.ts";
 
 /**
  * public-media-kit
@@ -338,13 +339,18 @@ async function buildPayload(supabase: SupabaseClient, kit: KitRow) {
   const stats_as_of = newestStatDate;
   const stats_stale = !stats_as_of || now - Date.parse(stats_as_of) > staleMs;
 
+  // Kit images uploaded before 2026-09-14 live in the (now private) media
+  // bucket; a brand with no session needs a signed link. Newer uploads go to
+  // the public avatars bucket and pass through unchanged.
+  const [avatar_url] = await signMediaUrls(supabase, [kit.avatar_url || profile.avatar_url || null]);
+
   return {
     kit: {
       slug: kit.slug,
       display_name: kit.display_name || profile.display_name || profile.full_name || null,
       headline: kit.headline,
       bio: kit.bio || profile.bio || null,
-      avatar_url: kit.avatar_url || profile.avatar_url || null,
+      avatar_url: avatar_url || null,
       location: kit.location,
       website: kit.website || profile.website || null,
       theme: kit.theme,

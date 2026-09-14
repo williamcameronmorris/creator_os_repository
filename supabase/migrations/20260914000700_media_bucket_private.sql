@@ -1,0 +1,16 @@
+-- Make the media bucket private.
+--
+-- APPLY AFTER the signed-URL frontend (PR "Launch: first-run and security
+-- hardening") is merged and deployed. Until then the app still renders the
+-- bucket's object URLs directly and would show broken images.
+--
+-- The bucket was created public, so any user's raw uploads, unpublished
+-- footage included, were fetchable without signing in. With
+-- 20260914000600_media_owner_select.sql in place, reads are scoped to the
+-- owner's folder and the app serves files through short-lived signed URLs
+-- (src/lib/mediaUrls.ts). Post for Me and the platform publishers receive a
+-- 24-hour signed URL at publish time (supabase/functions/_shared/media.ts).
+--
+-- The avatars bucket stays public: it holds profile pictures and media kit
+-- images that a public kit page shows to brands with no session.
+update storage.buckets set public = false where id = 'media';
