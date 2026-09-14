@@ -202,7 +202,7 @@ Deno.serve(async (req: Request) => {
 
     // The source post may have aged out of post_performance's 7-day window;
     // fall back to the row itself so the button never dead-ends.
-    let sourcePost: PerfRow | null = (sourcePerfResult.data as PerfRow | null) ?? null;
+    let sourcePost: PerfRow | null = (sourcePerfResult.data as unknown as PerfRow | null) ?? null;
     if (sourcePostId && !sourcePost) {
       const { data: raw } = await supabase
         .from("content_posts")
@@ -230,7 +230,9 @@ Deno.serve(async (req: Request) => {
       if (s.followers === 0 && Number(m.followers_count) > 0) s.followers = Number(m.followers_count);
     }
 
-    const topPerf = ((perfResult.data || []) as PerfRow[]).filter((p) => p.id !== sourcePostId);
+    // PostgREST types a view select as GenericStringError[] when it cannot
+    // resolve the shape, so go through unknown rather than fight it.
+    const topPerf = ((perfResult.data || []) as unknown as PerfRow[]).filter((p) => p.id !== sourcePostId);
     const creatorName = profileResult.data?.first_name || profileResult.data?.display_name || "creator";
     // Niche resolution order: account profile.niche → profiles.niche_preference.
     const niche = accountNiche || (profileResult.data?.niche_preference || "").trim();
