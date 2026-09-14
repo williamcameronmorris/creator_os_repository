@@ -37,9 +37,6 @@ export interface WatchVideo {
   creator_subscriber_count: number | null;
 }
 
-// Fallback niche if the user hasn't set one and resolution fails.
-export const WATCH_NICHE = 'guitar';
-
 export interface EnsureNicheResult {
   niche: string | null;
   ready: boolean;
@@ -51,21 +48,26 @@ export interface EnsureNicheResult {
  * running discovery on demand the first time a niche is seen. May take a
  * while on a cold niche while discovery runs.
  *
- * Pass the active account's PFM id to resolve the niche PER ACCOUNT
- * (user_content_profiles.niche for that account → profiles.niche_preference
- * fallback). Omit for the legacy user-level resolution.
+ * Resolution order on the server, first hit wins: the active account's own
+ * niche (user_content_profiles for that account) → the brand's main voice
+ * row → profiles.niche_preference. Pass both ids so a second brand watches
+ * its own niche rather than inheriting the first one's.
  */
-export async function ensureWatchNiche(socialAccountId?: string | null): Promise<EnsureNicheResult> {
-  const { data, error } = await supabase.functions.invoke('watch-ensure-niche', {
-    body: socialAccountId ? { socialAccountId } : {},
-  });
+export async function ensureWatchNiche(
+  socialAccountId?: string | null,
+  brandId?: string | null,
+): Promise<EnsureNicheResult> {
+  const body: { socialAccountId?: string; brandId?: string } = {};
+  if (socialAccountId) body.socialAccountId = socialAccountId;
+  if (brandId) body.brandId = brandId;
+  const { data, error } = await supabase.functions.invoke('watch-ensure-niche', { body });
   if (error) throw error;
   return (data || { niche: null, ready: false }) as EnsureNicheResult;
 }
 
 export async function getSuggestedCreators(
   platform: string,
-  niche: string = WATCH_NICHE,
+  niche: string,
 ): Promise<SuggestedCreator[]> {
   const { data, error } = await supabase
     .from('suggested_creators')
@@ -79,7 +81,7 @@ export async function getSuggestedCreators(
 
 export async function getWatchFeed(
   platform: string,
-  niche: string = WATCH_NICHE,
+  niche: string,
 ): Promise<WatchVideo[]> {
   const creators = await getSuggestedCreators(platform, niche);
   if (creators.length === 0) return [];
