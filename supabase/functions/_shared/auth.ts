@@ -96,8 +96,12 @@ export async function requireUserOrCron(
  *     layer exists to prevent.
  *   - Else with a `brandId` from the caller (the switcher's active brand for
  *     "all accounts" work): that brand, after verifying `userId` owns it.
- *   - Else: the user's default brand (brands.is_default). Right for user-level
- *     work: cron briefs, comments pulled through the direct grants.
+ *   - Else, ONLY when `allowDefault` is true: the user's default brand
+ *     (brands.is_default). That is right for user-level work with no brand in
+ *     the request: cron briefs, the sync's voice rebuild, comments pulled
+ *     through the direct grants. A client call that lands here has sent no
+ *     brand (the brand context had not loaded), and guessing the default
+ *     would file one brand's work under another, so it throws instead.
  *
  * Nothing client-supplied is trusted as-is: the account id is checked against
  * its mapping's owner, the brand id against brands.owner_id.
@@ -107,6 +111,7 @@ export async function resolveBrandId(
   userId: string,
   socialAccountId?: string | null,
   brandId?: string | null,
+  allowDefault = false,
 ): Promise<string> {
   if (socialAccountId) {
     const { data: mapping, error } = await supabase
@@ -135,6 +140,10 @@ export async function resolveBrandId(
     if (ownErr) throw new Error(`brand lookup: ${ownErr.message}`);
     if (!own) throw new Error("That brand is not yours");
     return own.id as string;
+  }
+
+  if (!allowDefault) {
+    throw new Error("No brand was given for this request. Reload the app and try again.");
   }
 
   const { data: brand, error } = await supabase

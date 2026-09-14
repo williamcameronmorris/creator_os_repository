@@ -79,12 +79,12 @@ export const HELP_SECTIONS: HelpSection[] = [
     name: 'Create',
     tagline: 'The fast path, from the plus button.',
     body: [
-      'Quick post writes and publishes now to any of the brand’s connected accounts.',
-      'Drop a video takes one piece of footage and turns it into platform-shaped posts with captions in your voice, ready to schedule or send.',
+      'Both paths take a video and publish or schedule it through the brand’s connected accounts. The difference is who writes the caption.',
+      'Write a post: you write the caption, and a title when YouTube is in the mix. Drop a video: Clio writes one caption per platform in your voice, and you edit before sending.',
     ],
     find: 'The plus button in the middle of the bottom nav',
     links: [
-      { label: 'Quick post', to: '/compose' },
+      { label: 'Write a post', to: '/compose' },
       { label: 'Drop a video', to: '/drop' },
     ],
   },

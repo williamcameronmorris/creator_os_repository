@@ -251,6 +251,8 @@ export type AIContentSuggestion = {
   reasoning: string;
   expected_performance?: string;
   inspired_by_post_id?: string;
+  /** The hook the idea was chosen for (deep links and Clio's brief). */
+  hook_text?: string;
   status: 'new' | 'pending' | 'accepted' | 'rejected';
   confidence_score?: number;
   created_at: string;

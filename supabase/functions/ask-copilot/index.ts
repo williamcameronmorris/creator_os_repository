@@ -173,7 +173,11 @@ Deno.serve(async (req: Request) => {
     if (socialAccountId) {
       topPostsQuery = topPostsQuery.eq("social_account_id", socialAccountId);
       recentPostsQuery = recentPostsQuery.eq("social_account_id", socialAccountId);
-      metricsQuery = metricsQuery.eq("social_account_id", socialAccountId);
+      // platform_metrics is a brand-level roll-up: postforme-sync and the
+      // follower syncs write every row with social_account_id NULL. A strict
+      // account filter matched nothing and Clio said "no follower data" on a
+      // page showing 143k. Same filter the Analytics page uses.
+      metricsQuery = metricsQuery.or(`social_account_id.eq.${socialAccountId},social_account_id.is.null`);
     }
 
     const [profileResult, metricsResult, postsResult, recentPostsResult, deals, pfmContext, inspirationResult, inspirationCountsResult, voiceContext, accountNiche] = await Promise.all([
@@ -215,11 +219,17 @@ Deno.serve(async (req: Request) => {
       const cur = latestSnapshotByPlatform[m.platform];
       if (!cur || (m.date && m.date > cur.date)) {
         latestSnapshotByPlatform[m.platform] = {
-          followers: m.followers_count || 0,
+          followers: cur?.followers ?? 0,
           avgEng: Number(m.avg_engagement_rate) || 0,
           date: m.date || "",
         };
       }
+      // Followers: the newest row that actually carries a count. A day's row
+      // can exist with followers_count 0 before the follower sync fills it,
+      // and 0 is not a reading — same rule as the Analytics Followers KPI.
+      const followers = Number(m.followers_count) || 0;
+      const slot = latestSnapshotByPlatform[m.platform];
+      if (followers > 0 && slot.followers === 0) slot.followers = followers;
     }
 
     const recentPostsForRollup = recentPostsResult.data || [];
@@ -448,6 +458,7 @@ POST-LEVEL REASONING — when the user asks "what should I post" or "how am I do
 9. If the library has zero Outliers in a relevant framework: if a TEMPLATE BANK formula in that framework fits the user's content, you MAY suggest it as scaffolding — but call it a "template formula to riff on", NEVER cite it as a proven example. If no template fits either, say the library has no example for this framework yet.
 10. Outlier examples ALWAYS take priority over Template Bank formulas. Templates are fallback only.
 11. An empty "THIS WEEK'S POSTS" window is normal — creators don't post every week. NEVER treat it as a blocker. When it's empty, ground your answer in TOP POSTS (last 30 days) and the Inspiration Library. Deliver the ideas the user asked for; do not refuse or ask them to supply a content pillar, audience, or format you can already infer from their posts and captions.
+12. When you give a numbered list of content ideas, end each idea's title line with its target in square brackets, platform then format, e.g. "1. Title [instagram · reel]" or "2. Title [youtube · short]". Use only platforms listed under "Connected platforms". The app reads that tag to open the idea in Studio on the right platform.
 
 ANTI-PATTERNS — do not do these:
 - "Your Instagram is carrying all the momentum at 145K followers, 0.20% engagement…" (this is platform-level kitchen sink)

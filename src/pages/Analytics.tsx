@@ -15,6 +15,17 @@ import {
 } from '../components/analytics/DateComparisonPill';
 import { computeDelta, formatCount, formatPercent, formatCompact } from '../components/analytics/format';
 import type { BreakdownRow, ChartSeries } from '../components/analytics/types';
+import {
+  isoDate,
+  exclusiveEndIso,
+  inRange,
+  sumFollowers,
+  followerDelta,
+  sumEngagement,
+  engagementByDay,
+  engagementRate,
+  type EngagementDay,
+} from '../lib/analyticsMath';
 import { Eyebrow, SectionHead } from '../components/ui/tac';
 import { DataHealthPanel } from '../components/DataHealthPanel';
 import { VerdictCard, VerdictRow } from '../components/analytics/VerdictCard';
@@ -79,6 +90,12 @@ export function Analytics() {
   const [metrics, setMetrics] = useState<PlatformMetricRow[]>([]);
   const [posts, setPosts] = useState<ContentPostRow[]>([]);
   const [perf, setPerf] = useState<PostPerformance[]>([]);
+  // Engagements per brand/platform/day from the engagement_daily view: the
+  // sum of each post's day-over-day change. The old figure was last-minus-
+  // first of a lifetime total over a rolling 150-post window, so a post
+  // ageing out read as zero growth and a new one dumped its whole lifetime
+  // count into a single day.
+  const [engagementDays, setEngagementDays] = useState<EngagementDay[]>([]);
 
   useEffect(() => {
     if (user && activeBrand) loadAnalytics();
@@ -111,6 +128,11 @@ export function Analytics() {
         .eq('brand_id', activeBrand.id)
         .gte('date', queryStartIso)
         .lte('date', queryEndIso);
+      // The end bound is "before the day after": `lte` against a bare date
+      // compared timestamps to the end day's midnight and dropped everything
+      // published that day, which is usually the post you came to check.
+      const rangeStartIso = isoDate(dateValue.range.start);
+      const rangeEndExclusive = exclusiveEndIso(dateValue.range);
       let postsQuery = supabase
         .from('content_posts')
         .select('id, platform, caption, published_date, published_at, likes, comments, views, saves, shares, media_type, thumbnail_url, instagram_post_id, youtube_video_id, tiktok_post_id')
@@ -120,9 +142,15 @@ export function Analytics() {
         // App-published posts set published_at (not published_date), so filter
         // on either column — otherwise the user's own content is excluded.
         .or(
-          `and(published_at.gte.${isoDate(dateValue.range.start)},published_at.lte.${isoDate(dateValue.range.end)}),` +
-          `and(published_date.gte.${isoDate(dateValue.range.start)},published_date.lte.${isoDate(dateValue.range.end)})`
+          `and(published_at.gte.${rangeStartIso},published_at.lt.${rangeEndExclusive}),` +
+          `and(published_date.gte.${rangeStartIso},published_date.lt.${rangeEndExclusive})`
         );
+      let engagementQuery = supabase
+        .from('engagement_daily')
+        .select('date, platform, engagements, views')
+        .eq('brand_id', activeBrand.id)
+        .gte('date', queryStartIso)
+        .lte('date', queryEndIso);
       if (activeAccount) {
         // platform_metrics is a USER-LEVEL roll-up: postforme-sync aggregates
         // across every account on a platform, and the follower syncs are
@@ -134,15 +162,23 @@ export function Analytics() {
           `social_account_id.eq.${activeAccount.id},social_account_id.is.null`
         );
         postsQuery = postsQuery.eq('social_account_id', activeAccount.id);
+        // engagement_daily is per brand and platform; the pinned account's
+        // platform is the closest honest scope.
+        engagementQuery = engagementQuery.eq('platform', activeAccount.platform);
       }
 
-      const [metricsRes, postsRes] = await Promise.all([
+      const [metricsRes, postsRes, engagementRes] = await Promise.all([
         metricsQuery.order('date', { ascending: true }),
         postsQuery.order('likes', { ascending: false }).limit(20),
+        engagementQuery.order('date', { ascending: true }),
       ]);
 
       setMetrics((metricsRes.data ?? []) as PlatformMetricRow[]);
       setPosts((postsRes.data ?? []) as ContentPostRow[]);
+      if (engagementRes.error) {
+        console.warn('engagement_daily query failed:', engagementRes.error.message);
+      }
+      setEngagementDays((engagementRes.data ?? []) as unknown as EngagementDay[]);
 
     } catch (err) {
       console.error('loadAnalytics error', err);
@@ -159,13 +195,26 @@ export function Analytics() {
     [metrics, dateValue]
   );
 
+  const engagementSplit = useMemo(
+    () => ({
+      current: engagementDays.filter((r) => inRange(r.date, dateValue.range)),
+      previous: dateValue.comparison
+        ? engagementDays.filter((r) => inRange(r.date, dateValue.comparison!))
+        : [],
+    }),
+    [engagementDays, dateValue]
+  );
+
   const kpis = useMemo(
-    () => buildKpis(split).filter((k) => hasFollowerDataRef(metrics) || 
-      (k.label !== 'Followers' && k.label !== 'Net Growth')),
-    [split, metrics]
+    () => buildKpis(metrics, split, engagementSplit, dateValue.range, dateValue.comparison)
+      .filter((k) => hasFollowerDataRef(metrics) || (k.label !== 'Followers' && k.label !== 'Net Growth')),
+    [metrics, split, engagementSplit, dateValue]
   );
   const audienceWidget = useMemo(() => buildAudienceWidget(split), [split]);
-  const engagementsWidget = useMemo(() => buildEngagementsWidget(split), [split]);
+  const engagementsWidget = useMemo(
+    () => buildEngagementsWidget(engagementSplit, dateValue.comparison !== null),
+    [engagementSplit, dateValue.comparison]
+  );
 
   // Follower counts still come from the direct Meta/YouTube syncs, which are
   // currently failing auth. Rather than render a wall of zeros and quietly lie,
@@ -284,7 +333,7 @@ export function Analytics() {
 
             <MetricWidget
               title="Engagements"
-              subtitle="Total likes plus comments earned during the selected period."
+              subtitle="Likes plus comments earned during the selected period, summed from each post's daily change."
               series={engagementsWidget.series}
             >
               <BreakdownTable
@@ -333,6 +382,9 @@ export function Analytics() {
 }
 
 // ── Math: snapshot-as-stock period-over-period ─────────────────────────────
+// Followers are a stock (a level read off the newest snapshot); engagements
+// are a flow (summed per day from engagement_daily). The pure rules live in
+// src/lib/analyticsMath.ts so they are unit-tested.
 
 interface SplitMetrics {
   current: PlatformMetricRow[];
@@ -341,15 +393,16 @@ interface SplitMetrics {
   byPlatformPrevious: Map<string, PlatformMetricRow[]>;
 }
 
+interface EngagementSplit {
+  current: EngagementDay[];
+  previous: EngagementDay[];
+}
+
 function splitByRange(
   rows: PlatformMetricRow[],
   range: DateRange,
   comparison: DateRange | null
 ): SplitMetrics {
-  const inRange = (iso: string, r: DateRange) => {
-    const d = iso.slice(0, 10);
-    return d >= isoDate(r.start) && d <= isoDate(r.end);
-  };
   const current = rows.filter((r) => inRange(r.date, range));
   const previous = comparison ? rows.filter((r) => inRange(r.date, comparison)) : [];
   return {
@@ -372,32 +425,11 @@ function groupByPlatform(rows: PlatformMetricRow[]): Map<string, PlatformMetricR
   return out;
 }
 
-/**
- * Snapshot-as-stock delta: take last_value − first_value per platform, sum
- * across platforms. This is what Sprout calls "Net Audience Growth" math —
- * the value at the END of the window minus the value at the START.
- *
- * Replaces the old (broken) approach of summing every daily snapshot, which
- * counted each lifetime cumulative number once per day in the window.
- */
-function periodDelta(byPlatform: Map<string, PlatformMetricRow[]>, field: keyof PlatformMetricRow): number {
+/** Net follower change summed across platforms. Not clamped: a losing week
+ *  used to read as flat. */
+function netFollowerGrowth(byPlatform: Map<string, PlatformMetricRow[]>): number {
   let total = 0;
-  for (const list of byPlatform.values()) {
-    if (list.length === 0) continue;
-    const first = Number(list[0][field] ?? 0);
-    const last = Number(list[list.length - 1][field] ?? 0);
-    total += Math.max(0, last - first);
-  }
-  return total;
-}
-
-/** Latest stock value (sum of most-recent snapshot per platform). For followers. */
-function latestStock(byPlatform: Map<string, PlatformMetricRow[]>, field: keyof PlatformMetricRow): number {
-  let total = 0;
-  for (const list of byPlatform.values()) {
-    if (list.length === 0) continue;
-    total += Number(list[list.length - 1][field] ?? 0);
-  }
+  for (const list of byPlatform.values()) total += followerDelta(list);
   return total;
 }
 
@@ -407,34 +439,43 @@ function hasFollowerDataRef(metrics: PlatformMetricRow[]): boolean {
   return metrics.some((m) => (m.followers_count ?? 0) > 0);
 }
 
-function buildKpis(split: SplitMetrics) {
-  const curEngagements =
-    periodDelta(split.byPlatformCurrent, 'total_likes') +
-    periodDelta(split.byPlatformCurrent, 'total_comments');
-  const prevEngagements =
-    periodDelta(split.byPlatformPrevious, 'total_likes') +
-    periodDelta(split.byPlatformPrevious, 'total_comments');
+function buildKpis(
+  metrics: PlatformMetricRow[],
+  split: SplitMetrics,
+  engagement: EngagementSplit,
+  range: DateRange,
+  comparison: DateRange | null
+) {
+  const cur = sumEngagement(engagement.current);
+  const prev = sumEngagement(engagement.previous);
+  const hasComparison = comparison !== null;
 
-  const curFollowers = latestStock(split.byPlatformCurrent, 'followers_count');
-  const prevFollowers = latestStock(split.byPlatformPrevious, 'followers_count');
+  // Followers: newest real count per platform on or before the range end.
+  // Rows born at 0 by the midnight sync do not count, and the comparison
+  // period reads the same way against its own end date.
+  const curFollowers = sumFollowers(metrics, isoDate(range.end));
+  const prevFollowers = comparison ? sumFollowers(metrics, isoDate(comparison.end)) : 0;
 
-  const curNetGrowth = periodDelta(split.byPlatformCurrent, 'followers_count');
-  const prevNetGrowth = periodDelta(split.byPlatformPrevious, 'followers_count');
+  const curNetGrowth = netFollowerGrowth(split.byPlatformCurrent);
+  const prevNetGrowth = netFollowerGrowth(split.byPlatformPrevious);
 
-  const curRate = curFollowers > 0 ? (curEngagements / curFollowers) * 100 : 0;
-  const prevRate = prevFollowers > 0 ? (prevEngagements / prevFollowers) * 100 : 0;
+  // Interactions over reach (views earned in the period), never over
+  // followers: a follower-based rate printed 0.00% as fact wherever the
+  // follower sync had not run. N/A when there is nothing to divide by.
+  const curRate = engagementRate(cur.engagements, cur.views);
+  const prevRate = engagementRate(prev.engagements, prev.views);
 
   return [
     {
       label: 'Engagements',
-      value: formatCompact(curEngagements),
-      delta: computeDelta(curEngagements, split.previous.length > 0 ? prevEngagements : null),
+      value: formatCompact(cur.engagements),
+      delta: computeDelta(cur.engagements, hasComparison ? prev.engagements : null),
       hero: true,
     },
     {
       label: 'Followers',
       value: formatCompact(curFollowers),
-      delta: computeDelta(curFollowers, split.previous.length > 0 ? prevFollowers : null),
+      delta: computeDelta(curFollowers, hasComparison && prevFollowers > 0 ? prevFollowers : null),
     },
     {
       label: 'Net Growth',
@@ -444,7 +485,7 @@ function buildKpis(split: SplitMetrics) {
     {
       label: 'Engagement Rate',
       value: formatPercent(curRate, 2),
-      delta: computeDelta(curRate, split.previous.length > 0 ? prevRate : null),
+      delta: computeDelta(curRate, hasComparison ? prevRate : null),
     },
   ];
 }
@@ -455,12 +496,16 @@ function buildAudienceWidget(split: SplitMetrics) {
       name: PLATFORM_LABELS[platform] ?? platform,
       variant: 'line',
       color: idx === 0 ? 'var(--chart-1)' : idx === 1 ? 'var(--chart-3)' : 'var(--chart-2)',
-      data: rows.map((r) => ({ x: format(parseISO(r.date), 'MMM d'), y: r.followers_count })),
+      // Skip the zeros: a row the sync opened before the follower count
+      // landed is a gap in the line, not a drop to nothing.
+      data: rows
+        .filter((r) => (r.followers_count ?? 0) > 0)
+        .map((r) => ({ x: format(parseISO(r.date), 'MMM d'), y: r.followers_count })),
     })
   );
 
-  const totalCur = periodDelta(split.byPlatformCurrent, 'followers_count');
-  const totalPrev = periodDelta(split.byPlatformPrevious, 'followers_count');
+  const totalCur = netFollowerGrowth(split.byPlatformCurrent);
+  const totalPrev = netFollowerGrowth(split.byPlatformPrevious);
   const rows: BreakdownRow[] = [
     {
       label: 'Net Audience Growth',
@@ -469,8 +514,8 @@ function buildAudienceWidget(split: SplitMetrics) {
       isTotal: true,
     },
     ...Array.from(split.byPlatformCurrent.keys()).map((platform): BreakdownRow => {
-      const cur = perPlatformDelta(split.byPlatformCurrent, platform, 'followers_count');
-      const prev = perPlatformDelta(split.byPlatformPrevious, platform, 'followers_count');
+      const cur = followerDelta(split.byPlatformCurrent.get(platform) ?? []);
+      const prev = followerDelta(split.byPlatformPrevious.get(platform) ?? []);
       return {
         label: `${PLATFORM_LABELS[platform] ?? platform} Net Follower Growth`,
         values: [formatCount(cur)],
@@ -482,83 +527,40 @@ function buildAudienceWidget(split: SplitMetrics) {
   return { series, rows };
 }
 
-function buildEngagementsWidget(split: SplitMetrics) {
-  // Engagements per day = (today's lifetime total likes+comments) − (yesterday's),
-  // computed per platform then summed across platforms for the chart.
-  const dailyMap = new Map<string, Record<string, number>>();
-  for (const [platform, rows] of split.byPlatformCurrent.entries()) {
-    for (let i = 1; i < rows.length; i++) {
-      const prev = rows[i - 1];
-      const cur = rows[i];
-      const dailyEng = Math.max(
-        0,
-        (cur.total_likes - prev.total_likes) + (cur.total_comments - prev.total_comments)
-      );
-      const key = format(parseISO(cur.date), 'MMM d');
-      const row = dailyMap.get(key) ?? { all: 0 };
-      row[platform] = (row[platform] ?? 0) + dailyEng;
-      row.all = (row.all ?? 0) + dailyEng;
-      dailyMap.set(key, row);
-    }
-  }
+function buildEngagementsWidget(engagement: EngagementSplit, hasComparison: boolean) {
   const series: ChartSeries[] = [
     {
       name: 'Engagements',
       variant: 'area',
       color: 'var(--chart-1)',
-      data: Array.from(dailyMap.entries()).map(([x, v]) => ({ x, y: v.all ?? 0 })),
+      data: engagementByDay(engagement.current).map((d) => ({
+        x: format(parseISO(d.date), 'MMM d'),
+        y: d.engagements,
+      })),
     },
   ];
 
-  const totalCur =
-    periodDelta(split.byPlatformCurrent, 'total_likes') +
-    periodDelta(split.byPlatformCurrent, 'total_comments');
-  const totalPrev =
-    periodDelta(split.byPlatformPrevious, 'total_likes') +
-    periodDelta(split.byPlatformPrevious, 'total_comments');
+  const totalCur = sumEngagement(engagement.current).engagements;
+  const totalPrev = sumEngagement(engagement.previous).engagements;
+  const platforms = Array.from(new Set(engagement.current.map((r) => r.platform)));
 
   const rows: BreakdownRow[] = [
     {
       label: 'Engagements',
       values: [formatCount(totalCur)],
-      delta: computeDelta(totalCur, split.previous.length > 0 ? totalPrev : null),
+      delta: computeDelta(totalCur, hasComparison ? totalPrev : null),
       isTotal: true,
     },
-    ...Array.from(split.byPlatformCurrent.keys()).map((platform): BreakdownRow => {
-      const cur =
-        perPlatformDelta(split.byPlatformCurrent, platform, 'total_likes') +
-        perPlatformDelta(split.byPlatformCurrent, platform, 'total_comments');
-      const prev =
-        perPlatformDelta(split.byPlatformPrevious, platform, 'total_likes') +
-        perPlatformDelta(split.byPlatformPrevious, platform, 'total_comments');
+    ...platforms.map((platform): BreakdownRow => {
+      const cur = sumEngagement(engagement.current.filter((r) => r.platform === platform)).engagements;
+      const prev = sumEngagement(engagement.previous.filter((r) => r.platform === platform)).engagements;
       return {
         label: `${PLATFORM_LABELS[platform] ?? platform} Engagements`,
         values: [formatCount(cur)],
-        delta: computeDelta(cur, split.previous.length > 0 ? prev : null),
+        delta: computeDelta(cur, hasComparison ? prev : null),
       };
     }),
   ];
 
   return { series, rows };
 }
-
-function perPlatformDelta(
-  byPlatform: Map<string, PlatformMetricRow[]>,
-  platform: string,
-  field: keyof PlatformMetricRow
-): number {
-  const list = byPlatform.get(platform) ?? [];
-  if (list.length === 0) return 0;
-  return Math.max(0, Number(list[list.length - 1][field] ?? 0) - Number(list[0][field] ?? 0));
-}
-
-// ── Small helpers ───────────────────────────────────────────────────────────
-
-function isoDate(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
-
-

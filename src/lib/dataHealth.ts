@@ -37,6 +37,20 @@ export interface DataHealth {
   platforms_with_metrics: number;
   scored_posts: number;
   posts_with_verdict: number;
+  /** One entry per platform the brand posts on or has connected. Absent
+   *  when the view predates per-platform rows. */
+  platforms?: PlatformHealth[];
+}
+
+/** Sync health for one platform of one brand. */
+export interface PlatformHealth {
+  platform: string;
+  accounts_connected: number | null;
+  newest_snapshot_at: string | null;
+  total_posts: number;
+  newest_post_at: string | null;
+  newest_metric_date: string | null;
+  posts_with_metrics_7d: number;
 }
 
 export type Severity = 'blocked' | 'warning' | 'ok';
@@ -66,18 +80,69 @@ function fmtDate(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
 }
 
-/** One row per BRAND: connections, syncs and coverage for that brand only. */
+const PLATFORM_LABELS: Record<string, string> = {
+  instagram: 'Instagram',
+  tiktok: 'TikTok',
+  youtube: 'YouTube',
+  facebook: 'Facebook',
+  threads: 'Threads',
+  x: 'X',
+  bluesky: 'Bluesky',
+};
+
+function platformLabel(p: string): string {
+  return PLATFORM_LABELS[p] ?? p;
+}
+
+type DataHealthRow = DataHealth & {
+  platform: string | null;
+  platform_accounts_connected: number | null;
+  platform_newest_snapshot_at: string | null;
+  platform_total_posts: number | null;
+  platform_newest_post_at: string | null;
+  platform_newest_metric_date: string | null;
+  platform_posts_with_metrics_7d: number | null;
+};
+
+/**
+ * The view returns one row per BRAND and PLATFORM, brand-level columns
+ * repeated on each. Fold them into one DataHealth with a platforms list. A
+ * brand-level max across platforms is what let a live platform hide a dead
+ * one: Gibsunday's Instagram feed went dark for ten days while the panel
+ * said everything was syncing.
+ */
+export function foldDataHealthRows(rows: DataHealthRow[]): DataHealth | null {
+  if (rows.length === 0) return null;
+  const {
+    platform: _p, platform_accounts_connected: _a, platform_newest_snapshot_at: _s,
+    platform_total_posts: _t, platform_newest_post_at: _n, platform_newest_metric_date: _m,
+    platform_posts_with_metrics_7d: _w, ...brand
+  } = rows[0];
+  const platforms: PlatformHealth[] = rows
+    .filter((r) => !!r.platform)
+    .map((r) => ({
+      platform: r.platform!,
+      accounts_connected: r.platform_accounts_connected,
+      newest_snapshot_at: r.platform_newest_snapshot_at,
+      total_posts: r.platform_total_posts ?? 0,
+      newest_post_at: r.platform_newest_post_at,
+      newest_metric_date: r.platform_newest_metric_date,
+      posts_with_metrics_7d: r.platform_posts_with_metrics_7d ?? 0,
+    }));
+  return { ...(brand as DataHealth), platforms };
+}
+
+/** Connections, syncs and coverage for one brand, per platform. */
 export async function fetchDataHealth(brandId: string): Promise<DataHealth | null> {
   const { data, error } = await supabase
     .from('data_health')
     .select('*')
-    .eq('brand_id', brandId)
-    .maybeSingle();
+    .eq('brand_id', brandId);
   if (error) {
     console.warn('data_health query failed:', error.message);
     return null;
   }
-  return (data as DataHealth) ?? null;
+  return foldDataHealthRows((data ?? []) as unknown as DataHealthRow[]);
 }
 
 export interface DiagnoseOptions {
@@ -154,16 +219,47 @@ export function diagnose(h: DataHealth | null, opts: DiagnoseOptions = {}): Find
     });
   }
 
-  const metricAge = daysSince(h.newest_metric_date);
-  if (h.total_posts > 0 && (metricAge === null || metricAge > 2)) {
-    findings.push({
-      id: 'metrics-stale',
-      severity: 'warning',
-      title: metricAge === null
-        ? 'No metrics have been recorded yet'
-        : `Metrics are ${metricAge} days old`,
-      detail: 'Numbers on this page reflect the last successful sync, not today.',
-    });
+  // Per platform, worst first. One platform's fresh metrics never vouch for
+  // another's: the page hides a platform whose metrics are over a week old
+  // (post_performance's freshness gate), so say which one and since when
+  // instead of letting its rows vanish.
+  const platforms = (h.platforms ?? []).filter(
+    (p) => p.total_posts > 0 || (p.accounts_connected ?? 0) > 0
+  );
+  if (platforms.length > 0) {
+    const stale = platforms
+      .map((p) => ({ p, age: daysSince(p.newest_metric_date) }))
+      .filter(({ age }) => age === null || age > 2)
+      .sort((a, b) => (b.age ?? Infinity) - (a.age ?? Infinity));
+    for (const { p, age } of stale) {
+      const name = platformLabel(p.platform);
+      const dead = age === null || age > 7;
+      findings.push({
+        id: `metrics-stale-${p.platform}`,
+        severity: dead ? 'blocked' : 'warning',
+        title: age === null
+          ? `No ${name} metrics yet`
+          : `${name} metrics stale since ${fmtDate(p.newest_metric_date!)}`,
+        detail: age === null
+          ? `${name} has ${p.total_posts.toLocaleString()} posts but no metrics have come back for them. Nothing from ${name} can be scored until they do.`
+          : dead
+            ? `The ${name} feed has returned no post metrics for ${age} days. ${name} posts are left out of verdicts and lanes until it does, so check the connection.`
+            : `${name} numbers reflect the last successful sync, ${age} days ago, not today.`,
+        action: dead ? { label: 'Check the connection', to: '/office/connections' } : undefined,
+      });
+    }
+  } else {
+    const metricAge = daysSince(h.newest_metric_date);
+    if (h.total_posts > 0 && (metricAge === null || metricAge > 2)) {
+      findings.push({
+        id: 'metrics-stale',
+        severity: 'warning',
+        title: metricAge === null
+          ? 'No metrics have been recorded yet'
+          : `Metrics are ${metricAge} days old`,
+        detail: 'Numbers on this page reflect the last successful sync, not today.',
+      });
+    }
   }
 
   // ── Content vs the selected window ───────────────────────────────────────

@@ -2,6 +2,8 @@ import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useBrand } from '../contexts/BrandContext';
+import { useAccount } from '../contexts/AccountContext';
+import { useSubscription } from '../contexts/SubscriptionContext';
 import { supabase } from '../lib/supabase';
 import { mediaRef } from '../lib/mediaUrls';
 import {
@@ -9,20 +11,27 @@ import {
   Instagram, Youtube, Facebook, Twitter, Sparkles, AtSign, Cloud, Globe,
 } from 'lucide-react';
 import {
-  listPostForMeAccounts,
   createPostForMePost,
-  listConnectedAccounts,
-  type PostForMeAccount,
   POSTFORME_PLATFORMS,
 } from '../lib/postforme';
 import {
   getSuggestedTimes,
-  suggestedTimeToDate,
+  suggestedTimeToLocalInput,
   formatSuggestedTime,
   type SuggestedTime,
 } from '../lib/suggestedTimes';
 import { useTimezone } from '../hooks/useTimezone';
-import { localInputToUtc } from '../lib/timezone';
+import { localInputToUtc, utcToLocalInput } from '../lib/timezone';
+import {
+  fileTooLargeMessage,
+  readVideoDuration,
+  youtubeContentType,
+  YOUTUBE_TITLE_LIMIT,
+  MIN_SCHEDULE_LEAD_MINUTES,
+  scheduleLeadTimeMessage,
+  scheduleCapMessage,
+  countScheduledPosts,
+} from '../lib/postingRules';
 
 /**
  * ComposePost — Post for Me-backed quick publisher.
@@ -47,6 +56,8 @@ interface MediaItem {
   file: File;
   preview: string;
   kind: 'image' | 'video';
+  /** Seconds, once the metadata has been read; null when unreadable. */
+  durationSeconds?: number | null;
 }
 
 interface PlatformRule {
@@ -65,7 +76,9 @@ const PLATFORM_RULES: Record<string, PlatformRule> = {
   linkedin:  { captionLimit: 3000,   mediaRequired: false, mediaMax: 9,  mediaTypes: 'both' },
   instagram: { captionLimit: 2200,   mediaRequired: true,  mediaMax: 10, mediaTypes: 'both' },
   tiktok:    { captionLimit: 4000,   mediaRequired: true,  mediaMax: 1,  mediaTypes: 'video' },
-  youtube:   { captionLimit: 100,    mediaRequired: true,  mediaMax: 1,  mediaTypes: 'video' },
+  // 100 is YouTube's TITLE limit, which has its own box below; the caption
+  // becomes the video description.
+  youtube:   { captionLimit: 5000,   mediaRequired: true,  mediaMax: 1,  mediaTypes: 'video' },
   facebook:  { captionLimit: 63000,  mediaRequired: false, mediaMax: 10, mediaTypes: 'both' },
 };
 
@@ -86,7 +99,12 @@ const PLATFORM_NAMES: Record<string, string> = Object.fromEntries(
 
 export function ComposePost() {
   const { user } = useAuth();
-  const { activeBrand } = useBrand();
+  const { activeBrand, accountBrandMap } = useBrand();
+  // Accounts come brand-filtered from the account context, so a post can only
+  // go to accounts of the brand it is stamped with.
+  const { accounts: connectedAccounts, loading: loadingAccounts } = useAccount();
+  const { tier } = useSubscription();
+  const isPremium = tier === 'paid';
   const navigate = useNavigate();
   const { timezone } = useTimezone();
 
@@ -96,13 +114,12 @@ export function ComposePost() {
   // publish the post twice to the user's real accounts.
   const inFlight = useRef(false);
 
-  const [accounts, setAccounts] = useState<PostForMeAccount[]>([]);
-  const [loadingAccounts, setLoadingAccounts] = useState(true);
   // Per-ACCOUNT selection (not per-platform): a user may have several accounts
   // on the same platform and picks exactly which ones this post goes to.
   const [selectedAccountIds, setSelectedAccountIds] = useState<string[]>([]);
 
   const [caption, setCaption] = useState('');
+  const [ytTitle, setYtTitle] = useState('');
   const [media, setMedia] = useState<MediaItem[]>([]);
   const [mode, setMode] = useState<Mode>('now');
   const [scheduleAt, setScheduleAt] = useState('');
@@ -112,38 +129,31 @@ export function ComposePost() {
   const [publishState, setPublishState] = useState<PublishState>('idle');
   const [errorMsg, setErrorMsg] = useState('');
 
+  // Default to the brand's first account, and start over when the brand (and
+  // so the account list) changes, so a selection never outlives its brand.
+  const accountsKey = connectedAccounts.map((a) => a.id).join(',');
   useEffect(() => {
-    if (!user) return;
-    listPostForMeAccounts(user.id, false)
-      .then((s) => {
-        setAccounts(s.accounts);
-        const connected = listConnectedAccounts(s.accounts);
-        if (connected.length > 0) {
-          setSelectedAccountIds([connected[0].id]);
-        }
-      })
-      .catch(() => setAccounts([]))
-      .finally(() => setLoadingAccounts(false));
-  }, [user]);
+    setSelectedAccountIds(connectedAccounts.length > 0 ? [connectedAccounts[0].id] : []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeBrand?.id, accountsKey]);
 
-  const connectedAccounts = listConnectedAccounts(accounts);
   const selectedAccounts = connectedAccounts.filter((a) => selectedAccountIds.includes(a.id));
   // Union of platforms across the selected accounts — validation rules derive
   // from this (two accounts on the same platform contribute it once).
   const selectedPlatforms = [...new Set(selectedAccounts.map((a) => a.platform))];
 
   useEffect(() => {
-    if (!user || selectedPlatforms.length === 0) {
+    if (!user || !activeBrand || selectedPlatforms.length === 0) {
       setSuggestedTimes([]);
       return;
     }
     const primary = selectedPlatforms[0];
-    getSuggestedTimes(user.id, primary).then((r) => {
+    getSuggestedTimes(user.id, primary, activeBrand.id).then((r) => {
       setSuggestedTimes(r.times);
       setSuggestedSource(r.source);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, selectedPlatforms.join(',')]);
+  }, [user, activeBrand?.id, selectedPlatforms.join(',')]);
 
   useEffect(() => {
     return () => {
@@ -176,6 +186,16 @@ export function ComposePost() {
 
   const platformNames = (ids: string[]) => ids.map((p) => PLATFORM_NAMES[p] ?? p).join(', ');
 
+  // YouTube needs a title of its own; it is sent as snippet.title while the
+  // caption goes out as the description.
+  const youtubeSelected = selectedPlatforms.includes('youtube');
+  const titleMissing = youtubeSelected && ytTitle.trim().length === 0;
+  const titleOver = ytTitle.length > YOUTUBE_TITLE_LIMIT;
+  const minScheduleAt = utcToLocalInput(
+    new Date(Date.now() + MIN_SCHEDULE_LEAD_MINUTES * 60_000).toISOString(),
+    timezone,
+  );
+
   const isEmpty = caption.trim().length === 0;
   const noAccountSelected = selectedAccountIds.length === 0;
   const missingRequiredMedia = mediaRequiredByAny && media.length === 0;
@@ -191,10 +211,29 @@ export function ComposePost() {
   const onFilesPicked = (e: React.ChangeEvent<HTMLInputElement>) => {
     const list = e.target.files;
     if (!list) return;
+    if (publishState === 'error') {
+      setPublishState('idle');
+      setErrorMsg('');
+    }
     const next: MediaItem[] = [...media];
     for (const f of Array.from(list)) {
+      // The bucket refuses anything over the cap; say so now, not after a
+      // long upload fails.
+      const tooLarge = fileTooLargeMessage(f);
+      if (tooLarge) {
+        setPublishState('error');
+        setErrorMsg(tooLarge);
+        continue;
+      }
       const kind: 'image' | 'video' = f.type.startsWith('video') ? 'video' : 'image';
-      next.push({ file: f, preview: URL.createObjectURL(f), kind });
+      const item: MediaItem = { file: f, preview: URL.createObjectURL(f), kind };
+      next.push(item);
+      if (kind === 'video') {
+        // Decides Short vs video for YouTube once the metadata is in.
+        readVideoDuration(f).then((d) => {
+          setMedia((prev) => prev.map((m) => (m.file === f ? { ...m, durationSeconds: d } : m)));
+        });
+      }
     }
     setMedia(next);
     if (fileInputRef.current) fileInputRef.current.value = '';
@@ -210,11 +249,8 @@ export function ComposePost() {
   };
 
   const applySuggestedTime = (time: SuggestedTime) => {
-    const date = suggestedTimeToDate(time);
-    const pad = (n: number) => String(n).padStart(2, '0');
-    setScheduleAt(
-      `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
-    );
+    // Built in the profile timezone, which is how submit reads it back.
+    setScheduleAt(suggestedTimeToLocalInput(time, timezone));
   };
 
   const uploadMedia = async (): Promise<string[]> => {
@@ -235,6 +271,7 @@ export function ComposePost() {
   const submit = async () => {
     if (inFlight.current) return;
     if (!user || !activeBrand || isEmpty || overLimit || noAccountSelected) return;
+    if (titleMissing || titleOver) return;
     if (missingRequiredMedia) {
       setPublishState('error');
       setErrorMsg(`${platformNames(platformsRequiringMedia)} require${platformsRequiringMedia.length === 1 ? 's' : ''} at least one media file.`);
@@ -256,27 +293,27 @@ export function ComposePost() {
     setErrorMsg('');
 
     try {
-      const mediaUrls = await uploadMedia();
-
+      // Everything that can refuse the post is checked BEFORE the upload, so
+      // a rejected post never costs a 50 MB round trip.
       let scheduledAt: string | undefined;
       let scheduledForRow: string;
       if (mode === 'now') {
         scheduledAt = undefined;
         scheduledForRow = new Date().toISOString();
       } else if (mode === 'schedule') {
-        if (!scheduleAt) throw new Error('Pick a date/time to schedule');
+        if (!scheduleAt) throw new Error('Pick a date and time to schedule.');
         // Interpret the datetime-local value in the user's profile timezone,
         // matching how OfficeHub/Schedule display it. Using new Date(...) here
         // would interpret it in the browser's timezone and publish at the wrong
         // wall-clock time whenever the two differ.
         scheduledAt = localInputToUtc(scheduleAt, timezone);
         scheduledForRow = scheduledAt;
+        const tooSoon = scheduleLeadTimeMessage(scheduledAt);
+        if (tooSoon) throw new Error(tooSoon);
       } else {
         scheduledAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
         scheduledForRow = scheduledAt;
       }
-
-      setPublishState('submitting');
 
       // Re-derive from live account state so a mid-compose disconnect can't
       // send to a stale account id.
@@ -286,12 +323,35 @@ export function ComposePost() {
         throw new Error('No connected accounts found for the selected accounts.');
       }
 
+      // Never stamp another brand's account with this brand id: that would
+      // file its posts and metrics under the wrong brand.
+      const foreign = targets.find((a) => accountBrandMap.get(a.id) !== activeBrand.id);
+      if (foreign) {
+        throw new Error(
+          `${foreign.username ? `@${foreign.username}` : foreign.platform} is not part of ${activeBrand.name}. Switch brand or move the account under Connections.`,
+        );
+      }
+
+      if (mode !== 'now') {
+        const scheduledCount = await countScheduledPosts(user.id, activeBrand.id);
+        const capped = scheduleCapMessage(scheduledCount, targets.length, isPremium);
+        if (capped) throw new Error(capped);
+      }
+
+      const mediaUrls = await uploadMedia();
+
+      setPublishState('submitting');
+
       const post = await createPostForMePost({
         userId: user.id,
         caption: caption.trim(),
         mediaUrls,
         socialAccountIds: targets.map((a) => a.id),
         scheduledAt,
+        // YouTube gets a real title; the caption is its description.
+        platformConfigurations: youtubeSelected
+          ? { youtube: { title: ytTitle.trim(), description: caption.trim() } }
+          : undefined,
       });
 
       // Classify media so Analytics/format rendering don't mislabel videos as images.
@@ -300,6 +360,8 @@ export function ComposePost() {
         : media.length > 1
           ? 'carousel'
           : 'image';
+
+      const videoDuration = media.find((m) => m.kind === 'video')?.durationSeconds ?? null;
 
       // One mirror row PER SELECTED ACCOUNT (not per platform) so two accounts
       // on the same platform each get their own attributable row.
@@ -310,6 +372,7 @@ export function ComposePost() {
         social_account_id: account.id,
         account_username: account.username || null,
         caption: caption.trim(),
+        title: account.platform === 'youtube' ? ytTitle.trim() : null,
         media_urls: mediaUrls,
         media_type: mediaType,
         scheduled_date: scheduledForRow,
@@ -317,7 +380,7 @@ export function ComposePost() {
         status: mode === 'now' ? 'publishing' : 'scheduled',
         provider: 'postforme',
         postforme_post_id: post.id,
-        content_type: account.platform === 'youtube' ? 'short' : 'post',
+        content_type: account.platform === 'youtube' ? youtubeContentType(videoDuration) : 'post',
       }));
 
       const { error: insertErr } = await supabase.from('content_posts').insert(rows);
@@ -464,6 +527,32 @@ export function ComposePost() {
           );
         })}
       </div>
+
+      {/* YouTube title — only when a YouTube account is selected */}
+      {youtubeSelected && (
+        <div className="mb-6">
+          <div className="flex justify-between mb-2">
+            <span className="t-micro">YOUTUBE TITLE</span>
+            <span
+              className="font-mono text-[12px]"
+              style={{ color: titleOver ? 'var(--destructive)' : 'var(--muted-foreground)' }}
+            >
+              {ytTitle.length}/{YOUTUBE_TITLE_LIMIT}
+            </span>
+          </div>
+          <input
+            type="text"
+            value={ytTitle}
+            onChange={(e) => setYtTitle(e.target.value)}
+            placeholder="The video's title on YouTube"
+            className="w-full bg-transparent border px-3 py-2 text-foreground outline-none transition-colors placeholder:text-muted-foreground"
+            style={{ borderColor: titleOver ? 'var(--destructive)' : 'var(--border)' }}
+          />
+          <p className="t-micro text-muted-foreground mt-2">
+            The caption below becomes the video description.
+          </p>
+        </div>
+      )}
 
       {/* Caption */}
       <div className="ie-border-t ie-border-b py-6 mb-6">
@@ -615,6 +704,7 @@ export function ComposePost() {
           <input
             type="datetime-local"
             value={scheduleAt}
+            min={minScheduleAt}
             onChange={(e) => setScheduleAt(e.target.value)}
             className="w-full bg-transparent border border-border px-3 py-2 font-mono text-sm text-foreground outline-none focus:border-accent transition-colors"
           />
@@ -636,7 +726,7 @@ export function ComposePost() {
       <button
         onClick={submit}
         disabled={
-          isEmpty || overLimit || noAccountSelected ||
+          isEmpty || overLimit || noAccountSelected || titleMissing || titleOver ||
           missingRequiredMedia || tooMuchMedia || wrongMediaType ||
           (mode === 'schedule' && !scheduleAt) ||
           publishState === 'uploading' || publishState === 'submitting'

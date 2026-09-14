@@ -67,9 +67,14 @@ function inlineMarkdown(text: string, lineKey: number) {
 // paragraphs / Hook / Why) as well as plain "1. Title" lines.
 // Returns { ideas: [{ number, title, body }], preamble } or null when fewer
 // than 2 ideas are found.
+// An idea title may end with its target in brackets, "[instagram · reel]",
+// which ask-copilot is asked to emit so the card can carry platform and
+// format into Studio instead of defaulting everything to an Instagram reel.
+const IDEA_TARGET = /\s*[[(](instagram|tiktok|youtube|facebook|threads|x|bluesky)(?:\s*[·•|/,-]\s*([a-z][a-z ]*?))?\s*[\])]\s*$/i;
+
 function parseActionableIdeas(text: string) {
   const lines = text.split('\n');
-  const ideas: { number: number; title: string; body: string }[] = [];
+  const ideas: { number: number; title: string; body: string; platform?: string; content_type?: string }[] = [];
   const preambleLines: string[] = [];
   let current: { number: number; title: string; bodyLines: string[] } | null = null;
 
@@ -79,7 +84,15 @@ function parseActionableIdeas(text: string) {
 
   const flush = () => {
     if (current) {
-      ideas.push({ number: current.number, title: current.title, body: current.bodyLines.join('\n').trim() });
+      const target = current.title.match(IDEA_TARGET);
+      const title = target ? current.title.slice(0, target.index).trim() : current.title;
+      ideas.push({
+        number: current.number,
+        title,
+        body: current.bodyLines.join('\n').trim(),
+        platform: target ? target[1].toLowerCase() : undefined,
+        content_type: target?.[2] ? target[2].trim().toLowerCase() : undefined,
+      });
     }
   };
 
@@ -240,6 +253,11 @@ export function Clio() {
 
   const handleSubmit = async () => {
     if (!query.trim() || isLoading) return;
+    // The server refuses a question with no brand rather than guessing one.
+    if (!activeBrand) {
+      setErrorMsg('Your brands are still loading. Try again in a moment.');
+      return;
+    }
     const question = query.trim();
     setIsLoading(true);
     setErrorMsg('');
@@ -252,7 +270,7 @@ export function Clio() {
       const res = await supabase.functions.invoke('ask-copilot', {
         body: {
           userId: user!.id,
-          brandId: activeBrand?.id,
+          brandId: activeBrand.id,
           question,
           // Prior turns so Clio keeps context across follow-ups. The edge
           // function validates + caps this at the last 12 turns anyway.
@@ -502,6 +520,8 @@ export function Clio() {
                         idea: idea.title,
                         reasoning: idea.body.slice(0, 600),
                         autostart: '1',
+                        ...(idea.platform ? { platform: idea.platform } : {}),
+                        ...(idea.content_type ? { type: idea.content_type } : {}),
                       });
                       navigate(`/studio/workflow?${params.toString()}`);
                     }}

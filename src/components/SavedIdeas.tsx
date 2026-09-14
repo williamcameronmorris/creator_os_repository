@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useBrand } from '../contexts/BrandContext';
 import { supabase } from '../lib/supabase';
@@ -16,6 +17,7 @@ import {
   Lightbulb,
   Search,
   X,
+  ArrowRight,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { useConfirm } from './ui/ConfirmDialog';
@@ -48,6 +50,7 @@ export function SavedIdeas() {
   const { user } = useAuth();
   const { activeBrand } = useBrand();
   const confirm = useConfirm();
+  const navigate = useNavigate();
   const [ideas, setIdeas] = useState<SavedIdea[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -366,11 +369,27 @@ export function SavedIdeas() {
 
               <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                 <button
-                  onClick={() => handleEdit(idea)}
+                  onClick={() => {
+                    // Same deep link Clio's idea cards use: Studio creates the
+                    // workflow and opens Scripting on this idea.
+                    const params = new URLSearchParams({
+                      autostart: '1',
+                      idea: idea.title,
+                      reasoning: (idea.description || 'From your saved ideas').slice(0, 600),
+                    });
+                    navigate(`/studio/workflow?${params.toString()}`);
+                  }}
                   className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-mono font-bold tracking-[0.04em] border border-foreground bg-foreground text-background hover:bg-background hover:text-foreground transition-colors"
                 >
+                  <ArrowRight className="w-4 h-4" />
+                  Start project
+                </button>
+                <button
+                  onClick={() => handleEdit(idea)}
+                  className="flex items-center justify-center p-2 border border-border hover:bg-accent transition-colors"
+                  title="Edit"
+                >
                   <Edit className="w-4 h-4" />
-                  Edit
                 </button>
                 <button
                   onClick={() => toggleArchive(idea)}

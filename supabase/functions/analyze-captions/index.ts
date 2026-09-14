@@ -69,9 +69,10 @@ Deno.serve(async (req: Request) => {
       typeof (body as { brandId?: unknown }).brandId === "string"
         ? ((body as { brandId: string }).brandId.trim() || null)
         : null;
-    // The voice profile belongs to the brand of the scoped account (or the
-    // default brand for the account-less legacy row).
-    const brandId = await resolveBrandId(supabase, userId, socialAccountId, requestedBrandId);
+    // The voice profile belongs to the brand of the scoped account, else the
+    // brand the caller named. Only the sync's cron call may fall back to the
+    // default brand; a client call with no brand is refused.
+    const brandId = await resolveBrandId(supabase, userId, socialAccountId, requestedBrandId, auth.isCron);
 
     if (!userId) throw new Error("Missing required field: userId");
 
@@ -82,7 +83,8 @@ Deno.serve(async (req: Request) => {
       let freshnessQuery = supabase
         .from("user_content_profiles")
         .select("analyzed_at, posts_analyzed")
-        .eq("user_id", userId);
+        .eq("user_id", userId)
+        .eq("brand_id", brandId);
       freshnessQuery = socialAccountId
         ? freshnessQuery.eq("social_account_id", socialAccountId)
         : freshnessQuery.is("social_account_id", null);
@@ -109,10 +111,13 @@ Deno.serve(async (req: Request) => {
     // ── Pull top-performing published posts with captions ────────────────────
     // Sort by engagement_rate DESC, fall back to (likes + comments) for posts
     // that were synced before engagement_rate was calculated.
+    // Brand scope: a brand's voice is learned from its own posts only. Without
+    // this, every brand's "main voice" was built from the whole user's posts.
     let postsQuery = supabase
       .from("content_posts")
       .select("id, caption, platform, media_type, likes, comments, views, engagement_rate, published_date, account_username")
       .eq("user_id", userId)
+      .eq("brand_id", brandId)
       .eq("status", "published")
       .not("caption", "eq", "")
       .not("caption", "is", null);
