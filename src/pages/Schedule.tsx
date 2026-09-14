@@ -8,6 +8,9 @@ import { Calendar, Clock, Instagram, Youtube, Facebook, Twitter, Cloud, Plus, Sp
 import { useTimezone } from '../hooks/useTimezone';
 import { formatInTz } from '../lib/timezone';
 import { CalendarView } from '../components/CalendarView';
+import { SignedImg } from '../components/ui/SignedMedia';
+import { useToast } from '../components/ui/Toast';
+import { useConfirm } from '../components/ui/ConfirmDialog';
 
 interface Post {
   id: string;
@@ -34,6 +37,8 @@ export function Schedule() {
   const { activeBrand } = useBrand();
   const { tier } = useSubscription();
   const navigate = useNavigate();
+  const toast = useToast();
+  const confirm = useConfirm();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'scheduled' | 'draft' | 'published'>('all');
@@ -102,13 +107,18 @@ export function Schedule() {
   };
 
   const handleDelete = async (postId: string) => {
-    if (!confirm('Are you sure you want to delete this post?')) return;
+    const ok = await confirm({
+      title: 'Delete this post?',
+      message: 'It comes off the calendar. If it was already published, the live post stays up on the platform.',
+      danger: true,
+    });
+    if (!ok) return;
     // content_posts_unified is a read-only dedup VIEW over content_posts — a
     // delete against it errors and was silently ignored, so the post always
     // reappeared. Write to the base table instead.
     const { error } = await supabase.from('content_posts').delete().eq('id', postId);
     if (error) {
-      alert(`Could not delete post: ${error.message}`);
+      toast.error(`Could not delete the post: ${error.message}`);
       return;
     }
     loadPosts();
@@ -154,7 +164,7 @@ export function Schedule() {
 
   const handleNewPost = () => {
     if (!isPremium && totalScheduled >= schedulingLimit) {
-      alert(`You've reached the limit of ${schedulingLimit} scheduled posts on the free plan. Upgrade to schedule unlimited posts.`);
+      toast.info(`You have reached the limit of ${schedulingLimit} scheduled posts on the free plan. Upgrade to schedule more.`);
       return;
     }
     navigate('/compose');
@@ -433,7 +443,7 @@ export function Schedule() {
                         {post.media_urls && post.media_urls.length > 0 && (
                           <div className="relative flex-shrink-0">
                             <div className="w-14 h-14 sm:w-16 sm:h-16 overflow-hidden border border-border bg-accent">
-                              <img src={post.media_type === 'video' && post.thumbnail_url ? post.thumbnail_url : post.media_urls[0]} alt="" className="w-full h-full object-cover" />
+                              <SignedImg src={post.media_type === 'video' && post.thumbnail_url ? post.thumbnail_url : post.media_urls[0]} alt="" className="w-full h-full object-cover" />
                             </div>
                             {post.media_urls.length > 1 && (
                               <div className="absolute -bottom-1 -right-1 px-1 py-0.5 bg-card border border-border text-[10px] text-muted-foreground font-semibold">

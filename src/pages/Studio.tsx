@@ -9,10 +9,12 @@ import { ScriptingStage } from '../components/Studio/ScriptingStage';
 import { CreationStage } from '../components/Studio/CreationStage';
 import { SchedulingStage } from '../components/Studio/SchedulingStage';
 import { AnalysisStage } from '../components/Studio/AnalysisStage';
-import { Bot, CheckCircle } from 'lucide-react';
+import { Bot } from 'lucide-react';
+import { useToast } from '../components/ui/Toast';
 
 export function Studio() {
   const { activeBrand } = useBrand();
+  const toast = useToast();
   const [activeStage, setActiveStage] = useState<WorkflowStage>('ideation');
   const [completedStages, setCompletedStages] = useState<WorkflowStage[]>([]);
   const [activeWorkflowId, setActiveWorkflowId] = useState<string | null>(null);
@@ -66,8 +68,8 @@ export function Studio() {
   const handleIdeaSelected = async (idea: AIContentSuggestion) => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { alert('You must be logged in to start a project.'); return; }
-      if (!activeBrand) { alert('No active brand selected.'); return; }
+      if (!user) { toast.error('Sign in again to start a project.'); return; }
+      if (!activeBrand) { toast.error('Pick a brand first.'); return; }
 
       if (idea.id) {
         await supabase
@@ -90,7 +92,7 @@ export function Studio() {
         .select()
         .maybeSingle();
 
-      if (error) { console.error('Error creating workflow:', error); alert('Failed to create workflow. Please try again.'); return; }
+      if (error) { console.error('Error creating workflow:', error); toast.error('Could not start the workflow. Try again.'); return; }
 
       if (data) {
         setActiveWorkflowId(data.id);
@@ -99,11 +101,11 @@ export function Studio() {
         setActiveStage('scripting');
         setPrefilledIdea(null);
       } else {
-        alert('Failed to create workflow. Please try again.');
+        toast.error('Could not start the workflow. Try again.');
       }
     } catch (err) {
       console.error('Unexpected error:', err);
-      alert('An unexpected error occurred. Please try again.');
+      toast.error('Something went wrong starting the workflow. Try again.');
     }
   };
 
@@ -205,7 +207,7 @@ export function Studio() {
               />
             ) : (
               <div className="text-center py-20 text-muted-foreground">
-                {activeStage === 'ideation' ? "Select an idea to start." : "Select a valid workflow to proceed."}
+                Pick an idea in Ideate first. The rest of the workflow starts from there.
               </div>
             )}
           </div>

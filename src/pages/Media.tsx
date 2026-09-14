@@ -2,8 +2,20 @@ import { useEffect, useState, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useBrand } from '../contexts/BrandContext';
 import { supabase } from '../lib/supabase';
+import { mediaRef, mediaPathFromRef } from '../lib/mediaUrls';
+import { SignedImg, SignedVideo, useSignedMediaUrl } from '../components/ui/SignedMedia';
+import { useToast } from '../components/ui/Toast';
+import { useConfirm } from '../components/ui/ConfirmDialog';
 import { Image as ImageIcon, Video, Upload, Trash2, Download, X } from 'lucide-react';
 import { format } from 'date-fns';
+
+// Mirrors the bucket's own limits (migration 20251229043321) so a file that
+// would be rejected on upload is refused here with a reason, not a 400.
+const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
+const ALLOWED_TYPES = new Set([
+  'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+  'video/mp4', 'video/quicktime', 'video/webm',
+]);
 
 interface MediaFile {
   id: string;
@@ -23,6 +35,10 @@ export function Media() {
   const [selectedFile, setSelectedFile] = useState<MediaFile | null>(null);
   const [filter, setFilter] = useState<'all' | 'image' | 'video'>('all');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const toast = useToast();
+  const confirm = useConfirm();
+  // The open file's signed URL, for the player, the View link and Download.
+  const selectedUrl = useSignedMediaUrl(selectedFile?.file_url);
 
   useEffect(() => {
     if (user) {
@@ -59,6 +75,14 @@ export function Media() {
     setUploading(true);
 
     for (const file of files) {
+      if (!ALLOWED_TYPES.has(file.type)) {
+        toast.error(`${file.name}: use a JPG, PNG, GIF, WebP, MP4, MOV or WebM file.`);
+        continue;
+      }
+      if (file.size > MAX_UPLOAD_BYTES) {
+        toast.error(`${file.name} is ${formatFileSize(file.size)}. The limit is 50 MB per file.`);
+        continue;
+      }
       try {
         const fileExt = file.name.split('.').pop();
         const fileName = `${user!.id}/${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
@@ -72,9 +96,7 @@ export function Media() {
 
         if (uploadError) throw uploadError;
 
-        const { data: { publicUrl } } = supabase.storage
-          .from('media')
-          .getPublicUrl(data.path);
+        const publicUrl = mediaRef(data.path);
 
         await supabase.from('media_library').insert({
           user_id: user!.id,
@@ -87,7 +109,7 @@ export function Media() {
 
       } catch (error) {
         console.error('Upload error:', error);
-        alert(`Failed to upload ${file.name}`);
+        toast.error(`Could not upload ${file.name}: ${(error as Error).message || 'unknown error'}`);
       }
     }
 
@@ -100,13 +122,19 @@ export function Media() {
   };
 
   const handleDelete = async (file: MediaFile) => {
-    if (!confirm(`Delete ${file.file_name}?`)) return;
+    const ok = await confirm({
+      title: `Delete ${file.file_name}?`,
+      message: 'It comes out of your library and out of storage. Posts that already used it keep their copy on the platform.',
+      danger: true,
+    });
+    if (!ok) return;
 
-    const path = file.file_url.split('/media/')[1];
-
-    await supabase.storage
-      .from('media')
-      .remove([path]);
+    const path = mediaPathFromRef(file.file_url);
+    if (path) {
+      await supabase.storage
+        .from('media')
+        .remove([path]);
+    }
 
     await supabase
       .from('media_library')
@@ -118,8 +146,9 @@ export function Media() {
   };
 
   const handleDownload = (file: MediaFile) => {
+    if (!selectedUrl) return;
     const link = document.createElement('a');
-    link.href = file.file_url;
+    link.href = selectedUrl;
     link.download = file.file_name;
     link.target = '_blank';
     document.body.appendChild(link);
@@ -238,7 +267,7 @@ export function Media() {
                 {file.file_type === 'video' ? (
                   <Video className="w-12 h-12 text-muted-foreground" />
                 ) : (
-                  <img src={file.file_url} alt={file.file_name} className="w-full h-full object-cover" />
+                  <SignedImg src={file.file_url} alt={file.file_name} className="w-full h-full object-cover" />
                 )}
               </div>
               <div className="p-3">
@@ -288,9 +317,9 @@ export function Media() {
 
             <div className="p-4">
               {selectedFile.file_type === 'video' ? (
-                <video src={selectedFile.file_url} controls className="w-full max-h-[70vh]" />
+                <SignedVideo src={selectedFile.file_url} controls className="w-full max-h-[70vh]" />
               ) : (
-                <img src={selectedFile.file_url} alt={selectedFile.file_name} className="w-full max-h-[70vh] object-contain" />
+                <SignedImg src={selectedFile.file_url} alt={selectedFile.file_name} className="w-full max-h-[70vh] object-contain" />
               )}
               <div className="mt-4 p-4 bg-muted">
                 <div className="grid grid-cols-2 gap-4 text-sm">
@@ -315,7 +344,7 @@ export function Media() {
                   <div>
                     <p className="font-mono text-[10px] font-bold tracking-[0.08em] uppercase text-muted-foreground mb-1">URL</p>
                     <a
-                      href={selectedFile.file_url}
+                      href={selectedUrl || undefined}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="font-medium text-chart-1 hover:text-chart-1/80 truncate block"
