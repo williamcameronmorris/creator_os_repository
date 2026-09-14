@@ -138,6 +138,23 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // ── Reserve a quota slot ──────────────────────────────────────────────────
+    // Same atomic reserve as the other AI functions: increment first, stop on
+    // false. Runs after the freshness and minimum-posts checks so a skipped
+    // rebuild costs nothing. Sync- and cron-triggered rebuilds are system
+    // work, like the morning brief, and do not spend the creator's credits.
+    if (!auth.isCron) {
+      const { data: reserved, error: quotaError } = await supabase
+        .rpc("increment_ai_request", { p_user_id: userId });
+      if (quotaError) throw new Error("Failed to check AI quota");
+      if (!reserved) {
+        return new Response(
+          JSON.stringify({ error: "Daily AI quota exceeded. Resets at midnight." }),
+          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+
     // ── Build the Claude prompt ───────────────────────────────────────────────
     const avgLen = Math.round(
       validPosts.reduce((sum, p) => sum + (p.caption?.length || 0), 0) / validPosts.length
