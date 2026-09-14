@@ -51,6 +51,7 @@ export function Profile() {
   const [confirmText, setConfirmText] = useState('');
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleted, setDeleted] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -143,13 +144,24 @@ export function Profile() {
         }
       );
 
-      if (!res.ok) {
-        const body = await res.text();
-        throw new Error(body || 'Account deletion failed.');
+      // The function answers JSON either way: { ok: true } or
+      // { ok: false, message, errors?: [{ table, message }] }. Show the real
+      // reason; a half-finished delete is something to retry, not guess at.
+      const body = (await res.json().catch(() => null)) as
+        | { ok?: boolean; message?: string; errors?: { table: string; message: string }[] }
+        | null;
+      if (!res.ok || !body?.ok) {
+        const detail = body?.errors?.map((e) => `${e.table}: ${e.message}`).join('; ');
+        throw new Error(
+          body?.message ? (detail ? `${body.message} ${detail}` : body.message) : 'Account deletion failed.',
+        );
       }
 
-      await signOut();
-      navigate('/auth', { replace: true });
+      setDeleted(true);
+      setTimeout(async () => {
+        await signOut();
+        navigate('/auth', { replace: true });
+      }, 1500);
     } catch (e: any) {
       setDeleteError(e.message || 'Account deletion failed.');
       setDeleting(false);
@@ -368,6 +380,12 @@ export function Profile() {
               disabled={deleting}
               autoFocus
             />
+
+            {deleted && (
+              <div className="t-micro mb-4" style={{ color: 'var(--accent)' }}>
+                ✓ Your account is gone. Signing you out…
+              </div>
+            )}
 
             {deleteError && (
               <div className="t-micro mb-4" style={{ color: 'var(--destructive, #c0392b)' }}>
