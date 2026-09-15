@@ -63,6 +63,12 @@ function AppContent() {
   const { user, loading } = useAuth();
   const [profile, setProfile] = useState<ProfileType | null>(null);
   const [checkingProfile, setCheckingProfile] = useState(true);
+  // True once a fetch has answered (row or confirmed no row). Until then a
+  // null profile means "not loaded yet", never "new user". Without this, the
+  // first render after sign-in has user set, profile null and checkingProfile
+  // already false, and the onboarding gate redirects a finished user to
+  // /onboarding, which the main routes then 404.
+  const [profileLoaded, setProfileLoaded] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const location = useLocation();
 
@@ -96,6 +102,7 @@ function AppContent() {
             .maybeSingle();
           if (error) throw error;
           setProfile(data ?? null); // null = row not created yet (new user → onboarding)
+          setProfileLoaded(true);
           lastErr = null;
           break;
         } catch (e) {
@@ -127,7 +134,7 @@ function AppContent() {
     );
   }
 
-  if (loading || checkingProfile) {
+  if (loading || checkingProfile || (user && !profileLoaded && !loadError)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="w-1.5 h-1.5 bg-foreground animate-pulse" />
@@ -183,6 +190,7 @@ function AppContent() {
       {/* Ã¢ÂÂÃ¢ÂÂ Clio (landing) Ã¢ÂÂÃ¢ÂÂ */}
       <Route path="/" element={<ProtectedRoute><Layout><Clio /></Layout></ProtectedRoute>} />
       <Route path="/clio" element={<Navigate to="/" replace />} />
+      <Route path="/onboarding" element={<Navigate to="/" replace />} />
 
       {/* Ã¢ÂÂÃ¢ÂÂ Legacy redirects Ã¢ÂÂÃ¢ÂÂ */}
       <Route path="/dashboard" element={<Navigate to="/" replace />} />
