@@ -132,12 +132,20 @@ export function PostForMeConnections({ initialFlash }: Props) {
   // `reconnectId` is set when a disconnected row's Reconnect button starts
   // the flow: Post for Me may hand the same account id back as connected
   // rather than minting a new one, so completion is detected either way.
-  const handleConnect = async (platform: PostForMePlatformId, reconnectId?: string) => {
+  // Instagram has two login routes at Post for Me: Instagram's own login
+  // (default) and the Facebook Page login. Instagram's own flow sometimes
+  // fails for professional accounts ("We couldn't connect to Instagram"), and
+  // the Facebook route connects the same account.
+  const handleConnect = async (
+    platform: PostForMePlatformId,
+    reconnectId?: string,
+    instagramVia: 'instagram' | 'facebook' = 'instagram',
+  ) => {
     if (!user) return;
     setBusyPlatform(platform);
     setError(null);
     try {
-      const { authUrl } = await initPostForMeConnect(user.id, platform);
+      const { authUrl } = await initPostForMeConnect(user.id, platform, undefined, { instagramVia });
       const popup = window.open(authUrl, '_blank');
       if (!popup) {
         window.location.href = authUrl;
@@ -323,17 +331,29 @@ export function PostForMeConnections({ initialFlash }: Props) {
             >
               <span className="t-micro">{platform.name.toUpperCase()}</span>
               <div className="t-micro text-muted-foreground">VIA POST FOR ME</div>
-              <button
-                onClick={() => handleConnect(platform.id)}
-                disabled={busyPlatform === platform.id}
-                className="t-micro text-foreground hover:text-accent transition-colors flex items-center gap-2 disabled:opacity-50"
-              >
-                {busyPlatform === platform.id ? 'OPENING…' : (
-                  <>
-                    CONNECT <ArrowRight className="w-3 h-3" />
-                  </>
+              <div className="flex items-center gap-4">
+                {platform.id === 'instagram' && (
+                  <button
+                    onClick={() => handleConnect(platform.id, undefined, 'facebook')}
+                    disabled={busyPlatform === platform.id}
+                    title="Use this if Instagram's own login keeps failing. Signs in with the Facebook account that manages the page."
+                    className="t-micro text-muted-foreground hover:text-accent transition-colors disabled:opacity-50"
+                  >
+                    THROUGH FACEBOOK
+                  </button>
                 )}
-              </button>
+                <button
+                  onClick={() => handleConnect(platform.id)}
+                  disabled={busyPlatform === platform.id}
+                  className="t-micro text-foreground hover:text-accent transition-colors flex items-center gap-2 disabled:opacity-50"
+                >
+                  {busyPlatform === platform.id ? 'OPENING…' : (
+                    <>
+                      CONNECT <ArrowRight className="w-3 h-3" />
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           ))}
         </div>
