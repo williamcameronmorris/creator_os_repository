@@ -86,10 +86,15 @@ export async function listPostForMeAccounts(_userId: string, _refresh = false): 
  * Other platforms don't currently require `platform_data` — added cases as we
  * encounter them.
  */
-function buildPlatformData(platform: PostForMePlatformId): Record<string, unknown> | undefined {
+export type InstagramConnectionType = 'instagram' | 'facebook';
+
+function buildPlatformData(
+  platform: PostForMePlatformId,
+  instagramVia: InstagramConnectionType = 'instagram',
+): Record<string, unknown> | undefined {
   switch (platform) {
     case 'instagram':
-      return { instagram: { connection_type: 'instagram' } };
+      return { instagram: { connection_type: instagramVia } };
     default:
       return undefined;
   }
@@ -99,6 +104,7 @@ export async function initPostForMeConnect(
   userId: string,
   platform: PostForMePlatformId,
   redirectUrl?: string,
+  options?: { instagramVia?: InstagramConnectionType },
 ): Promise<{ authUrl: string }> {
   // Tag the new account with this user's id so it scopes correctly in
   // multi-tenant listings + sync. Proxy will enforce/override this from JWT
@@ -108,7 +114,7 @@ export async function initPostForMeConnect(
     permissions: ['posts', 'feeds'],
     external_id: userId,
   };
-  const platformData = buildPlatformData(platform);
+  const platformData = buildPlatformData(platform, options?.instagramVia);
   if (platformData) body.platform_data = platformData;
   if (redirectUrl) body.redirect_url_override = redirectUrl;
   const data = await proxy<{ url: string }>('POST', '/v1/social-accounts/auth-url', body);
