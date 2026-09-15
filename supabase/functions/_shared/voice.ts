@@ -163,14 +163,25 @@ export async function loadAccountNiche(
   socialAccountId?: string | null,
   brandId?: string | null,
 ): Promise<string | null> {
-  if (!socialAccountId) return null;
-  let query = supabase
-    .from("user_content_profiles")
-    .select("niche")
-    .eq("user_id", userId)
-    .eq("social_account_id", socialAccountId);
-  if (brandId) query = query.eq("brand_id", brandId);
-  const { data } = await query.maybeSingle();
-  const niche = ((data as { niche?: string | null } | null)?.niche || "").trim();
-  return niche || null;
+  // Account row first, then the brand-level row (social_account_id null).
+  // Without the brand step every brand-level call returned null and callers
+  // fell through to profiles.niche_preference, which is one niche per USER,
+  // so a second brand was briefed in the first brand's niche.
+  const read = async (accountId: string | null): Promise<string | null> => {
+    let query = supabase
+      .from("user_content_profiles")
+      .select("niche")
+      .eq("user_id", userId);
+    query = accountId ? query.eq("social_account_id", accountId) : query.is("social_account_id", null);
+    if (brandId) query = query.eq("brand_id", brandId);
+    const { data } = await query.limit(1).maybeSingle();
+    const niche = ((data as { niche?: string | null } | null)?.niche || "").trim();
+    return niche || null;
+  };
+  if (socialAccountId) {
+    const fromAccount = await read(socialAccountId);
+    if (fromAccount) return fromAccount;
+  }
+  if (brandId) return await read(null);
+  return null;
 }
