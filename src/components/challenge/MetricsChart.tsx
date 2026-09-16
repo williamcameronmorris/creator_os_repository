@@ -79,9 +79,10 @@ export function MetricsChart({ metrics, metricDefinitions }: MetricsChartProps) 
                 fontSize: 13,
               }}
               labelFormatter={(v) => (v === 0 ? 'Baseline' : `Day ${v}`)}
-              formatter={(value: any, name: string) => {
-                const def = metricDefinitions.find((d) => d.key === name);
-                return [Number(value).toLocaleString(), def?.label || name];
+              formatter={(value: any, name: string | undefined) => {
+                const key = name ?? '';
+                const def = metricDefinitions.find((d) => d.key === key);
+                return [Number(value).toLocaleString(), def?.label || key] as [string, string];
               }}
             />
             <Legend

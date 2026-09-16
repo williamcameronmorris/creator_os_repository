@@ -10,7 +10,20 @@ export default defineConfig({
   },
   build: {
     target: 'safari14',
-    chunkSizeWarningLimit: 600,
+    rollupOptions: {
+      output: {
+        // recharts (with its d3 dependencies) and the Supabase client are the
+        // two heavy deps that would otherwise sit in the entry chunk. Splitting
+        // them out keeps the entry small and lets both cache across deploys
+        // that only touch app code. React is named explicitly so it stays in
+        // its own chunk instead of being absorbed into the recharts one.
+        manualChunks: {
+          react: ['react', 'react-dom', 'react-router-dom'],
+          recharts: ['recharts'],
+          supabase: ['@supabase/supabase-js'],
+        },
+      },
+    },
   },
   test: {
     environment: 'jsdom',

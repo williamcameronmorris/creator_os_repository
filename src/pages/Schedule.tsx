@@ -213,7 +213,7 @@ export function Schedule() {
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
-      {/* Ã¢ÂÂÃ¢ÂÂ Page header Ã¢ÂÂÃ¢ÂÂ */}
+      {/* ── Page header ── */}
       <div className="mb-6">
         <div className="flex items-start justify-between gap-3 mb-4">
           <div>
@@ -229,7 +229,7 @@ export function Schedule() {
           </button>
         </div>
 
-        {/* Ã¢ÂÂÃ¢ÂÂ Filter + view controls Ã¢ÂÂÃ¢ÂÂ */}
+        {/* ── Filter + view controls ── */}
         <div className="flex items-center justify-between gap-3 flex-wrap">
           {/* Status filters */}
           <div className="flex items-center gap-2 flex-wrap">
@@ -268,7 +268,7 @@ export function Schedule() {
               </button>
             </div>
 
-            {/* Granularity dropdown Ã¢ÂÂ only in calendar mode */}
+            {/* Granularity dropdown — only in calendar mode */}
             {viewMode === 'calendar' && (
               <div className="relative" ref={calDropdownRef}>
                 <button
@@ -297,7 +297,7 @@ export function Schedule() {
         </div>
       </div>
 
-      {/* Ã¢ÂÂÃ¢ÂÂ Content area Ã¢ÂÂÃ¢ÂÂ */}
+      {/* ── Content area ── */}
       <div className="mb-8">
         {/* Calendar view */}
         {viewMode === 'calendar' && !loading && (
@@ -341,6 +341,9 @@ export function Schedule() {
           <div className="grid gap-3">
             {filteredPosts.map((post) => {
               const Icon = getPlatformIcon(post.platform);
+              // Either column can be null; hoisting the fallback here lets the
+              // render below both test and format the same narrowed value.
+              const scheduledIso = post.scheduled_for || post.scheduled_date;
               return (
                 <div
                   key={post.id}
@@ -395,7 +398,7 @@ export function Schedule() {
                           )}
                         </div>
 
-                        {/* Action buttons Ã¢ÂÂ always top-right, compact */}
+                        {/* Action buttons — always top-right, compact */}
                         <div className="flex items-center gap-1 flex-shrink-0">
                           {post.publish_status === 'failed' && (
                             <button
@@ -428,12 +431,12 @@ export function Schedule() {
                             {post.caption || 'No caption'}
                           </p>
 
-                          {(post.scheduled_for || post.scheduled_date) && (
+                          {scheduledIso && (
                             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                               <Clock className="w-3.5 h-3.5 flex-shrink-0" />
                               {post.publish_status === 'published' && post.published_at
                                 ? `Published ${formatInTz(post.published_at, timezone)}`
-                                : formatInTz((post.scheduled_for || post.scheduled_date), timezone)}
+                                : formatInTz(scheduledIso, timezone)}
                             </div>
                           )}
 
@@ -456,7 +459,7 @@ export function Schedule() {
                           })()}
                         </div>
 
-                        {/* Thumbnail Ã¢ÂÂ smaller on mobile, larger on desktop */}
+                        {/* Thumbnail — smaller on mobile, larger on desktop */}
                         {post.media_urls && post.media_urls.length > 0 && (
                           <div className="relative flex-shrink-0">
                             <div className="w-14 h-14 sm:w-16 sm:h-16 overflow-hidden border border-border bg-accent">
@@ -479,7 +482,7 @@ export function Schedule() {
         )}
       </div>
 
-      {/* Ã¢ÂÂÃ¢ÂÂ Stats Ã¢ÂÂÃ¢ÂÂ */}
+      {/* ── Stats ── */}
       <div className="mb-8">
         <h2 className="t-h2 font-bold text-foreground mb-4">Content Scheduling Stats</h2>
 
