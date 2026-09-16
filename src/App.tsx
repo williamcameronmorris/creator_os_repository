@@ -206,16 +206,16 @@ function AppContent() {
 
   return (
     <Routes>
-      {/* Ã¢ÂÂÃ¢ÂÂ Clio (landing) Ã¢ÂÂÃ¢ÂÂ */}
+      {/* ── Clio (landing) ── */}
       <Route path="/" element={<ProtectedRoute><Layout><Clio /></Layout></ProtectedRoute>} />
       <Route path="/clio" element={<Navigate to="/" replace />} />
       <Route path="/onboarding" element={<Navigate to="/" replace />} />
 
-      {/* Ã¢ÂÂÃ¢ÂÂ Legacy redirects Ã¢ÂÂÃ¢ÂÂ */}
+      {/* ── Legacy redirects ── */}
       <Route path="/dashboard" element={<Navigate to="/" replace />} />
       <Route path="/command-center" element={<Navigate to="/" replace />} />
 
-      {/* Ã¢ÂÂÃ¢ÂÂ Studio Ã¢ÂÂÃ¢ÂÂ */}
+      {/* ── Studio ── */}
       <Route path="/studio" element={<ProtectedRoute><Layout><StudioHub /></Layout></ProtectedRoute>} />
       <Route path="/studio/workflow" element={<ProtectedRoute><Layout><Studio /></Layout></ProtectedRoute>} />
       <Route path="/studio/script" element={<ProtectedRoute><Layout><Studio /></Layout></ProtectedRoute>} />
@@ -225,7 +225,7 @@ function AppContent() {
       <Route path="/media" element={<ProtectedRoute><Layout><Media /></Layout></ProtectedRoute>} />
       <Route path="/saved-ideas" element={<ProtectedRoute><Layout><SavedIdeasPage /></Layout></ProtectedRoute>} />
 
-      {/* Ã¢ÂÂÃ¢ÂÂ Office Ã¢ÂÂÃ¢ÂÂ */}
+      {/* ── Office ── */}
       <Route path="/watch" element={<ProtectedRoute><Layout><Watch /></Layout></ProtectedRoute>} />
       <Route path="/watch/creator/:id" element={<ProtectedRoute><Layout><WatchCreator /></Layout></ProtectedRoute>} />
 
@@ -249,7 +249,7 @@ function AppContent() {
       <Route path="/revenue" element={<Navigate to="/patra?tab=invoices" replace />} />
       <Route path="/pipeline" element={<Navigate to="/patra?tab=deals" replace />} />
 
-      {/* Ã¢ÂÂÃ¢ÂÂ Settings Ã¢ÂÂÃ¢ÂÂ */}
+      {/* ── Settings ── */}
       <Route path="/profile" element={<ProtectedRoute><Layout><Profile /></Layout></ProtectedRoute>} />
       <Route path="/settings" element={<ProtectedRoute><Layout><SettingsPage /></Layout></ProtectedRoute>} />
       <Route path="/help" element={<ProtectedRoute><Layout><HelpPage /></Layout></ProtectedRoute>} />
@@ -258,7 +258,7 @@ function AppContent() {
       <Route path="/privacy" element={<Privacy />} />
       <Route path="/terms" element={<Terms />} />
 
-      {/* Ã¢ÂÂÃ¢ÂÂ OAuth Callbacks Ã¢ÂÂÃ¢ÂÂ */}
+      {/* ── OAuth Callbacks ── */}
       {/* OAuth callbacks are rendered above the auth gate (see AppContent top). */}
 
       {/* Unknown path: say so, inside the shell, rather than bouncing home. */}
