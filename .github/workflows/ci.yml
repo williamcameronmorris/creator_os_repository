@@ -32,27 +32,32 @@ jobs:
       # incident). Keep the lockfile in sync in the same commit as package.json.
       - run: npm ci --no-audit --no-fund
 
-      # Lint is advisory for now (167 pre-existing problems, mostly no-explicit-any
-      # and unused vars). Visible in CI without blocking; flip to a hard gate once
-      # burned down.
+      # Lint runs for the log, not for the verdict. 163 problems are
+      # pre-existing and 115 of them are no-explicit-any on hand-typed API
+      # payloads — a burn-down someone has to sit down and do, not a
+      # mechanical fix, so failing on zero today would block every PR.
       - name: Lint (advisory)
         run: npm run lint
         continue-on-error: true
 
-      # Typecheck ratchet: the count of `error TS` lines must not exceed the
-      # committed baseline (.typecheck-baseline). New type errors fail CI; fixing
-      # errors means lowering the baseline in the same PR. Burn to 0, then delete
-      # this ratchet and make `tsc --noEmit` a plain hard gate.
-      - name: Typecheck (ratchet)
+      # The COUNT is the gate. .eslint-baseline holds today's number and this
+      # step fails when a PR pushes it higher, so new problems cannot ride in
+      # while the old ones are being worked off. Fixing lint means lowering the
+      # baseline in the same PR. When it reaches 0: delete this step and the
+      # baseline file, and drop continue-on-error from the step above.
+      - name: Lint (no new problems)
         run: |
-          COUNT=$(npm run typecheck 2>&1 | grep -c "error TS" || true)
-          BASELINE=$(cat .typecheck-baseline 2>/dev/null || echo 0)
-          echo "Typecheck errors: $COUNT (baseline: $BASELINE)"
+          COUNT=$(npx eslint . -f json | node -e "let s='';process.stdin.on('data',c=>s+=c);process.stdin.on('end',()=>{const r=JSON.parse(s);console.log(r.reduce((n,f)=>n+f.errorCount+f.warningCount,0));});")
+          BASELINE=$(cat .eslint-baseline 2>/dev/null || echo 0)
+          echo "Lint problems: $COUNT (baseline: $BASELINE)"
           if [ "$COUNT" -gt "$BASELINE" ]; then
-            echo "::error::Typecheck errors increased from $BASELINE to $COUNT. New errors:"
-            npm run typecheck 2>&1 | grep "error TS" || true
+            echo "::error::Lint problems increased from $BASELINE to $COUNT. The Lint (advisory) step above lists them."
             exit 1
           fi
+
+      # Typecheck is a hard gate: the ratchet reached 0, so any type error is a
+      # new type error.
+      - run: npm run typecheck
 
       - run: npm run test
 
