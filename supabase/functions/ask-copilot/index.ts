@@ -3,6 +3,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 // same as generate-script and the other AI functions.
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { loadVoiceContext, loadAccountNiche } from "../_shared/voice.ts";
+import { inspirationTagsForNiche } from "../_shared/niche.ts";
 import { resolveBrandId } from "../_shared/auth.ts";
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
@@ -180,20 +181,53 @@ Deno.serve(async (req: Request) => {
       metricsQuery = metricsQuery.or(`social_account_id.eq.${socialAccountId},social_account_id.is.null`);
     }
 
-    const [profileResult, metricsResult, postsResult, recentPostsResult, deals, pfmContext, inspirationResult, inspirationCountsResult, voiceContext, accountNiche] = await Promise.all([
-      supabase.from("profiles").select("full_name, display_name, niche_preference, instagram_avg_views, tiktok_avg_views, youtube_avg_views, instagram_access_token, instagram_business_account_id, tiktok_access_token, youtube_access_token").eq("id", userId).maybeSingle(),
+    // Two cheap lookups the inspiration queries have to wait for, kicked off
+    // first so everything else still fires in parallel. Wrapped in async IIFEs
+    // because a PostgREST builder re-runs the query every time it is awaited.
+    const profilePromise = (async () =>
+      await supabase.from("profiles").select("full_name, display_name, niche_preference, instagram_avg_views, tiktok_avg_views, youtube_avg_views, instagram_access_token, instagram_business_account_id, tiktok_access_token, youtube_access_token").eq("id", userId).maybeSingle())();
+    const nichePromise = loadAccountNiche(supabase, userId, socialAccountId, brandId);
+
+    // inspiration_entries is ONE global Notion-synced table: no user_id, no
+    // brand_id, every row visible to everyone. It used to be read whole and
+    // handed to Clio as the creator's own saved library, which was wrong twice
+    // over — it is not theirs, and a knitting creator was being shown posts
+    // about ad funnels. topic_tags is the only column that says what a row is
+    // about, so the resolved niche narrows the shelf to tags it plausibly
+    // covers. An unrecognised niche matches no tags and reads the whole shelf,
+    // which the prompt describes honestly as shared reference material.
+    const inspirationScope = (async () => {
+      const [profileRes, accountNicheValue] = await Promise.all([profilePromise, nichePromise]);
+      const resolved = accountNicheValue || (profileRes.data?.niche_preference || "").trim();
+      const tags = inspirationTagsForNiche(resolved);
+      let outliers = supabase.from("inspiration_entries").select("post_title, platform, content_format, hook_framework, hook_text, topic_tags, tactical_notes, creator, likes, views").eq("performance_tier", "Outlier");
+      let counts = supabase.from("inspiration_entries").select("performance_tier, hook_framework");
+      if (tags.length > 0) {
+        outliers = outliers.overlaps("topic_tags", tags);
+        counts = counts.overlaps("topic_tags", tags);
+      }
+      const [outlierRes, countsRes] = await Promise.all([
+        outliers.order("likes", { ascending: false, nullsFirst: false }).limit(15),
+        counts,
+      ]);
+      return { outlierRes, countsRes, tags };
+    })();
+
+    const [profileResult, metricsResult, postsResult, recentPostsResult, deals, pfmContext, inspiration, voiceContext, accountNiche] = await Promise.all([
+      profilePromise,
       metricsQuery.order("date", { ascending: false }),
       topPostsQuery.order("likes", { ascending: false, nullsFirst: false }).limit(10),
       recentPostsQuery.order("published_at", { ascending: false }).limit(15),
       fetchDeals(),
       fetchPostForMeContext(userId),
-      supabase.from("inspiration_entries").select("post_title, platform, content_format, hook_framework, hook_text, topic_tags, tactical_notes, creator, likes, views").eq("performance_tier", "Outlier").order("likes", { ascending: false, nullsFirst: false }).limit(15),
-      supabase.from("inspiration_entries").select("performance_tier, hook_framework"),
+      inspirationScope,
       // The creator's own voice fingerprint (null until they've built one).
       // Account-scoped when pinned; falls back to the main voice.
       loadVoiceContext(supabase, userId, socialAccountId, brandId),
-      loadAccountNiche(supabase, userId, socialAccountId, brandId),
+      nichePromise,
     ]);
+    const inspirationResult = inspiration.outlierRes;
+    const inspirationCountsResult = inspiration.countsRes;
 
     const profile = profileResult.data;
     const creatorName = profile?.display_name || profile?.full_name?.split(" ")[0] || "Creator";
@@ -295,6 +329,11 @@ Deno.serve(async (req: Request) => {
 
     const inspirationOutliers = inspirationResult.data || [];
     const inspirationAll = inspirationCountsResult.data || [];
+    // Say out loud which slice of the shared shelf is in view, so the counts
+    // below can never read as a description of something the creator built.
+    const inspirationScopeNote = inspiration.tags.length > 0
+      ? ` (shared shelf, topics: ${inspiration.tags.join(", ")})`
+      : " (shared shelf, all topics)";
     const tierCounts = inspirationAll.reduce((acc: Record<string, number>, e: { performance_tier?: string }) => {
       const t = e.performance_tier || "Untested"; acc[t] = (acc[t] || 0) + 1; return acc;
     }, {});
@@ -319,16 +358,15 @@ Deno.serve(async (req: Request) => {
     // hook_templates holds ~1000 parameterized hook formulas (with [insert X]
     // blanks) curated from a viral hooks PDF. They have NO performance signal
     // — they're scaffolding, not evidence. Conservative gating: only surface
-    // templates for frameworks where the user has ZERO Outlier examples in
-    // inspiration_entries. If they have an Outlier in a given framework, the
-    // Outlier wins; templates stay hidden so we don't dilute the citation
-    // hierarchy.
+    // templates for frameworks with ZERO Outlier examples on the slice of the
+    // shared shelf in view. Where a real Outlier exists, the Outlier wins and
+    // templates stay hidden so we don't dilute the citation hierarchy.
     const STANDARD_FRAMEWORKS = [
       "Proof-First", "Curiosity Gap", "Pain Point", "Challenge",
       "Question + Proof", "Bold Claim", "Storytelling", "Contrarian",
       "How-To", "List/Ranking",
     ];
-    // Derive outlier-covered frameworks from ALL inspiration entries (via
+    // Derive outlier-covered frameworks from every entry in view (via
     // inspirationAll), not just the top-15 by likes. A framework with 20
     // total Outliers but none in the top-15 by likes is NOT a gap — Clio
     // can still cite an Outlier from it. The top-15 list is a render limit,
@@ -406,7 +444,7 @@ Deno.serve(async (req: Request) => {
     // Data block is now post-first. Platform aggregates ride along as light
     // context, not headlines. Clio is instructed in the system prompt to
     // reason at the post level — to spot patterns, point at specific posts,
-    // and tie recommendations to a concrete saved Outlier.
+    // and tie recommendations to a concrete example from the shared shelf.
     const context = `DATA BLOCK — every number below is real and grounded. Anything not listed here, you don't have.
 
 CREATOR PROFILE:
@@ -421,12 +459,13 @@ ${recentPostLines || "  No posts in the last 7 days"}
 ═══ TOP POSTS (last 30 days, ranked by likes) ═══
 ${topPostLines || "  No published posts yet"}
 
-═══ INSPIRATION LIBRARY — saved Outlier examples (study these for hook patterns) ═══
-Total entries: ${inspirationAll.length} | By tier: ${Object.entries(tierCounts).map(([t, c]) => `${t}: ${c}`).join(", ") || "none"}
-Top hook frameworks (most-saved): ${topFrameworks || "none"}
+═══ SHARED REFERENCE LIBRARY — Outlier posts by OTHER creators ═══
+These are examples Cliopatra curates for everyone. They are NOT the creator's posts and the creator did not save them. Study them for hook patterns; cite them as someone else's work.
+Entries in view${inspirationScopeNote}: ${inspirationAll.length} | By tier: ${Object.entries(tierCounts).map(([t, c]) => `${t}: ${c}`).join(", ") || "none"}
+Most common hook frameworks here: ${topFrameworks || "none"}
 
-${inspirationLines || "  No Outliers in library yet"}
-${templateLines ? `\n═══ TEMPLATE BANK — formula scaffolding for frameworks with ZERO saved Outliers ═══\nThese are parameterized hook formulas with [insert X] blanks. NO performance data. Use ONLY when a framework has no relevant Outlier above. NEVER cite these as evidence — they are starting points to riff on.\n${templateLines}` : ""}
+${inspirationLines || "  No Outlier examples in the shared library for this niche yet"}
+${templateLines ? `\n═══ TEMPLATE BANK — formula scaffolding for frameworks with NO reference Outlier ═══\nThese are parameterized hook formulas with [insert X] blanks. NO performance data. Use ONLY when a framework has no relevant Outlier above. NEVER cite these as evidence — they are starting points to riff on.\n${templateLines}` : ""}
 ─── BACKGROUND CONTEXT (current state per platform — use as reference, not as headline numbers) ───
 ${platformLines || "  No platform data available"}
 
@@ -440,9 +479,9 @@ ${dealLines}${deals.length > 0 ? `\nTotal pipeline value: $${totalDealValue.toLo
     // present, else the instructions). The per-request DATA block (posts,
     // deals, metrics — changes every call) comes AFTER the breakpoint so it
     // never invalidates the cached prefix.
-    const staticInstructions = `You are Clio, the creator's personal analytics + inspiration copilot inside Cliopatra Social. The DATA block below has two grounded sources: (a) their real per-post performance, (b) their curated Inspiration Library of Outlier posts.
+    const staticInstructions = `You are Clio, the creator's personal analytics + inspiration copilot inside Cliopatra Social. The DATA block below has two grounded sources: (a) their real per-post performance, (b) a SHARED reference library of Outlier posts by other creators, curated by Cliopatra for everyone.
 
-YOUR JOB: reason at the POST level, not the platform level. Find patterns across specific posts. Pair what they're already doing well with a concrete saved Outlier example. Avoid kitchen-sink platform summaries.
+YOUR JOB: reason at the POST level, not the platform level. Find patterns across specific posts. Pair what they're already doing well with a concrete example from the shared reference library. Avoid kitchen-sink platform summaries.
 
 GROUNDING RULES — non-negotiable:
 1. NEVER invent metrics. If a number isn't in the DATA block, say "I don't have that data yet".
@@ -450,14 +489,15 @@ GROUNDING RULES — non-negotiable:
 3. NEVER assume a platform is connected unless it's in "Connected platforms".
 4. "Typical post engagement" is a rolling average — NOT a 7-day delta. Don't frame it as recent activity.
 5. Quote your sources. When you cite a number, name the post or platform it came from.
+5a. The shared reference library is NOT theirs. Never call it "your library", "your saved posts", "your Outliers" or anything that implies they collected it. Say "a reference example" or name the creator who posted it. Only posts under THIS WEEK'S POSTS and TOP POSTS are their own.
 
 POST-LEVEL REASONING — when the user asks "what should I post" or "how am I doing":
 6. Pick out 1-2 SPECIFIC posts from the data block and name what worked or didn't.
-7. Pair the recommendation with a concrete saved Outlier example by quoting the saved Hook text and tactical notes.
-8. Never recommend a hook framework absent from "Top hook frameworks".
-9. If the library has zero Outliers in a relevant framework: if a TEMPLATE BANK formula in that framework fits the user's content, you MAY suggest it as scaffolding — but call it a "template formula to riff on", NEVER cite it as a proven example. If no template fits either, say the library has no example for this framework yet.
+7. Pair the recommendation with a concrete example from the shared reference library by quoting its hook text and tactical notes, and attribute it to the creator who posted it.
+8. Never recommend a hook framework absent from "Most common hook frameworks here".
+9. If the shared library has no Outlier in a relevant framework: if a TEMPLATE BANK formula in that framework fits the user's content, you MAY suggest it as scaffolding — but call it a "template formula to riff on", NEVER cite it as a proven example. If no template fits either, say the shared library has no example for this framework yet.
 10. Outlier examples ALWAYS take priority over Template Bank formulas. Templates are fallback only.
-11. An empty "THIS WEEK'S POSTS" window is normal — creators don't post every week. NEVER treat it as a blocker. When it's empty, ground your answer in TOP POSTS (last 30 days) and the Inspiration Library. Deliver the ideas the user asked for; do not refuse or ask them to supply a content pillar, audience, or format you can already infer from their posts and captions.
+11. An empty "THIS WEEK'S POSTS" window is normal — creators don't post every week. NEVER treat it as a blocker. When it's empty, ground your answer in TOP POSTS (last 30 days) and the shared reference library. Deliver the ideas the user asked for; do not refuse or ask them to supply a content pillar, audience, or format you can already infer from their posts and captions.
 12. When you give a numbered list of content ideas, end each idea's title line with its target in square brackets, platform then format, e.g. "1. Title [instagram · reel]" or "2. Title [youtube · short]". Use only platforms listed under "Connected platforms". The app reads that tag to open the idea in Studio on the right platform.
 
 ANTI-PATTERNS — do not do these:
@@ -468,7 +508,7 @@ ANTI-PATTERNS — do not do these:
 GOOD ANSWER SHAPE:
 - One specific observation tied to a named post: "Your Bigsby install Reel from Tuesday hit 234 likes — top performer this week."
 - One specific pattern call-out: "Three of your last 7 posts use How-To framing. They average 2.5x your typical engagement."
-- One concrete recommendation tied to a saved Outlier: "@myrongolden's Outlier ('Break it down: What to do, when to do it, why...') maps perfectly to your tone-mod content. Try a 60-sec Reel framed that way on out-of-phase wiring."
+- One concrete recommendation tied to a reference example: "@myrongolden's post in the reference library ('Break it down: What to do, when to do it, why...') maps perfectly to your tone-mod content. Try a 60-sec Reel framed that way on out-of-phase wiring."
 
 Style: direct, post-level, under 250 words. No filler, no preamble, no platform-aggregate openers.`;
 

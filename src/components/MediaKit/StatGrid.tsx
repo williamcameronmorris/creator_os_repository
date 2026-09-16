@@ -3,14 +3,27 @@ import { fmtCompact, fmtDate, fmtPct, type PublicKitPlatform } from '../../lib/m
 import { PLATFORM_ICONS, platformLabel } from './platformMeta';
 import { AtSign } from 'lucide-react';
 
+/** median_views is the current name; avg_views is the old one the function
+ *  still sends alongside it. Read both so a page served from cache mid-deploy
+ *  does not blank the number out. */
+function medianViews(p: PublicKitPlatform): number | null {
+  return p.median_views ?? p.avg_views ?? null;
+}
+
 /**
  * One panel per platform. Followers carry the gold; everything else is ink.
  * A number that is manual or stale is dated rather than hidden: a brand will
  * not mind a date, and silently showing old numbers as current is the thing
  * that costs a creator the deal.
+ *
+ * Views sit side by side across platforms here, and each platform counts a
+ * view differently (a TikTok view and a YouTube view are not the same event),
+ * so a one-line note says so rather than letting a brand read the panels as a
+ * league table.
  */
 export function StatGrid({ platforms }: { platforms: PublicKitPlatform[] }) {
   if (platforms.length === 0) return null;
+  const platformsWithViews = platforms.filter((p) => medianViews(p) != null).length;
   return (
     <div className="grid gap-4 sm:grid-cols-2">
       {platforms.map((p) => {
@@ -21,7 +34,8 @@ export function StatGrid({ platforms }: { platforms: PublicKitPlatform[] }) {
         }
         if (p.growth_30d_pct != null) stats.push({ value: fmtPct(p.growth_30d_pct), label: '30-DAY GROWTH' });
         if (p.engagement_rate != null) stats.push({ value: `${p.engagement_rate}%`, label: 'ENGAGEMENT' });
-        if (p.avg_views != null) stats.push({ value: fmtCompact(p.avg_views), label: 'MEDIAN VIEWS' });
+        const med = medianViews(p);
+        if (med != null) stats.push({ value: fmtCompact(med), label: 'MEDIAN VIEWS' });
         if (p.total_posts != null && p.total_posts > 0) stats.push({ value: fmtCompact(p.total_posts), label: 'POSTS' });
         const note = p.followers_source === 'manual'
           ? `${p.platform === 'youtube' ? 'SUBSCRIBERS' : 'FOLLOWERS'} ENTERED${p.followers_as_of ? ` ${fmtDate(p.followers_as_of).toUpperCase()}` : ''}`
@@ -48,6 +62,12 @@ export function StatGrid({ platforms }: { platforms: PublicKitPlatform[] }) {
           </Panel>
         );
       })}
+      {platformsWithViews > 1 && (
+        <p className="sm:col-span-2 text-sm text-muted-foreground">
+          Each platform counts a view its own way, so view numbers are not
+          comparable between platforms.
+        </p>
+      )}
     </div>
   );
 }

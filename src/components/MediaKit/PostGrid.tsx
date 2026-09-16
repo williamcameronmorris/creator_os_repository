@@ -10,12 +10,18 @@ import { platformLabel } from './platformMeta';
  * outside the sync window can carry a dead one. A tile whose image fails to
  * load is dropped and the next candidate takes its place, so the grid never
  * shows a black square to a brand.
+ *
+ * The grid mixes platforms, so two tiles can show "views" that were counted by
+ * two different platforms in two different ways. One line under the grid says
+ * so when that is actually the case.
  */
 export function PostGrid({ posts, limit }: { posts: PublicKitPost[]; limit: number }) {
   const [broken, setBroken] = useState<Set<string>>(() => new Set());
   const visible = posts.filter((p) => !broken.has(p.thumbnail_url)).slice(0, Math.max(1, limit));
   if (visible.length === 0) return null;
   const markBroken = (url: string) => setBroken((prev) => new Set(prev).add(url));
+  const viewTiles = visible.filter((p) => p.metric_label === 'views');
+  const mixedViews = new Set(viewTiles.map((p) => p.platform)).size > 1;
 
   return (
     <section>
@@ -48,6 +54,12 @@ export function PostGrid({ posts, limit }: { posts: PublicKitPost[]; limit: numb
           );
         })}
       </div>
+      {mixedViews && (
+        <p className="text-sm text-muted-foreground mt-3">
+          Each platform counts a view its own way, so view counts are not
+          comparable between platforms.
+        </p>
+      )}
     </section>
   );
 }

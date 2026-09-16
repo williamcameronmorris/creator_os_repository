@@ -26,8 +26,9 @@ import { loadVoiceContext, loadAccountNiche } from "../_shared/voice.ts";
  *   force           - optional; skip the same-day cache below
  *
  * Same-day cache: without `force` or a source post, today's unused ('new')
- * suggestions for the brand come back as they are, with no model call and no
- * credit spent. Every click used to append four rows and burn one of the
+ * suggestions this function generated for the brand come back as they are,
+ * with no model call and no credit spent (ideas the morning brief wrote are
+ * listed in Studio alongside them but never satisfy the cache). Every click used to append four rows and burn one of the
  * user's 15 daily credits.
  *
  * Caller must be authenticated; we ignore any userId field in the body and
@@ -140,6 +141,11 @@ Deno.serve(async (req: Request) => {
         .eq("user_id", userId)
         .eq("brand_id", brandId)
         .eq("status", "new")
+        // Only this function's own output counts as "today's ideas". The
+        // morning brief now writes its ideas here too (source 'daily_brief'),
+        // and without this filter clicking Generate would hand those straight
+        // back and never call the model.
+        .eq("source", "generate-ideas")
         .gte("created_at", todayStart.toISOString())
         .order("created_at", { ascending: false })
         .limit(8);

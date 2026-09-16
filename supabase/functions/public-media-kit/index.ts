@@ -250,12 +250,17 @@ async function buildPayload(supabase: SupabaseClient, kit: KitRow) {
     }
 
     const platformPosts = posts.filter((x) => x.platform === p);
-    // Typical views: the median over the last 90 days, or over the last twenty
-    // posts with views when the creator has not published much lately.
+    // Typical views: the MEDIAN over the last 90 days, or over the last twenty
+    // posts with views when the creator has not published much lately. The
+    // field is called median_views because that is what it is — it was called
+    // avg_views for months while computing a median, and a brand reading an
+    // "average" next to a skewed feed is being told something untrue.
+    // (The stored config flag is still show_avg_views: renaming a key inside
+    // every kit's JSON is a migration, not a label fix.)
     const withViews = platformPosts.filter((x) => (x.views ?? 0) > 0 && x.published_at);
     let window = withViews.filter((x) => now - Date.parse(x.published_at!) <= 90 * DAY);
     if (window.length < 3) window = withViews.slice(0, 20);
-    const avg_views = cfg.show_avg_views !== false && window.length
+    const median_views = cfg.show_avg_views !== false && window.length
       ? Math.round(median(window.map((x) => x.views ?? 0)))
       : null;
 
@@ -286,7 +291,10 @@ async function buildPayload(supabase: SupabaseClient, kit: KitRow) {
       growth_30d_pct,
       engagement_rate,
       total_posts,
-      avg_views,
+      median_views,
+      /** @deprecated Alias of median_views, kept so a cached older page build
+       *  that still reads avg_views keeps rendering. Drop after one release. */
+      avg_views: median_views,
       as_of,
     };
   });
