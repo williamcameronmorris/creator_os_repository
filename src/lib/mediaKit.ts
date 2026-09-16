@@ -19,7 +19,10 @@ export interface PublicKitPlatform {
   engagement_rate: number | null;
   /** All-time count from a direct grant or the creator's own figure; null when neither exists. */
   total_posts: number | null;
-  avg_views: number | null;
+  /** Median views over the last 90 days (or the last twenty posts with views). */
+  median_views: number | null;
+  /** @deprecated Old name for median_views; the function still sends both. */
+  avg_views?: number | null;
   as_of: string | null;
 }
 

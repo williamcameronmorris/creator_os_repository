@@ -370,6 +370,9 @@ export function Analytics() {
               <p className="text-sm text-muted-foreground mt-2">
                 Your lanes on {platformLabel}, ranked by median views. Scored
                 against {scored.length} posts with enough history to judge.
+                {/* With no account pinned this ranking pools posts from every
+                    platform, and each platform counts a view its own way. */}
+                {!activeAccount && ' Each platform counts a view its own way, so a ranking that pools them is a rough guide, not a like-for-like one.'}
               </p>
             </div>
             <LaneLeaderboard lanes={laneStats} platformLabel={platformLabel} />

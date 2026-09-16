@@ -29,6 +29,18 @@ describe('PostGrid', () => {
     expect(after).toContain('https://cdn.example/4.jpg');
   });
 
+  it('warns that view counts are not comparable once tiles mix platforms', () => {
+    const { container } = render(
+      <PostGrid posts={[post(1, 'instagram'), post(2, 'tiktok')]} limit={6} />
+    );
+    expect(container.textContent).toContain('comparable between platforms');
+  });
+
+  it('stays quiet when every tile is from the same platform', () => {
+    const { container } = render(<PostGrid posts={[post(1), post(2)]} limit={6} />);
+    expect(container.textContent).not.toContain('comparable between platforms');
+  });
+
   it('renders nothing when there are no posts', () => {
     const { container } = render(<PostGrid posts={[]} limit={6} />);
     expect(container.innerHTML).toBe('');
