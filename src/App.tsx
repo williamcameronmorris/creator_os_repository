@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { Suspense, lazy, useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
@@ -14,32 +14,51 @@ import { StudioHub } from './pages/StudioHub';
 import { Studio } from './pages/Studio';
 import { Schedule } from './pages/Schedule';
 import { Media } from './pages/Media';
-import { Analytics } from './pages/Analytics';
-import { AnalyticsPlatform } from './pages/AnalyticsPlatform';
 import { SavedIdeasPage } from './pages/SavedIdeasPage';
 import { Profile } from './pages/Profile';
 import { SettingsPage } from './pages/SettingsPage';
-import { HelpPage } from './pages/HelpPage';
-import { PublicMediaKit } from './pages/PublicMediaKit';
 import { PostComposerPage } from './pages/PostComposerPage';
 import { ComposePost } from './pages/ComposePost';
 import { DropZone } from './pages/DropZone';
-import { Watch } from './pages/Watch';
-import { WatchCreator } from './pages/WatchCreator';
-import { StudioChallenge } from './pages/StudioChallenge';
-import { Templates } from './pages/Templates';
 import { MetaCallback } from './components/MetaCallback';
 import { ThreadsCallback } from './components/ThreadsCallback';
 import { YoutubeCallback } from './components/YoutubeCallback';
 import { PostForMeCallback } from './components/PostForMeCallback';
 import { Connections } from './pages/Connections';
-import { Patra } from './pages/Patra';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ToastProvider } from './components/ui/Toast';
 import { ConfirmProvider } from './components/ui/ConfirmDialog';
-import { Privacy, Terms } from './pages/Legal';
 import { NotFound } from './pages/NotFound';
 import { supabase, type Profile as ProfileType } from './lib/supabase';
+
+// Routes that are never the first thing a session opens are split out of the
+// entry chunk and fetched on navigation. Clio, Auth, Onboarding, Layout,
+// Studio, Schedule, ComposePost and DropZone stay eager so first paint is
+// unchanged. Patra pulls its own panels (including the media-kit editor) into
+// its chunk, and PublicMediaKit pulls the public kit components into its own.
+const Analytics = lazy(() => import('./pages/Analytics').then(m => ({ default: m.Analytics })));
+const AnalyticsPlatform = lazy(() => import('./pages/AnalyticsPlatform').then(m => ({ default: m.AnalyticsPlatform })));
+const Patra = lazy(() => import('./pages/Patra').then(m => ({ default: m.Patra })));
+const Watch = lazy(() => import('./pages/Watch').then(m => ({ default: m.Watch })));
+const WatchCreator = lazy(() => import('./pages/WatchCreator').then(m => ({ default: m.WatchCreator })));
+const PublicMediaKit = lazy(() => import('./pages/PublicMediaKit').then(m => ({ default: m.PublicMediaKit })));
+const Templates = lazy(() => import('./pages/Templates').then(m => ({ default: m.Templates })));
+// Also split: the challenge view is the only eager route that pulls recharts,
+// so leaving it in the entry would ship the chart library on every first load.
+const StudioChallenge = lazy(() => import('./pages/StudioChallenge').then(m => ({ default: m.StudioChallenge })));
+const HelpPage = lazy(() => import('./pages/HelpPage').then(m => ({ default: m.HelpPage })));
+const Privacy = lazy(() => import('./pages/Legal').then(m => ({ default: m.Privacy })));
+const Terms = lazy(() => import('./pages/Legal').then(m => ({ default: m.Terms })));
+
+// Same full-screen pulse the auth and profile gates already render, so a
+// chunk fetch looks like every other wait in the app.
+function RouteFallback() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="w-1.5 h-1.5 bg-foreground animate-pulse" />
+    </div>
+  );
+}
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -263,7 +282,9 @@ export default function App() {
                 <SubscriptionProvider>
                   <ToastProvider>
                     <ConfirmProvider>
-                      <AppContent />
+                      <Suspense fallback={<RouteFallback />}>
+                        <AppContent />
+                      </Suspense>
                     </ConfirmProvider>
                   </ToastProvider>
                 </SubscriptionProvider>
