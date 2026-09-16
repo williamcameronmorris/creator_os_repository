@@ -341,6 +341,9 @@ export function Schedule() {
           <div className="grid gap-3">
             {filteredPosts.map((post) => {
               const Icon = getPlatformIcon(post.platform);
+              // Either column can be null; hoisting the fallback here lets the
+              // render below both test and format the same narrowed value.
+              const scheduledIso = post.scheduled_for || post.scheduled_date;
               return (
                 <div
                   key={post.id}
@@ -428,12 +431,12 @@ export function Schedule() {
                             {post.caption || 'No caption'}
                           </p>
 
-                          {(post.scheduled_for || post.scheduled_date) && (
+                          {scheduledIso && (
                             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                               <Clock className="w-3.5 h-3.5 flex-shrink-0" />
                               {post.publish_status === 'published' && post.published_at
                                 ? `Published ${formatInTz(post.published_at, timezone)}`
-                                : formatInTz((post.scheduled_for || post.scheduled_date), timezone)}
+                                : formatInTz(scheduledIso, timezone)}
                             </div>
                           )}
 

@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { ChevronLeft, ChevronRight, Instagram, Youtube, Facebook, Twitter, Cloud, Sparkles, AtSign, Calendar, Clock } from 'lucide-react';
-import { formatInTz } from '../lib/timezone';
 
 interface CalPost {
   id: string;
   platform: string;
   caption: string;
-  scheduled_date: string;
+  // Rows can carry a null date (drafts, or posts scheduled by time only);
+  // every read below already falls back to scheduled_for and skips empties.
+  scheduled_date: string | null;
   scheduled_for?: string | null;
   status: string;
 }

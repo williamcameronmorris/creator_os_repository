@@ -6,13 +6,10 @@ import { useAccount } from '../contexts/AccountContext';
 import { useBrand } from '../contexts/BrandContext';
 import { PlaybookPanel } from '../components/PlaybookPanel';
 import {
-  Send,
   TrendingUp,
   Calendar,
   Lightbulb,
-  ArrowRight,
   RefreshCw,
-  Pencil,
   Check,
   Upload,
 } from 'lucide-react';
