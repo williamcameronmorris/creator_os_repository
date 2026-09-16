@@ -11,6 +11,10 @@ import { loadVoiceContext, loadAccountNiche } from "../_shared/voice.ts";
  * `ai_daily_briefs` (one row per user per day). The Clio home page reads
  * today's row and lights up the Daily Brief panel.
  *
+ * Each generated idea is also mirrored into `ai_content_suggestions` with
+ * source 'daily_brief' (see persistBriefIdeas) so it is still there tomorrow —
+ * the brief row itself is only ever read for today.
+ *
  * Two modes (deploy `--no-verify-jwt`, same as the other functions):
  *
  *   1. User mode — `Authorization: Bearer <user-jwt>`. Generates (or, with
@@ -79,8 +83,10 @@ type PostRow = {
 
 /** A top performer as the Analytics page scores it: post_performance's multiple
  * of the creator's own trailing median. views_multiple is null when there is
- * not enough history to judge. */
+ * not enough history to judge. `id` is the content_posts id (post_performance
+ * is a view over it) and is null on the unscored fallback. */
 type TopPost = PostRow & {
+  id: string | null;
   views_multiple: number | null;
   lane_name: string | null;
   outlier_metric: string | null;
@@ -162,7 +168,7 @@ async function gatherUserData(
   // brief can never praise a post the page marks 0.4x.
   let scoredQuery = supabase
     .from("post_performance")
-    .select("title, caption, platform, content_type, views, likes, comments, engagement_rate, published_at, views_multiple, lane_name, outlier_metric")
+    .select("id, title, caption, platform, content_type, views, likes, comments, engagement_rate, published_at, views_multiple, lane_name, outlier_metric")
     .eq("brand_id", brandId)
     .gte("published_at", sevenDaysAgo);
   if (socialAccountId) {
@@ -191,7 +197,7 @@ async function gatherUserData(
   const topPosts: TopPost[] = scored.length > 0
     ? scored
     : [...recent].sort((a, b) => postScore(b) - postScore(a)).slice(0, 3)
-        .map((p) => ({ ...p, views_multiple: null, lane_name: null, outlier_metric: null }));
+        .map((p) => ({ ...p, id: null, views_multiple: null, lane_name: null, outlier_metric: null }));
 
   // ── Best posting hour: weight each published hour by likes+comments (+1 so
   //    zero-engagement posts still count as frequency), pick the heaviest.
@@ -347,6 +353,74 @@ Exactly 3 ideas. Use the best posting hour given above for best_time.hour_local.
   return parsed;
 }
 
+// ─── Persisting the ideas ────────────────────────────────────────────────────
+
+/**
+ * The brief's ideas used to live only inside ai_daily_briefs.content, and Clio
+ * reads exactly one row — today's. An idea the creator liked on Tuesday was
+ * unreachable on Wednesday. Each one is now mirrored into
+ * ai_content_suggestions, the table Studio's Ideate stage already lists, with
+ * the same column shape generate-ideas writes so the two kinds of idea are
+ * indistinguishable once they land.
+ *
+ * Idempotent per brand per day: the brief upserts on (brand_id, brief_date)
+ * and `force` regenerates it, so the rows carry the brief date in metadata and
+ * a second run for the same day writes nothing instead of stacking duplicates.
+ *
+ * Never throws. The brief is the artifact the creator is waiting for; a failed
+ * mirror is logged and the brief still lands.
+ */
+async function persistBriefIdeas(
+  supabase: SupabaseClient,
+  userId: string,
+  brandId: string,
+  briefDate: string,
+  ideas: BriefIdea[],
+  inspiredByPostId: string | null,
+): Promise<void> {
+  try {
+    if (!Array.isArray(ideas) || ideas.length === 0) return;
+
+    const { data: already, error: existingErr } = await supabase
+      .from("ai_content_suggestions")
+      .select("id")
+      .eq("brand_id", brandId)
+      .eq("source", "daily_brief")
+      .eq("metadata->>brief_date", briefDate)
+      .limit(1);
+    if (existingErr) {
+      console.error("brief ideas: existence check failed", existingErr.message);
+      return;
+    }
+    if (already && already.length > 0) return;
+
+    const rows = ideas.slice(0, 5).map((idea) => ({
+      user_id: userId,
+      brand_id: brandId,
+      platform: (idea.platform || "instagram").toLowerCase(),
+      content_type: idea.content_type || "reel",
+      suggested_topic: (idea.topic || "Untitled idea").slice(0, 200),
+      // The Daily Brief card already deep-links into Studio with the hook in
+      // this slot; keeping it there means a persisted idea opens identically.
+      suggested_format: (idea.hook || "").slice(0, 300),
+      reasoning: (idea.reasoning || "").slice(0, 600),
+      hook_text: (idea.hook || "").slice(0, 300),
+      status: "new",
+      source: "daily_brief",
+      // Null unless the brief actually led with a scored post. confidence_score
+      // is left to its column default: the brief's model is not asked to score
+      // its ideas, and inventing a number here would be a made-up metric.
+      inspired_by_post_id: inspiredByPostId,
+      metadata: { brief_date: briefDate },
+    }));
+
+    const { error: insertErr } = await supabase.from("ai_content_suggestions").insert(rows);
+    if (insertErr) console.error("brief ideas: insert failed", insertErr.message);
+  } catch (err) {
+    console.error("brief ideas: unexpected failure", err instanceof Error ? err.message : String(err));
+  }
+}
+
 // ─── Per-user pipeline ───────────────────────────────────────────────────────
 
 async function generateForUser(
@@ -385,6 +459,20 @@ async function generateForUser(
     .select()
     .single();
   if (error) throw new Error(`Failed to save brief: ${error.message}`);
+
+  // Mirror the ideas into ai_content_suggestions so they outlive today's row.
+  // inspired_by_post_id only when the brief was built on scored posts — the
+  // unscored fallback has no post id to point at.
+  const scoredSource = data.topPosts.find((p) => p.views_multiple !== null && p.id);
+  await persistBriefIdeas(
+    supabase,
+    userId,
+    brandId,
+    briefDate,
+    content.ideas,
+    scoredSource?.id ?? null,
+  );
+
   return { row };
 }
 
