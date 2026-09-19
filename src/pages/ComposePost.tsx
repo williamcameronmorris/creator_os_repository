@@ -6,6 +6,7 @@ import { useAccount } from '../contexts/AccountContext';
 import { useSubscription } from '../contexts/SubscriptionContext';
 import { supabase } from '../lib/supabase';
 import { mediaRef } from '../lib/mediaUrls';
+import { uploadResumable, storagePathFor } from '../lib/resumableUpload';
 import {
   ArrowLeft, ArrowRight, Check, Upload, X as XIcon,
   Instagram, Youtube, Facebook, Twitter, Sparkles, AtSign, Cloud, Globe,
@@ -127,6 +128,7 @@ export function ComposePost() {
   const [suggestedSource, setSuggestedSource] = useState<'industry_default' | 'personal'>('industry_default');
 
   const [publishState, setPublishState] = useState<PublishState>('idle');
+  const [uploadProgress, setUploadProgress] = useState<{ index: number; total: number; fraction: number } | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
 
   // Default to the brand's first account, and start over when the brand (and
@@ -256,14 +258,17 @@ export function ComposePost() {
   const uploadMedia = async (): Promise<string[]> => {
     if (!user || media.length === 0) return [];
     const urls: string[] = [];
-    for (const m of media) {
-      const ext = m.file.name.split('.').pop() || (m.kind === 'video' ? 'mp4' : 'jpg');
-      const path = `${user.id}/${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${ext}`;
-      const { data, error } = await supabase.storage
-        .from('media')
-        .upload(path, m.file, { cacheControl: '3600', upsert: false });
-      if (error) throw new Error(`Upload failed: ${error.message}`);
-      urls.push(mediaRef(data.path));
+    try {
+      for (let i = 0; i < media.length; i++) {
+        const m = media[i];
+        setUploadProgress({ index: i, total: media.length, fraction: 0 });
+        const path = await uploadResumable(m.file, storagePathFor(user.id, m.file), {
+          onProgress: (fraction) => setUploadProgress({ index: i, total: media.length, fraction }),
+        });
+        urls.push(mediaRef(path));
+      }
+    } finally {
+      setUploadProgress(null);
     }
     return urls;
   };
@@ -723,6 +728,23 @@ export function ComposePost() {
         </p>
       )}
 
+      {publishState === 'uploading' && uploadProgress && (
+        <div className="mb-4">
+          <div className="flex items-center justify-between t-micro text-muted-foreground mb-1">
+            <span>
+              UPLOADING {String(uploadProgress.index + 1).padStart(2, '0')} / {String(uploadProgress.total).padStart(2, '0')}
+            </span>
+            <span>{Math.round(uploadProgress.fraction * 100)}%</span>
+          </div>
+          <div className="h-1 w-full bg-muted/40">
+            <div
+              className="h-full transition-[width] duration-200"
+              style={{ width: `${Math.round(uploadProgress.fraction * 100)}%`, backgroundColor: 'var(--accent)' }}
+            />
+          </div>
+        </div>
+      )}
+
       <button
         onClick={submit}
         disabled={
@@ -735,7 +757,9 @@ export function ComposePost() {
       >
         <span className="btn-ie-text">
           {publishState === 'uploading'
-            ? 'Uploading…'
+            ? uploadProgress
+              ? `Uploading ${Math.round(uploadProgress.fraction * 100)}%`
+              : 'Uploading…'
             : publishState === 'submitting'
             ? 'Submitting…'
             : mode === 'now'
