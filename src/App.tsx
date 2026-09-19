@@ -79,7 +79,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 function AppContent() {
-  const { user, loading } = useAuth();
+  const { user, loading, passwordRecovery } = useAuth();
   const [profile, setProfile] = useState<ProfileType | null>(null);
   const [checkingProfile, setCheckingProfile] = useState(true);
   // True once a fetch has answered (row or confirmed no row). Until then a
@@ -151,6 +151,13 @@ function AppContent() {
         <Route path="/auth/postforme/callback" element={<PostForMeCallback />} />
       </Routes>
     );
+  }
+
+  // A password-recovery link signs the person in, so without this gate they
+  // would land on the home page with the old password still in place. Render
+  // the reset form ahead of the profile and onboarding gates.
+  if (!loading && user && passwordRecovery) {
+    return <Auth />;
   }
 
   if (loading || checkingProfile || (user && !profileLoaded && !loadError)) {

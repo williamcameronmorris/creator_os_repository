@@ -48,13 +48,13 @@ export function Auth() {
   const [loading, setLoading] = useState(false);
   const [submittedEmail, setSubmittedEmail] = useState('');
   const [resendCooldown, setResendCooldown] = useState(0);
-  const { signIn, signUp, resetPassword, updatePassword } = useAuth();
+  const { signIn, signUp, resetPassword, updatePassword, passwordRecovery, endPasswordRecovery } = useAuth();
 
   useEffect(() => {
-    if (searchParams.get('reset') === 'true') {
+    if (passwordRecovery || searchParams.get('reset') === 'true') {
       setView('reset');
     }
-  }, [searchParams]);
+  }, [passwordRecovery, searchParams]);
 
   // Tick the resend cooldown down once a second
   useEffect(() => {
@@ -150,8 +150,10 @@ export function Auth() {
     setLoading(true);
     try {
       await updatePassword(newPassword);
-      setSuccess('Password updated successfully. Redirecting…');
-      setTimeout(() => { window.location.href = '/dashboard'; }, 2000);
+      setSuccess('Password updated. Taking you in…');
+      // Full reload: clears the recovery flag and the `?reset=true` query in
+      // one move, and lands on the home route with a fresh session.
+      setTimeout(() => { window.location.replace('/'); }, 1500);
     } catch (err: any) {
       setError(friendlyAuthError(err.message || 'An error occurred', 'reset'));
     } finally {
@@ -341,6 +343,17 @@ export function Auth() {
               <span className="btn-ie-text">{loading ? 'Updating…' : 'Update password'}</span>
               {!loading && <ArrowRight className="w-3 h-3" />}
             </button>
+            {passwordRecovery && (
+              <div className="pt-6 border-t border-border text-center">
+                <button
+                  type="button"
+                  onClick={endPasswordRecovery}
+                  className="t-micro text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  KEEP MY CURRENT PASSWORD
+                </button>
+              </div>
+            )}
           </form>
         )}
 
