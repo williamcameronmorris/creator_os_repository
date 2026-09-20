@@ -6,6 +6,8 @@ import { useAccount } from '../contexts/AccountContext';
 import { useSubscription } from '../contexts/SubscriptionContext';
 import { supabase } from '../lib/supabase';
 import { mediaRef } from '../lib/mediaUrls';
+import { uploadResumable, storagePathFor } from '../lib/resumableUpload';
+import { useConfirm } from '../components/ui/ConfirmDialog';
 import {
   ArrowLeft, ArrowRight, Check, Upload, X as XIcon,
   Instagram, Youtube, Facebook, Twitter, Sparkles, AtSign, Cloud, Globe,
@@ -24,6 +26,8 @@ import { useTimezone } from '../hooks/useTimezone';
 import { localInputToUtc, utcToLocalInput } from '../lib/timezone';
 import {
   fileTooLargeMessage,
+  formatFileSize,
+  MAX_UPLOAD_MB,
   readVideoDuration,
   youtubeContentType,
   YOUTUBE_TITLE_LIMIT,
@@ -127,6 +131,8 @@ export function ComposePost() {
   const [suggestedSource, setSuggestedSource] = useState<'industry_default' | 'personal'>('industry_default');
 
   const [publishState, setPublishState] = useState<PublishState>('idle');
+  const [uploadProgress, setUploadProgress] = useState<{ index: number; total: number; fraction: number } | null>(null);
+  const confirm = useConfirm();
   const [errorMsg, setErrorMsg] = useState('');
 
   // Default to the brand's first account, and start over when the brand (and
@@ -208,6 +214,27 @@ export function ComposePost() {
     );
   };
 
+  const alertTooLarge = (files: File[]) => {
+    const list = files.map((f) => `${f.name} (${formatFileSize(f.size)})`).join(', ');
+    return confirm({
+      acknowledge: true,
+      title: files.length === 1 ? 'That file is too large to upload' : 'Those files are too large to upload',
+      danger: true,
+      message: (
+        <>
+          <p className="mb-3">
+            {list} {files.length === 1 ? 'is' : 'are'} over the {MAX_UPLOAD_MB} MB limit, so{' '}
+            {files.length === 1 ? 'it was' : 'they were'} not added.
+          </p>
+          <p>
+            Trim the clip shorter, or re-export it at 1080p instead of 4K. Around a minute of
+            1080p video fits comfortably.
+          </p>
+        </>
+      ),
+    });
+  };
+
   const onFilesPicked = (e: React.ChangeEvent<HTMLInputElement>) => {
     const list = e.target.files;
     if (!list) return;
@@ -216,13 +243,12 @@ export function ComposePost() {
       setErrorMsg('');
     }
     const next: MediaItem[] = [...media];
+    const rejected: File[] = [];
     for (const f of Array.from(list)) {
       // The bucket refuses anything over the cap; say so now, not after a
       // long upload fails.
-      const tooLarge = fileTooLargeMessage(f);
-      if (tooLarge) {
-        setPublishState('error');
-        setErrorMsg(tooLarge);
+      if (fileTooLargeMessage(f)) {
+        rejected.push(f);
         continue;
       }
       const kind: 'image' | 'video' = f.type.startsWith('video') ? 'video' : 'image';
@@ -237,6 +263,7 @@ export function ComposePost() {
     }
     setMedia(next);
     if (fileInputRef.current) fileInputRef.current.value = '';
+    if (rejected.length > 0) void alertTooLarge(rejected);
   };
 
   const removeMedia = (idx: number) => {
@@ -256,14 +283,17 @@ export function ComposePost() {
   const uploadMedia = async (): Promise<string[]> => {
     if (!user || media.length === 0) return [];
     const urls: string[] = [];
-    for (const m of media) {
-      const ext = m.file.name.split('.').pop() || (m.kind === 'video' ? 'mp4' : 'jpg');
-      const path = `${user.id}/${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${ext}`;
-      const { data, error } = await supabase.storage
-        .from('media')
-        .upload(path, m.file, { cacheControl: '3600', upsert: false });
-      if (error) throw new Error(`Upload failed: ${error.message}`);
-      urls.push(mediaRef(data.path));
+    try {
+      for (let i = 0; i < media.length; i++) {
+        const m = media[i];
+        setUploadProgress({ index: i, total: media.length, fraction: 0 });
+        const path = await uploadResumable(m.file, storagePathFor(user.id, m.file), {
+          onProgress: (fraction) => setUploadProgress({ index: i, total: media.length, fraction }),
+        });
+        urls.push(mediaRef(path));
+      }
+    } finally {
+      setUploadProgress(null);
     }
     return urls;
   };
@@ -612,7 +642,7 @@ export function ComposePost() {
             <Upload className="w-5 h-5" />
             <span className="t-micro">ADD MEDIA</span>
             <span className="t-micro">
-              {requiresVideoOnly ? 'MP4, MOV' : 'JPG, PNG, MP4, MOV'}
+              {requiresVideoOnly ? 'MP4, MOV' : 'JPG, PNG, MP4, MOV'} · UP TO {MAX_UPLOAD_MB} MB
             </span>
           </button>
         ) : (
@@ -620,7 +650,18 @@ export function ComposePost() {
             {media.map((m, idx) => (
               <div key={idx} className="relative aspect-square border border-border overflow-hidden bg-muted/20">
                 {m.kind === 'video' ? (
-                  <video src={m.preview} className="w-full h-full object-cover" muted />
+                  <video
+                    src={m.preview}
+                    className="w-full h-full object-cover"
+                    muted
+                    playsInline
+                    preload="metadata"
+                    // iOS Safari paints an empty box until a frame is actually
+                    // decoded: without playsInline + preload it never fetches
+                    // metadata, and even with them it holds on frame zero.
+                    // Nudging currentTime forces the first frame to render.
+                    onLoadedMetadata={(e) => { e.currentTarget.currentTime = 0.1; }}
+                  />
                 ) : (
                   <img src={m.preview} alt="" className="w-full h-full object-cover" />
                 )}
@@ -635,7 +676,7 @@ export function ComposePost() {
                   className="absolute bottom-1 left-1 font-mono text-[12px] px-1 py-0.5 bg-background/80 uppercase"
                   style={{ color: 'var(--muted-foreground)' }}
                 >
-                  {m.kind}
+                  {m.kind} · {formatFileSize(m.file.size)}
                 </span>
               </div>
             ))}
@@ -723,6 +764,23 @@ export function ComposePost() {
         </p>
       )}
 
+      {publishState === 'uploading' && uploadProgress && (
+        <div className="mb-4">
+          <div className="flex items-center justify-between t-micro text-muted-foreground mb-1">
+            <span>
+              UPLOADING {String(uploadProgress.index + 1).padStart(2, '0')} / {String(uploadProgress.total).padStart(2, '0')}
+            </span>
+            <span>{Math.round(uploadProgress.fraction * 100)}%</span>
+          </div>
+          <div className="h-1 w-full bg-muted/40">
+            <div
+              className="h-full transition-[width] duration-200"
+              style={{ width: `${Math.round(uploadProgress.fraction * 100)}%`, backgroundColor: 'var(--accent)' }}
+            />
+          </div>
+        </div>
+      )}
+
       <button
         onClick={submit}
         disabled={
@@ -735,7 +793,9 @@ export function ComposePost() {
       >
         <span className="btn-ie-text">
           {publishState === 'uploading'
-            ? 'Uploading…'
+            ? uploadProgress
+              ? `Uploading ${Math.round(uploadProgress.fraction * 100)}%`
+              : 'Uploading…'
             : publishState === 'submitting'
             ? 'Submitting…'
             : mode === 'now'

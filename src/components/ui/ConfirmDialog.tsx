@@ -31,6 +31,13 @@ export interface ConfirmOptions {
   danger?: boolean;
   /** A third, quiet way out. Resolves null. */
   dismissLabel?: string;
+  /**
+   * Acknowledge-only: one button, no cancel, and the backdrop does not
+   * dismiss. For telling someone something they have to actually read (a
+   * rejected file, say) rather than asking them to choose. Escape still
+   * closes, so keyboard users are never trapped.
+   */
+  acknowledge?: boolean;
 }
 
 export type ConfirmFn = (opts: ConfirmOptions) => Promise<boolean | null>;
@@ -77,7 +84,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
         <div
           className="fixed inset-0 z-[70] flex items-center justify-center p-4"
           style={{ background: 'rgba(0,0,0,0.6)' }}
-          onClick={() => settle(null)}
+          onClick={() => { if (!o.acknowledge) settle(null); }}
         >
           <div
             role="alertdialog"
@@ -88,7 +95,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="t-micro mb-3" style={o.danger ? { color: 'var(--destructive)' } : undefined}>
-              {o.danger ? 'CONFIRM' : 'ONE MOMENT'}
+              {o.acknowledge ? 'HEADS UP' : o.danger ? 'CONFIRM' : 'ONE MOMENT'}
             </div>
             <h2
               id="confirm-title"
@@ -109,13 +116,15 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
                   {o.dismissLabel}
                 </button>
               )}
-              <button
-                type="button"
-                onClick={() => settle(false)}
-                className="t-micro px-3 py-2 text-muted-foreground hover:text-foreground transition-colors"
-              >
-                {o.cancelLabel ?? 'Cancel'}
-              </button>
+              {!o.acknowledge && (
+                <button
+                  type="button"
+                  onClick={() => settle(false)}
+                  className="t-micro px-3 py-2 text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  {o.cancelLabel ?? 'Cancel'}
+                </button>
+              )}
               <button
                 ref={confirmBtn}
                 type="button"
@@ -126,7 +135,9 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
                 {o.danger ? (
                   o.confirmLabel ?? 'Delete'
                 ) : (
-                  <span className="btn-ie-text">{o.confirmLabel ?? 'Continue'}</span>
+                  <span className="btn-ie-text">
+                    {o.confirmLabel ?? (o.acknowledge ? 'Got it' : 'Continue')}
+                  </span>
                 )}
               </button>
             </div>
