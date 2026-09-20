@@ -7,6 +7,7 @@ import { useSubscription } from '../contexts/SubscriptionContext';
 import { supabase } from '../lib/supabase';
 import { mediaRef } from '../lib/mediaUrls';
 import { uploadResumable, storagePathFor } from '../lib/resumableUpload';
+import { useConfirm } from '../components/ui/ConfirmDialog';
 import {
   ArrowLeft, ArrowRight, Check, Upload, X as XIcon,
   Instagram, Youtube, Facebook, Twitter, Sparkles, AtSign, Cloud, Globe,
@@ -131,6 +132,7 @@ export function ComposePost() {
 
   const [publishState, setPublishState] = useState<PublishState>('idle');
   const [uploadProgress, setUploadProgress] = useState<{ index: number; total: number; fraction: number } | null>(null);
+  const confirm = useConfirm();
   const [errorMsg, setErrorMsg] = useState('');
 
   // Default to the brand's first account, and start over when the brand (and
@@ -212,6 +214,27 @@ export function ComposePost() {
     );
   };
 
+  const alertTooLarge = (files: File[]) => {
+    const list = files.map((f) => `${f.name} (${formatFileSize(f.size)})`).join(', ');
+    return confirm({
+      acknowledge: true,
+      title: files.length === 1 ? 'That file is too large to upload' : 'Those files are too large to upload',
+      danger: true,
+      message: (
+        <>
+          <p className="mb-3">
+            {list} {files.length === 1 ? 'is' : 'are'} over the {MAX_UPLOAD_MB} MB limit, so{' '}
+            {files.length === 1 ? 'it was' : 'they were'} not added.
+          </p>
+          <p>
+            Trim the clip shorter, or re-export it at 1080p instead of 4K. Around a minute of
+            1080p video fits comfortably.
+          </p>
+        </>
+      ),
+    });
+  };
+
   const onFilesPicked = (e: React.ChangeEvent<HTMLInputElement>) => {
     const list = e.target.files;
     if (!list) return;
@@ -220,13 +243,12 @@ export function ComposePost() {
       setErrorMsg('');
     }
     const next: MediaItem[] = [...media];
+    const rejected: File[] = [];
     for (const f of Array.from(list)) {
       // The bucket refuses anything over the cap; say so now, not after a
       // long upload fails.
-      const tooLarge = fileTooLargeMessage(f);
-      if (tooLarge) {
-        setPublishState('error');
-        setErrorMsg(tooLarge);
+      if (fileTooLargeMessage(f)) {
+        rejected.push(f);
         continue;
       }
       const kind: 'image' | 'video' = f.type.startsWith('video') ? 'video' : 'image';
@@ -241,6 +263,7 @@ export function ComposePost() {
     }
     setMedia(next);
     if (fileInputRef.current) fileInputRef.current.value = '';
+    if (rejected.length > 0) void alertTooLarge(rejected);
   };
 
   const removeMedia = (idx: number) => {
