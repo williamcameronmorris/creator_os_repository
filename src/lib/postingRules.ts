@@ -10,6 +10,14 @@ import { supabase } from './supabase';
 export const MAX_UPLOAD_MB = 50;
 export const MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024;
 
+/** Size as a creator reads it, not as bytes. */
+export function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  const mb = bytes / (1024 * 1024);
+  return mb < 10 ? `${mb.toFixed(1)} MB` : `${Math.round(mb)} MB`;
+}
+
 /** Null when the file fits; otherwise the message to show at pick time. */
 export function fileTooLargeMessage(file: { name: string; size: number }): string | null {
   if (file.size <= MAX_UPLOAD_BYTES) return null;

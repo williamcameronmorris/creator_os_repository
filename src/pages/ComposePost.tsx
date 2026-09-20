@@ -25,6 +25,8 @@ import { useTimezone } from '../hooks/useTimezone';
 import { localInputToUtc, utcToLocalInput } from '../lib/timezone';
 import {
   fileTooLargeMessage,
+  formatFileSize,
+  MAX_UPLOAD_MB,
   readVideoDuration,
   youtubeContentType,
   YOUTUBE_TITLE_LIMIT,
@@ -617,7 +619,7 @@ export function ComposePost() {
             <Upload className="w-5 h-5" />
             <span className="t-micro">ADD MEDIA</span>
             <span className="t-micro">
-              {requiresVideoOnly ? 'MP4, MOV' : 'JPG, PNG, MP4, MOV'}
+              {requiresVideoOnly ? 'MP4, MOV' : 'JPG, PNG, MP4, MOV'} · UP TO {MAX_UPLOAD_MB} MB
             </span>
           </button>
         ) : (
@@ -651,7 +653,7 @@ export function ComposePost() {
                   className="absolute bottom-1 left-1 font-mono text-[12px] px-1 py-0.5 bg-background/80 uppercase"
                   style={{ color: 'var(--muted-foreground)' }}
                 >
-                  {m.kind}
+                  {m.kind} · {formatFileSize(m.file.size)}
                 </span>
               </div>
             ))}

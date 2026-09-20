@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   fileTooLargeMessage,
+  formatFileSize,
   MAX_UPLOAD_BYTES,
   youtubeContentType,
   scheduleLeadTimeMessage,
@@ -16,6 +17,19 @@ describe('file size guard', () => {
   it('names the file, its size and the limit when it is too big', () => {
     const msg = fileTooLargeMessage({ name: 'clip.mp4', size: 72.4 * 1024 * 1024 });
     expect(msg).toBe('clip.mp4 is 72.4 MB. The limit is 50 MB.');
+  });
+});
+
+describe('formatFileSize', () => {
+  it('uses one decimal under 10 MB and drops it above, so tiles stay short', () => {
+    expect(formatFileSize(3.25 * 1024 * 1024)).toBe('3.3 MB');
+    expect(formatFileSize(38.4 * 1024 * 1024)).toBe('38 MB');
+    expect(formatFileSize(205 * 1024 * 1024)).toBe('205 MB');
+  });
+
+  it('drops to KB and B for small files rather than showing 0.0 MB', () => {
+    expect(formatFileSize(200 * 1024)).toBe('200 KB');
+    expect(formatFileSize(512)).toBe('512 B');
   });
 });
 
