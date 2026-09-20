@@ -625,7 +625,18 @@ export function ComposePost() {
             {media.map((m, idx) => (
               <div key={idx} className="relative aspect-square border border-border overflow-hidden bg-muted/20">
                 {m.kind === 'video' ? (
-                  <video src={m.preview} className="w-full h-full object-cover" muted />
+                  <video
+                    src={m.preview}
+                    className="w-full h-full object-cover"
+                    muted
+                    playsInline
+                    preload="metadata"
+                    // iOS Safari paints an empty box until a frame is actually
+                    // decoded: without playsInline + preload it never fetches
+                    // metadata, and even with them it holds on frame zero.
+                    // Nudging currentTime forces the first frame to render.
+                    onLoadedMetadata={(e) => { e.currentTarget.currentTime = 0.1; }}
+                  />
                 ) : (
                   <img src={m.preview} alt="" className="w-full h-full object-cover" />
                 )}
