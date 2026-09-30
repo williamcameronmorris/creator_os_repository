@@ -28,6 +28,10 @@ import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
  *       provider 'postforme', so Schedule and Analytics see it. dryRun
  *       validates and returns the payload without calling Post for Me.
  *
+ *   cancel      { postIds: [...] }
+ *       Deletes not-yet-published posts at Post for Me and marks the mirror
+ *       rows cancelled. Published posts are never touched.
+ *
  *   status      { postIds: [...] }
  *       Post for Me's own status and per-account results for up to 20 posts.
  *
@@ -159,6 +163,33 @@ Deno.serve(async (req) => {
             platform_data: x.platform_data ?? null, social_post_id: x.social_post_id ?? x.post_id ?? null })) });
       }
       return json({ ok: true, posts: out });
+    }
+
+    if (action === "cancel") {
+      // Unschedule posts that have not published yet: delete at Post for Me so
+      // it never fires, then mark the mirror rows cancelled. Published posts
+      // are never touched — this only stops future sends.
+      const ids = Array.isArray(body.postIds) ? (body.postIds as unknown[]).filter((x) => typeof x === "string") as string[] : [];
+      if (ids.length === 0 || ids.length > 50) throw new Error("postIds: 1 to 50 Post for Me post ids");
+      const out: Record<string, unknown>[] = [];
+      for (const id of ids) {
+        const r = await pfm(`/v1/social-posts/${encodeURIComponent(id)}`, { method: "DELETE" });
+        const okAtPfm = r.ok || r.status === 404; // already gone counts as cancelled
+        let rows = 0;
+        if (okAtPfm) {
+          const { data, error } = await supabase
+            .from("content_posts")
+            .update({ status: "cancelled" })
+            .eq("postforme_post_id", id)
+            .eq("status", "scheduled")
+            .select("id");
+          if (error) throw new Error(`mirror update: ${error.message}`);
+          rows = (data ?? []).length;
+        }
+        out.push({ id, pfm: r.status, cancelled: okAtPfm, rowsUpdated: rows });
+        await new Promise((resolve) => setTimeout(resolve, 250));
+      }
+      return json({ ok: true, results: out });
     }
 
     if (action === "accounts") {
