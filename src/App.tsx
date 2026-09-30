@@ -47,6 +47,7 @@ const Templates = lazy(() => import('./pages/Templates').then(m => ({ default: m
 // so leaving it in the entry would ship the chart library on every first load.
 const StudioChallenge = lazy(() => import('./pages/StudioChallenge').then(m => ({ default: m.StudioChallenge })));
 const HelpPage = lazy(() => import('./pages/HelpPage').then(m => ({ default: m.HelpPage })));
+const Landing = lazy(() => import('./pages/Landing').then(m => ({ default: m.Landing })));
 const Privacy = lazy(() => import('./pages/Legal').then(m => ({ default: m.Privacy })));
 const Terms = lazy(() => import('./pages/Legal').then(m => ({ default: m.Terms })));
 
@@ -164,6 +165,11 @@ function AppContent() {
   if (!user) {
     return (
       <Routes>
+        {/* Home with no session: what the app is, and which Google data it
+            touches. Google's OAuth verification refuses to review an app whose
+            home page redirects to a login. Signed-in users never reach this;
+            for them `/` is Clio, below. */}
+        <Route path="/" element={<Landing />} />
         <Route path="/auth" element={<Auth />} />
         {/* Public media kit: a brand opens this with no session at all. */}
         <Route path="/kit/:slug" element={<PublicMediaKit />} />

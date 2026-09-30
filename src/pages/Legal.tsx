@@ -152,15 +152,21 @@ export function Privacy() {
         <p>We request the smallest set of permissions each platform allows for publishing and reading your own metrics. You can revoke access at any time from Connections in the app or from the platform's own settings.</p>
       </Section>
 
-      <Section num="04" title="Where it lives and how it is protected">
+      <Section num="04" title="Google user data">
+        <p>Connecting YouTube is optional. When you do, we request a single scope, <code className="font-mono text-xs">youtube.readonly</code>, and use it only to read your channel's subscriber count and published video count, so the app can show your follower growth beside your other platforms. We do not upload, edit, delete, or comment on anything on your channel with it, and we never read another channel's private data.</p>
+        <p>Cliopatra Social's use and transfer of information received from Google APIs adheres to the <Ext href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</Ext>, including the Limited Use requirements. We do not transfer this data to others except as needed to provide the app, do not use it for advertising, and do not allow humans to read it except with your explicit consent, to resolve a support issue you have raised, or where required by law.</p>
+        <p>Disconnecting YouTube from Connections, or deleting your account, removes the stored token immediately.</p>
+      </Section>
+
+      <Section num="05" title="Where it lives and how it is protected">
         <p>Data is stored in a Supabase Postgres database with row-level security, so each user can only read their own records. Uploaded media sits in a private bucket and is only reachable through links that expire. Everything travels over HTTPS. Access tokens are never written to logs.</p>
       </Section>
 
-      <Section num="05" title="How long we keep it">
+      <Section num="06" title="How long we keep it">
         <p>For as long as your account exists. Deleting your account, from Profile in the app, removes your profile, brands, posts, ideas, analytics history, uploaded media, and connected-account tokens straight away. Backups roll off within 30 days.</p>
       </Section>
 
-      <Section num="06" title="Your choices">
+      <Section num="07" title="Your choices">
         <Items
           items={[
             'See and edit what we hold about you from Profile and Settings.',
@@ -171,15 +177,15 @@ export function Privacy() {
         />
       </Section>
 
-      <Section num="07" title="Children">
+      <Section num="08" title="Children">
         <p>Cliopatra Social is not for anyone under 13, and we do not knowingly collect information from children. If you think a child has given us personal information, email us and we will delete it.</p>
       </Section>
 
-      <Section num="08" title="Changes">
+      <Section num="09" title="Changes">
         <p>If this policy changes in a way that matters, we will update the date at the top and say so in the app. Using Cliopatra Social after a change means you accept the updated policy.</p>
       </Section>
 
-      <Section num="09" title="Contact">
+      <Section num="10" title="Contact">
         <p>
           Questions about this policy or your data: <a href={`mailto:${CONTACT_EMAIL}`} className="underline underline-offset-2">{CONTACT_EMAIL}</a>.
         </p>
