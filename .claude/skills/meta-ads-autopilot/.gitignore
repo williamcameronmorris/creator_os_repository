@@ -1,4 +1,5 @@
-config.json
+# config.json is committed: it holds IDs and thresholds only.
+# Secrets go in environment variables (see kie_api_key_env), never in config.json.
 .env
 .DS_Store
 *.log

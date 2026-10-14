@@ -20,6 +20,20 @@ Before doing anything, look for `config.json` in this skill's directory.
 
 ---
 
+## Local adaptations (this repo)
+
+These override the generic instructions in `autopilot.md` and `promote-winners.md`:
+
+- **Meta tools** use the `mcp__Meta_Ads__` prefix (`config.autopilot.meta_mcp_tool_prefix`). Strip `act_` from the account ID when calling them.
+- **Budget lives at campaign level** (CBO, `daily_test_budget` on the testing campaign). Never set a budget per ad.
+- **New ads** go into `testing_ad_set_id` via `ads_create_ad` (created PAUSED). Go live with `ads_activate_entity`, which in manual mode needs explicit user approval.
+- **Promote** = `ads_create_ad` into an ad set of `main_campaign_id`, passing `source_ad_id` plus `creative: {"creative_id": "<source creative_id>"}`. There is no duplicate tool.
+- **Kill** = `ads_update_entity` with `{"status":"PAUSED"}`.
+- **Conversion** = `conversion_event` (pixel SCHEDULE, a booked call). CAC means cost per booked call.
+- **`run_mode: manual`** means never activate anything without the user saying yes in chat, even when triggered by a routine.
+
+---
+
 ## What the loop does (every run)
 
 Same pipeline whether triggered manually or by a routine. The only difference is whether it pauses for confirmation before launching to Meta.

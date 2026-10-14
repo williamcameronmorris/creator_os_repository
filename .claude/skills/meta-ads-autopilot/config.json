@@ -1,0 +1,24 @@
+{
+  "backend": "kie",
+  "kie_api_key_env": "KIE_API_KEY",
+  "kie_model": "gpt-image-1",
+  "reference_ads_folder": "/home/user/creator_os_repository/meta-ads/references",
+  "output_folder": "/home/user/creator_os_repository/meta-ads/output",
+  "run_mode": "manual",
+  "autopilot": {
+    "meta_backend": "mcp",
+    "meta_mcp_tool_prefix": "mcp__Meta_Ads__",
+    "meta_ad_account_id": "act_1456429279552573",
+    "meta_page_id": "587805097989758",
+    "testing_campaign_id": "120253407849730415",
+    "testing_ad_set_id": "120253407856390415",
+    "main_campaign_id": "120253366989830415",
+    "conversion_event": "SCHEDULE",
+    "daily_test_budget": 30,
+    "budget_level": "campaign",
+    "target_cac": 40,
+    "promote_threshold_cac": 40,
+    "kill_threshold_spend": 80,
+    "competitors": []
+  }
+}

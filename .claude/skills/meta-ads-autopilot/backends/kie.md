@@ -10,6 +10,8 @@ Authorization: Bearer <kie_api_key>
 Content-Type: application/json
 ```
 
+**Key lookup:** if config has `kie_api_key_env`, read the key from that environment variable (e.g. `$KIE_API_KEY`) instead of `kie_api_key`. If the variable is empty, stop image gen and tell the user to add it in the cloud environment settings. Never ask for the key in chat.
+
 Request body shape (gpt-image-1 example):
 ```json
 {
