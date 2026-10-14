@@ -1,0 +1,23 @@
+{
+  "backend": "higgsfield",
+  "kie_api_key": "kie-...",
+  "kie_model": "gpt-image-1",
+  "openai_api_key": "sk-...",
+  "openai_model": "gpt-image-1",
+  "custom_base_url": "https://api.together.xyz/v1",
+  "custom_api_key": "...",
+  "custom_model": "black-forest-labs/FLUX.1-schnell",
+  "reference_ads_folder": "~/meta-ads-autopilot-references",
+  "output_folder": "~/meta-ads-autopilot-output",
+  "autopilot": {
+    "meta_backend": "mcp",
+    "meta_ad_account_id": "act_XXXXXXXXX",
+    "testing_campaign_id": "120210000000000",
+    "main_campaign_id": "120210000000001",
+    "daily_test_budget": 50,
+    "target_cac": 25,
+    "promote_threshold_cac": 25,
+    "kill_threshold_spend": 30,
+    "competitors": ["@brand1", "@brand2", "@brand3"]
+  }
+}
