@@ -16,7 +16,9 @@ import {
 
 // One turn in the Clio conversation thread. Prior turns are sent back to
 // ask-copilot as `messages` so Clio keeps context across follow-ups.
-type ChatTurn = { role: 'user' | 'assistant'; content: string };
+// `dataGaps` (assistant turns only) names sources that failed to load for
+// that answer, so a failed query isn't mistaken for "you have none".
+type ChatTurn = { role: 'user' | 'assistant'; content: string; dataGaps?: string[] };
 
 // Shape of ai_daily_briefs.content, produced by the generate-daily-brief
 // edge function (one Claude call per user per morning). Everything optional
@@ -271,7 +273,7 @@ export function Clio() {
           question,
           // Prior turns so Clio keeps context across follow-ups. The edge
           // function validates + caps this at the last 12 turns anyway.
-          messages: conversation.slice(-12),
+          messages: conversation.slice(-12).map(({ role, content }) => ({ role, content })),
           // Account Switcher scope: Clio answers as this account (its posts,
           // its voice, its niche). Omitted under "All accounts".
           ...(activeAccount ? { socialAccountId: activeAccount.id } : {}),
@@ -295,7 +297,11 @@ export function Clio() {
         setConversation((prev) => [
           ...prev,
           { role: 'user', content: question },
-          { role: 'assistant', content: res.data.answer },
+          {
+            role: 'assistant',
+            content: res.data.answer,
+            dataGaps: Array.isArray(res.data.dataGaps) ? res.data.dataGaps : [],
+          },
         ]);
         setVoiceActive(!!res.data.voiceActive);
         setQuery('');
@@ -483,6 +489,11 @@ export function Clio() {
             {voiceActive && (
               <span className="t-micro inline-flex items-center gap-1" style={{ color: 'var(--accent)' }}>
                 <Check className="w-3 h-3" /> In your voice
+              </span>
+            )}
+            {turn.dataGaps && turn.dataGaps.length > 0 && (
+              <span className="t-micro text-muted-foreground inline-flex items-center gap-2 px-2.5 py-1 border border-border">
+                Couldn't load: {turn.dataGaps.join(', ')}
               </span>
             )}
           </div>

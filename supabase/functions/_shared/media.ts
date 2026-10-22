@@ -57,3 +57,50 @@ export async function signMediaUrls(
   });
   return out;
 }
+
+export type MediaKind = "video" | "image" | "unknown";
+
+const VIDEO_EXT_RE = /\.(mp4|mov|m4v|avi|webm|mkv)(\?|#|$)/i;
+const IMAGE_EXT_RE = /\.(jpe?g|png|gif|webp|heic|heif|avif)(\?|#|$)/i;
+
+/** Classify a Content-Type header. Pure, so the publishers' tests can use it. */
+export function kindFromContentType(contentType: string | null | undefined): MediaKind {
+  const ct = (contentType || "").split(";")[0].trim().toLowerCase();
+  if (ct.startsWith("video/")) return "video";
+  if (ct.startsWith("image/")) return "image";
+  return "unknown";
+}
+
+/** Last resort when the host doesn't say: the file extension in the URL. */
+export function kindFromExtension(url: string): MediaKind {
+  if (VIDEO_EXT_RE.test(url)) return "video";
+  if (IMAGE_EXT_RE.test(url)) return "image";
+  return "unknown";
+}
+
+/**
+ * What a media URL actually is, by the Content-Type its host serves. Storage
+ * returns the type recorded at upload, so a path or CDN rewrite that drops
+ * the extension doesn't turn a video into an image. Falls back to the
+ * extension only when the HEAD fails or the type is generic
+ * (application/octet-stream).
+ */
+export async function detectMediaKind(url: string, timeoutMs = 5000): Promise<MediaKind> {
+  if (!url) return "unknown";
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { method: "HEAD", signal: ctrl.signal });
+    const kind = res.ok ? kindFromContentType(res.headers.get("content-type")) : "unknown";
+    if (kind !== "unknown") return kind;
+  } catch {
+    // network error or timeout: fall through to the extension
+  } finally {
+    clearTimeout(timer);
+  }
+  return kindFromExtension(url);
+}
+
+export async function detectMediaKinds(urls: readonly string[]): Promise<MediaKind[]> {
+  return await Promise.all(urls.map((u) => detectMediaKind(u)));
+}

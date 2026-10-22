@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { detectMediaKind } from "../_shared/media.ts";
 
 /**
  * threads-publish Edge Function
@@ -100,9 +101,10 @@ async function waitForContainer(
   console.warn(`Container ${containerId} didn't reach FINISHED after polling — attempting publish anyway`);
 }
 
-// ── Detect media type from URL ────────────────────────────────────────────────
-function isVideoUrl(url: string): boolean {
-  return /\.(mp4|mov|avi|webm|mkv)(\?|$)/i.test(url);
+// ── Detect media type ─────────────────────────────────────────────────────────
+// By the Content-Type the host serves (see _shared/media.ts), not the URL.
+async function isVideoUrl(url: string): Promise<boolean> {
+  return (await detectMediaKind(url)) === "video";
 }
 
 Deno.serve(async (req: Request) => {
@@ -169,7 +171,7 @@ Deno.serve(async (req: Request) => {
       const childIds: string[] = [];
 
       for (const url of urls.slice(0, 10)) { // Threads supports up to 10 items
-        const isVideo = isVideoUrl(url);
+        const isVideo = await isVideoUrl(url);
         const childPayload: Record<string, any> = {
           is_carousel_item: true,
           access_token: accessToken,
@@ -227,7 +229,7 @@ Deno.serve(async (req: Request) => {
       publishedId = publishData.id;
 
     // ── SINGLE VIDEO ──────────────────────────────────────────────────────────
-    } else if (urls.length === 1 && isVideoUrl(urls[0])) {
+    } else if (urls.length === 1 && await isVideoUrl(urls[0])) {
       const containerRes = await fetch(`${THREADS_API}/${threadsUserId}/threads`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

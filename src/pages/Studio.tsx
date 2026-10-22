@@ -33,7 +33,7 @@ export function Studio() {
     const loadQuota = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      const quota = await getAIQuota(user.id);
+      const quota = await getAIQuota();
       setAiQuota(quota);
     };
     loadQuota();

@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { requireUserOrCron, corsHeaders, resolveBrandId } from "../_shared/auth.ts";
+import { QuotaError, QUOTA_EXCEEDED_MESSAGE, reserveAiRequest, type Refund } from "../_shared/quota.ts";
 
 /**
  * analyze-captions Edge Function
@@ -41,6 +42,7 @@ Deno.serve(async (req: Request) => {
     return new Response(null, { status: 200, headers: corsHeaders });
   }
 
+  let refund: Refund | null = null;
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -149,13 +151,15 @@ Deno.serve(async (req: Request) => {
     // rebuild costs nothing. Sync- and cron-triggered rebuilds are system
     // work, like the morning brief, and do not spend the creator's credits.
     if (!auth.isCron) {
-      const { data: reserved, error: quotaError } = await supabase
-        .rpc("increment_ai_request", { p_user_id: userId });
-      if (quotaError) throw new Error("Failed to check AI quota");
-      if (!reserved) {
+      // Reserve BEFORE generating (atomic, false at the limit); refunded in
+      // the catch below if the model call produces nothing.
+      try {
+        refund = await reserveAiRequest(supabase, userId);
+      } catch (e) {
+        if (!(e instanceof QuotaError && e.exceeded)) throw e;
         return new Response(
-          JSON.stringify({ error: "Daily AI quota exceeded. Resets at midnight." }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          JSON.stringify({ error: QUOTA_EXCEEDED_MESSAGE }),
+          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
       }
     }
@@ -344,6 +348,8 @@ Rules:
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
+    // Nothing came back for the reserved request: hand it back.
+    await refund?.();
     console.error("analyze-captions error:", error);
     return new Response(
       JSON.stringify({ error: (error as Error).message }),
