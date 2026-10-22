@@ -30,7 +30,9 @@ if (typeof localStorage !== 'object' || typeof localStorage.setItem !== 'functio
   });
 }
 
+// Through globalThis: tests that run in the node environment (the edge
+// function helpers) have no sessionStorage on Node 20.
 afterEach(() => {
-  sessionStorage.clear();
-  localStorage.clear();
+  globalThis.sessionStorage?.clear();
+  globalThis.localStorage?.clear();
 });
