@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { requireUser, corsHeaders, resolveBrandId } from "../_shared/auth.ts";
 import { loadVoiceContext } from "../_shared/voice.ts";
+import { reserveAiRequest, type Refund } from "../_shared/quota.ts";
 
 /**
  * generate-post-packages Edge Function — the Drop Zone brain.
@@ -73,6 +74,7 @@ Deno.serve(async (req: Request) => {
     return new Response(null, { status: 200, headers: corsHeaders });
   }
 
+  let refund: Refund | null = null;
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -105,13 +107,9 @@ Deno.serve(async (req: Request) => {
     }
 
     // ── Check quota ──────────────────────────────────────────────────────────
-    const { data: reserved, error: quotaError } = await supabase
-      .rpc("increment_ai_request", { p_user_id: userId });
-    // Reserve BEFORE generating. The RPC is an atomic guarded UPDATE that
-    // returns false at the day's limit, so two concurrent calls cannot both
-    // slip through the way check-then-generate-then-count did.
-    if (quotaError) throw new Error("Failed to check AI quota");
-    if (!reserved) throw new Error("Daily AI quota exceeded. Resets at midnight.");
+    // Reserve BEFORE generating (atomic, false at the limit); refunded in
+    // the catch below if the model call produces nothing. Throws QuotaError.
+    refund = await reserveAiRequest(supabase, userId);
 
     // ── Gather creator context ───────────────────────────────────────────────
     const thirtyDaysAgo = new Date();
@@ -281,6 +279,8 @@ Exactly one package per platform listed above (${platforms.length} total). No ex
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (error) {
+    // Nothing came back for the reserved request: hand it back.
+    await refund?.();
     console.error("generate-post-packages error:", error);
     return new Response(
       JSON.stringify({ error: (error as Error).message }),

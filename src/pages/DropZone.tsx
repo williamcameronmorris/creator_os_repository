@@ -179,7 +179,7 @@ export function DropZone() {
 
   useEffect(() => {
     if (!user) return;
-    getAIQuota(user.id).then(setQuota).catch(() => setQuota(null));
+    getAIQuota().then(setQuota).catch(() => setQuota(null));
   }, [user]);
 
   // Default: ALL of the brand's connected accounts checked — Drop Zone's whole
@@ -315,7 +315,7 @@ export function DropZone() {
     } finally {
       genInFlight.current = false;
       setGenerating(false);
-      if (user) getAIQuota(user.id).then(setQuota).catch(() => {});
+      if (user) getAIQuota().then(setQuota).catch(() => {});
     }
   };
 
@@ -692,7 +692,9 @@ export function DropZone() {
               className="t-micro"
               style={{ color: quotaEmpty ? 'var(--destructive)' : 'var(--muted-foreground)' }}
             >
-              {quotaEmpty
+              {quota.unavailable
+                ? 'CREDITS UNAVAILABLE · TRY AGAIN'
+                : quotaEmpty
                 ? `NO CREDITS LEFT · ${formatResetTime(quota.resetAt).toUpperCase()}`
                 : `${String(quota.requestsRemaining).padStart(2, '0')} / ${String(quota.dailyLimit).padStart(2, '0')} CREDITS TODAY`}
             </span>

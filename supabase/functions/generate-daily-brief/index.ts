@@ -3,6 +3,7 @@ import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { requireUser, corsHeaders, resolveBrandId } from "../_shared/auth.ts";
 import { canonicalNiche } from "../_shared/niche.ts";
 import { loadVoiceContext, loadAccountNiche } from "../_shared/voice.ts";
+import { QuotaError, QUOTA_EXCEEDED_MESSAGE, reserveAiRequest, type Refund } from "../_shared/quota.ts";
 
 /**
  * generate-daily-brief
@@ -483,6 +484,7 @@ Deno.serve(async (req: Request) => {
     return new Response(null, { status: 200, headers: corsHeaders });
   }
 
+  let refund: Refund | null = null;
   try {
     if (!ANTHROPIC_API_KEY) {
       throw new Error("ANTHROPIC_API_KEY secret not set. Add it in Supabase → Project Settings → Secrets.");
@@ -560,13 +562,14 @@ Deno.serve(async (req: Request) => {
 
     // On-demand generation is a user-initiated AI call — quota applies
     // (cron-generated briefs are system work and bypass this).
-    const { data: reserved, error: quotaError } = await supabase
-      .rpc("increment_ai_request", { p_user_id: userId });
-    // Reserve BEFORE generating: atomic guarded UPDATE, false at the limit.
-    if (quotaError) throw new Error("Failed to check AI quota");
-    if (!reserved) {
+    // Reserve BEFORE generating (atomic, false at the limit); refunded in
+    // the catch below if the model call produces nothing.
+    try {
+      refund = await reserveAiRequest(supabase, userId);
+    } catch (e) {
+      if (!(e instanceof QuotaError && e.exceeded)) throw e;
       return new Response(
-        JSON.stringify({ error: "Daily AI quota exceeded. Resets at midnight." }),
+        JSON.stringify({ error: QUOTA_EXCEEDED_MESSAGE }),
         { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
@@ -587,6 +590,8 @@ Deno.serve(async (req: Request) => {
 
     if (result === "skipped_exists") {
       // Already have today's brief — return it so the client can render it.
+      // No model call ran, so the reservation goes back.
+      await refund?.();
       const { data: existing } = await supabase
         .from("ai_daily_briefs")
         .select("*")
@@ -605,6 +610,8 @@ Deno.serve(async (req: Request) => {
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (error) {
+    // Nothing came back for the reserved request: hand it back.
+    await refund?.();
     console.error("generate-daily-brief error:", error);
     return new Response(
       JSON.stringify({ error: (error as Error).message }),

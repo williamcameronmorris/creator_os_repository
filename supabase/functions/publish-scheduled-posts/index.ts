@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { signMediaUrls } from "../_shared/media.ts";
+import { detectMediaKinds, signMediaUrls, type MediaKind } from "../_shared/media.ts";
 
 /**
  * publish-scheduled-posts Edge Function
@@ -12,7 +12,9 @@ import { signMediaUrls } from "../_shared/media.ts";
  *   Functions > publish-scheduled-posts > Schedule > "* * * * *"
  *
  * It is safe to call concurrently — it uses an atomic status transition
- * (null → 'publishing') to prevent duplicate publishes.
+ * (null → 'publishing') to prevent duplicate publishes. It only ever sees
+ * provider 'direct' rows: claim_due_posts is an allowlist, so Post for Me (or
+ * any provider added later) can't be double-published by this cron.
  *
  * Returns:
  *   { processed: number, results: Array<{ postId, platform, success, error? }> }
@@ -37,11 +39,10 @@ async function publishInstagram(
   serviceKey: string,
   userId: string,
   mediaUrls: string[],
+  kinds: MediaKind[],
   caption: string
 ): Promise<string> {
-  const isVideo = mediaUrls.some((u) =>
-    /\.(mp4|mov|avi|webm|mkv)(\?|$)/i.test(u)
-  );
+  const isVideo = kinds.includes("video");
 
   let body: Record<string, any>;
 
@@ -90,12 +91,11 @@ async function publishYouTube(
   serviceKey: string,
   userId: string,
   mediaUrls: string[],
+  kinds: MediaKind[],
   caption: string,
   contentType?: string
 ): Promise<string> {
-  const videoUrl = mediaUrls.find((u) =>
-    /\.(mp4|mov|avi|webm|mkv)(\?|$)/i.test(u)
-  ) || mediaUrls[0];
+  const videoUrl = mediaUrls.find((_, i) => kinds[i] === "video") || mediaUrls[0];
 
   if (!videoUrl) throw new Error("No video file found for YouTube post");
 
@@ -120,11 +120,10 @@ async function publishTikTok(
   serviceKey: string,
   userId: string,
   mediaUrls: string[],
+  kinds: MediaKind[],
   caption: string
 ): Promise<string> {
-  const videoUrl = mediaUrls.find((u) =>
-    /\.(mp4|mov|avi|webm|mkv)(\?|$)/i.test(u)
-  ) || mediaUrls[0];
+  const videoUrl = mediaUrls.find((_, i) => kinds[i] === "video") || mediaUrls[0];
 
   if (!videoUrl) throw new Error("No video file found for TikTok post");
 
@@ -210,9 +209,10 @@ Deno.serve(async (req: Request) => {
     // ── Atomically claim due posts ────────────────────────────────────────────
     // claim_due_posts() does a single UPDATE ... WHERE ... FOR UPDATE SKIP LOCKED
     // RETURNING, so two concurrent cron runs claim disjoint sets (no
-    // double-publish), and it EXCLUDES provider='postforme' rows — those are
-    // published by Post for Me, and the native cron claiming them was publishing
-    // every Compose-scheduled post twice. See migration claim_due_posts_atomic.
+    // double-publish), and it claims ONLY provider='direct' rows. It used to
+    // exclude 'postforme' by name, and before that it didn't, which published
+    // every Compose-scheduled post twice. An allowlist means a new provider is
+    // left alone by default. See migration 20261022130000.
     const { data: duePosts, error: fetchError } = await supabase
       .rpc("claim_due_posts", { p_limit: 20 });
 
@@ -239,17 +239,20 @@ Deno.serve(async (req: Request) => {
         // The media bucket is private and the platform fetches the file
         // itself, so hand it a 24-hour signed URL. Foreign URLs pass through.
         const urls = await signMediaUrls(supabase, storedUrls);
+        // Video vs image comes from the Content-Type the host serves, not the
+        // URL's extension (see detectMediaKind).
+        const kinds = await detectMediaKinds(urls);
         let platformPostId: string;
 
         switch (platform) {
           case "instagram":
-            platformPostId = await publishInstagram(supabaseUrl, supabaseKey, userId, urls, caption || "");
+            platformPostId = await publishInstagram(supabaseUrl, supabaseKey, userId, urls, kinds, caption || "");
             break;
           case "youtube":
-            platformPostId = await publishYouTube(supabaseUrl, supabaseKey, userId, urls, caption || "", postContentType || "video");
+            platformPostId = await publishYouTube(supabaseUrl, supabaseKey, userId, urls, kinds, caption || "", postContentType || "video");
             break;
           case "tiktok":
-            platformPostId = await publishTikTok(supabaseUrl, supabaseKey, userId, urls, caption || "");
+            platformPostId = await publishTikTok(supabaseUrl, supabaseKey, userId, urls, kinds, caption || "");
             break;
           case "threads":
             platformPostId = await publishThreads(supabaseUrl, supabaseKey, userId, urls, caption || "");
@@ -277,15 +280,17 @@ Deno.serve(async (req: Request) => {
         const errorMsg = err.message || "Unknown error";
         console.error(`✗ Post ${postId} failed on ${platform}:`, errorMsg);
 
-        // ── Failure: mark as failed with error ────────────────────────────────
-        await supabase
-          .from("content_posts")
-          .update({
-            publish_status: "failed",
-            publish_error: errorMsg,
-            published_at: new Date().toISOString(), // timestamp the attempt for retry window
-          })
-          .eq("id", postId);
+        // ── Failure: record the attempt ──────────────────────────────────────
+        // record_publish_failure stamps last_attempt_at (claim_due_posts
+        // retries 30 min later) and, on the last allowed attempt, moves the
+        // post to status 'failed' so it shows as failed instead of sitting on
+        // the calendar as a past "scheduled" post forever.
+        const { data: terminal, error: recordError } = await supabase.rpc("record_publish_failure", {
+          p_post_id: postId,
+          p_error: errorMsg,
+        });
+        if (recordError) console.error(`Could not record failure for ${postId}:`, recordError.message);
+        else if (terminal) console.warn(`Post ${postId} failed its last attempt; marked failed`);
 
         results.push({ postId, platform, success: false, error: errorMsg });
       }

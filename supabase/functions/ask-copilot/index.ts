@@ -5,6 +5,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { loadVoiceContext, loadAccountNiche } from "../_shared/voice.ts";
 import { inspirationTagsForNiche } from "../_shared/niche.ts";
 import { resolveBrandId } from "../_shared/auth.ts";
+import { QuotaError, reserveAiRequest, type Refund } from "../_shared/quota.ts";
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -20,14 +21,17 @@ const PFM_PLATFORM_LABELS: Record<string, string> = {
 };
 
 interface PfmAccount { id: string; platform: string; username?: string | null; status?: string; }
-interface PfmContext { accounts: PfmAccount[]; followersByPlatform: Record<string, number>; }
+interface PfmContext { accounts: PfmAccount[]; followersByPlatform: Record<string, number>; failed: boolean; }
 
 /**
  * Pull connected accounts + follower counts from Post for Me, with a hard
- * 3s timeout so a slow PFM doesn't block Clio. Falls back to empty on error.
+ * 3s timeout so a slow PFM doesn't block Clio. On error it returns empty with
+ * `failed` set, so the answer can say the data didn't load instead of
+ * reporting zero accounts.
  */
 async function fetchPostForMeContext(externalId: string): Promise<PfmContext> {
-  const empty: PfmContext = { accounts: [], followersByPlatform: {} };
+  const empty: PfmContext = { accounts: [], followersByPlatform: {}, failed: false };
+  const failed: PfmContext = { ...empty, failed: true };
   if (!POSTFORME_API_KEY) return empty;
   const ctrl = new AbortController();
   const timeout = setTimeout(() => ctrl.abort(), 3000);
@@ -40,7 +44,7 @@ async function fetchPostForMeContext(externalId: string): Promise<PfmContext> {
       `${PFM_BASE}/v1/social-accounts?external_id=${encodeURIComponent(externalId)}`,
       { headers: { Authorization: `Bearer ${POSTFORME_API_KEY}` }, signal: ctrl.signal },
     );
-    if (!accountsRes.ok) { clearTimeout(timeout); return empty; }
+    if (!accountsRes.ok) { clearTimeout(timeout); return failed; }
     const accountsBody = await accountsRes.json();
     const accountList: PfmAccount[] = Array.isArray(accountsBody) ? accountsBody : (accountsBody?.data || []);
     const connected = accountList.filter((a) => a.status !== "disconnected");
@@ -61,11 +65,11 @@ async function fetchPostForMeContext(externalId: string): Promise<PfmContext> {
       }
     }
     clearTimeout(timeout);
-    return { accounts: connected, followersByPlatform };
+    return { accounts: connected, followersByPlatform, failed: false };
   } catch (err) {
     clearTimeout(timeout);
     console.warn("PFM context fetch failed:", (err as Error).message);
-    return empty;
+    return failed;
   }
 }
 
@@ -95,6 +99,7 @@ Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type" } });
   }
+  let refund: Refund | null = null;
   try {
     if (!ANTHROPIC_API_KEY) return new Response(JSON.stringify({ error: "AI service not configured." }), { status: 503, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
 
@@ -144,16 +149,22 @@ Deno.serve(async (req: Request) => {
 
     // Reserve BEFORE generating: atomic guarded UPDATE, false at the limit, so two
     // concurrent questions cannot both slip through the old check-then-count gap.
-    const { data: reserved, error: quotaError } = await supabase.rpc("increment_ai_request", { p_user_id: userId });
-    if (quotaError) return new Response(JSON.stringify({ error: "Could not check AI quota." }), { status: 500, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
-    if (!reserved) return new Response(JSON.stringify({ error: "Daily AI quota exceeded." }), { status: 429, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
+    // Refunded in the catch below if the model call produces nothing.
+    try {
+      refund = await reserveAiRequest(supabase, userId);
+    } catch (e) {
+      const exceeded = e instanceof QuotaError && e.exceeded;
+      return new Response(JSON.stringify({ error: exceeded ? "Daily AI quota exceeded." : "Could not check AI quota." }), { status: exceeded ? 429 : 500, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
+    }
 
     const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString().split("T")[0];
     const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString().split("T")[0];
 
-    // Deals query is non-fatal — schema/columns may drift across users; if it
-    // errors, return empty rather than killing the whole Clio response.
-    async function fetchDeals() {
+    // Deals are non-fatal: a failed query must not kill the whole answer.
+    // But it is reported as a failure, never as "no deals" — an empty pipeline
+    // and an unreadable one are different answers.
+    type DealRow = { brand_name?: string | null; brand?: string | null; stage?: string | null; final_amount?: number | null; quote_standard?: number | null };
+    async function fetchDeals(): Promise<{ rows: DealRow[]; failed: boolean }> {
       try {
         const r = await supabase.from("deals")
           .select("brand_name, brand, stage, final_amount, quote_standard")
@@ -161,8 +172,15 @@ Deno.serve(async (req: Request) => {
           .eq("brand_id", brandId)
           .order("created_at", { ascending: false })
           .limit(10);
-        return r.error ? [] : (r.data || []);
-      } catch { return []; }
+        if (r.error) {
+          console.warn("ask-copilot: deals query failed:", r.error.message);
+          return { rows: [], failed: true };
+        }
+        return { rows: r.data || [], failed: false };
+      } catch (e) {
+        console.warn("ask-copilot: deals query threw:", (e as Error).message);
+        return { rows: [], failed: true };
+      }
     }
 
     // Account-scoped post queries: when the Account Switcher pins an account,
@@ -185,7 +203,7 @@ Deno.serve(async (req: Request) => {
     // first so everything else still fires in parallel. Wrapped in async IIFEs
     // because a PostgREST builder re-runs the query every time it is awaited.
     const profilePromise = (async () =>
-      await supabase.from("profiles").select("full_name, display_name, niche_preference, instagram_avg_views, tiktok_avg_views, youtube_avg_views, instagram_access_token, instagram_business_account_id, tiktok_access_token, youtube_access_token").eq("id", userId).maybeSingle())();
+      await supabase.from("profiles").select("full_name, display_name, niche_preference, instagram_avg_views, tiktok_avg_views, youtube_avg_views, has_instagram_token, instagram_business_account_id, has_tiktok_token, has_youtube_refresh_token").eq("id", userId).maybeSingle())();
     const nichePromise = loadAccountNiche(supabase, userId, socialAccountId, brandId);
 
     // inspiration_entries is ONE global Notion-synced table: no user_id, no
@@ -213,7 +231,7 @@ Deno.serve(async (req: Request) => {
       return { outlierRes, countsRes, tags };
     })();
 
-    const [profileResult, metricsResult, postsResult, recentPostsResult, deals, pfmContext, inspiration, voiceContext, accountNiche] = await Promise.all([
+    const [profileResult, metricsResult, postsResult, recentPostsResult, dealsResult, pfmContext, inspiration, voiceContext, accountNiche] = await Promise.all([
       profilePromise,
       metricsQuery.order("date", { ascending: false }),
       topPostsQuery.order("likes", { ascending: false, nullsFirst: false }).limit(10),
@@ -228,6 +246,24 @@ Deno.serve(async (req: Request) => {
     ]);
     const inspirationResult = inspiration.outlierRes;
     const inspirationCountsResult = inspiration.countsRes;
+    const deals = dealsResult.rows;
+
+    // Every source that failed to load. These are told to the model as gaps
+    // (and returned to the app), so a failed query reads as "couldn't load",
+    // never as a confident "you have none".
+    const dataGaps: string[] = [];
+    if (profileResult.error) dataGaps.push("creator profile");
+    if (metricsResult.error) dataGaps.push("follower and engagement snapshots");
+    if (postsResult.error) dataGaps.push("top posts (last 30 days)");
+    if (recentPostsResult.error) dataGaps.push("this week's posts");
+    if (inspirationResult.error || inspirationCountsResult.error) dataGaps.push("shared reference library");
+    if (dealsResult.failed) dataGaps.push("deal pipeline");
+    if (pfmContext.failed) dataGaps.push("connected accounts and follower counts from Post for Me");
+    for (const [label, res] of [["profile", profileResult], ["metrics", metricsResult], ["top posts", postsResult], ["recent posts", recentPostsResult], ["inspiration", inspirationResult], ["inspiration counts", inspirationCountsResult]] as const) {
+      if (res.error) console.warn(`ask-copilot: ${label} query failed:`, res.error.message);
+    }
+    const unavailable = (gap: string, fallback: string) =>
+      dataGaps.includes(gap) ? "  Could not be loaded this time (see DATA GAPS)" : fallback;
 
     const profile = profileResult.data;
     const creatorName = profile?.display_name || profile?.full_name?.split(" ")[0] || "Creator";
@@ -235,9 +271,9 @@ Deno.serve(async (req: Request) => {
     const niche = accountNiche || (profile?.niche_preference || "").trim();
 
     const connectedSet = new Set<string>();
-    if (profile?.instagram_access_token || profile?.instagram_business_account_id) connectedSet.add("Instagram");
-    if (profile?.tiktok_access_token) connectedSet.add("TikTok");
-    if (profile?.youtube_access_token) connectedSet.add("YouTube");
+    if (profile?.has_instagram_token || profile?.instagram_business_account_id) connectedSet.add("Instagram");
+    if (profile?.has_tiktok_token) connectedSet.add("TikTok");
+    if (profile?.has_youtube_refresh_token) connectedSet.add("YouTube");
     for (const account of pfmContext.accounts) {
       const label = PFM_PLATFORM_LABELS[account.platform.toLowerCase()] || account.platform;
       connectedSet.add(label);
@@ -434,19 +470,22 @@ Deno.serve(async (req: Request) => {
           const value = Number(d.final_amount ?? d.quote_standard ?? 0);
           return `  - ${name}${stage ? ` (${stage})` : ""}${value > 0 ? `: $${value.toLocaleString()}` : ""}`;
         }).join("\n")
-      : "  No active deals";
+      : unavailable("deal pipeline", "  No active deals");
     const totalDealValue = deals.reduce((s: number, d: any) => s + Number(d.final_amount ?? d.quote_standard ?? 0), 0);
 
     const viewsSummary = totalRecentPosts > 0
       ? `${totalRecentPosts} post${totalRecentPosts === 1 ? "" : "s"} published in last 7 days, ${totalRecentEng.toLocaleString()} total engagements${totalRecentViews > 0 ? `, ${totalRecentViews.toLocaleString()} total views` : " (view counts not exposed for IG image/carousel posts)"}`
-      : "No posts in the last 7 days";
+      : dataGaps.includes("this week's posts") ? "This week's posts could not be loaded" : "No posts in the last 7 days";
 
     // Data block is now post-first. Platform aggregates ride along as light
     // context, not headlines. Clio is instructed in the system prompt to
     // reason at the post level — to spot patterns, point at specific posts,
     // and tie recommendations to a concrete example from the shared shelf.
+    const gapsBlock = dataGaps.length > 0
+      ? `\n═══ DATA GAPS — these sources FAILED to load for this answer ═══\n${dataGaps.map((g) => `  - ${g}`).join("\n")}\n`
+      : "";
     const context = `DATA BLOCK — every number below is real and grounded. Anything not listed here, you don't have.
-
+${gapsBlock}
 CREATOR PROFILE:
 Name: ${creatorName}
 Niche: ${niche || "Not set yet"}
@@ -454,10 +493,10 @@ Connected platforms: ${connectedPlatforms.length > 0 ? connectedPlatforms.join("
 
 ═══ THIS WEEK'S POSTS (last 7 days, newest first) ═══
 ${viewsSummary}
-${recentPostLines || "  No posts in the last 7 days"}
+${recentPostLines || unavailable("this week's posts", "  No posts in the last 7 days")}
 
 ═══ TOP POSTS (last 30 days, ranked by likes) ═══
-${topPostLines || "  No published posts yet"}
+${topPostLines || unavailable("top posts (last 30 days)", "  No published posts yet")}
 
 ═══ SHARED REFERENCE LIBRARY — Outlier posts by OTHER creators ═══
 These are examples Cliopatra curates for everyone. They are NOT the creator's posts and the creator did not save them. Study them for hook patterns; cite them as someone else's work.
@@ -467,7 +506,7 @@ Most common hook frameworks here: ${topFrameworks || "none"}
 ${inspirationLines || "  No Outlier examples in the shared library for this niche yet"}
 ${templateLines ? `\n═══ TEMPLATE BANK — formula scaffolding for frameworks with NO reference Outlier ═══\nThese are parameterized hook formulas with [insert X] blanks. NO performance data. Use ONLY when a framework has no relevant Outlier above. NEVER cite these as evidence — they are starting points to riff on.\n${templateLines}` : ""}
 ─── BACKGROUND CONTEXT (current state per platform — use as reference, not as headline numbers) ───
-${platformLines || "  No platform data available"}
+${platformLines || unavailable("follower and engagement snapshots", "  No platform data available")}
 
 ─── ACTIVE DEAL PIPELINE ───
 ${dealLines}${deals.length > 0 ? `\nTotal pipeline value: $${totalDealValue.toLocaleString()}` : ""}`.trim();
@@ -498,6 +537,7 @@ POST-LEVEL REASONING — when the user asks "what should I post" or "how am I do
 9. If the shared library has no Outlier in a relevant framework: if a TEMPLATE BANK formula in that framework fits the user's content, you MAY suggest it as scaffolding — but call it a "template formula to riff on", NEVER cite it as a proven example. If no template fits either, say the shared library has no example for this framework yet.
 10. Outlier examples ALWAYS take priority over Template Bank formulas. Templates are fallback only.
 11. An empty "THIS WEEK'S POSTS" window is normal — creators don't post every week. NEVER treat it as a blocker. When it's empty, ground your answer in TOP POSTS (last 30 days) and the shared reference library. Deliver the ideas the user asked for; do not refuse or ask them to supply a content pillar, audience, or format you can already infer from their posts and captions.
+11a. DATA GAPS lists sources that failed to load this time. They are unknown, not empty or zero. If the question depends on one, say plainly that it couldn't be loaded and to try again; never answer as if the creator has none.
 12. When you give a numbered list of content ideas, end each idea's title line with its target in square brackets, platform then format, e.g. "1. Title [instagram · reel]" or "2. Title [youtube · short]". Use only platforms listed under "Connected platforms". The app reads that tag to open the idea in Studio on the right platform.
 
 ANTI-PATTERNS — do not do these:
@@ -552,10 +592,12 @@ Style: direct, post-level, under 250 words. No filler, no preamble, no platform-
     const answer = anthropicData.content?.[0]?.text || "Sorry, I couldn't generate a response.";
 
 
-    return new Response(JSON.stringify({ answer, success: true, voiceActive: !!voiceContext }), {
+    return new Response(JSON.stringify({ answer, success: true, voiceActive: !!voiceContext, dataGaps }), {
       headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
     });
   } catch (err: unknown) {
+    // Nothing came back for the reserved request: hand it back.
+    await refund?.();
     const message = err instanceof Error ? err.message : String(err);
     console.error("ask-copilot error:", message);
     return new Response(JSON.stringify({ error: "Something went wrong. Please try again." }), {
