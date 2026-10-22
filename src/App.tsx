@@ -30,6 +30,7 @@ import { ToastProvider } from './components/ui/Toast';
 import { ConfirmProvider } from './components/ui/ConfirmDialog';
 import { NotFound } from './pages/NotFound';
 import { supabase, type Profile as ProfileType } from './lib/supabase';
+import { PROFILE_COLUMNS } from './lib/profileColumns';
 
 // Routes that are never the first thing a session opens are split out of the
 // entry chunk and fetched on navigation. Clio, Auth, Onboarding, Layout,
@@ -117,7 +118,7 @@ function AppContent() {
         try {
           const { data, error } = await supabase
             .from('profiles')
-            .select('*')
+            .select(PROFILE_COLUMNS)
             .eq('id', user.id)
             .maybeSingle();
           if (error) throw error;

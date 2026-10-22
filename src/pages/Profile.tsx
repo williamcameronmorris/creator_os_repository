@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { ArrowLeft, AlertTriangle, Save } from 'lucide-react';
+import { PROFILE_COLUMNS } from '../lib/profileColumns';
 
 interface ProfileForm {
   first_name: string;
@@ -59,14 +60,14 @@ export function Profile() {
       try {
         const { data } = await supabase
           .from('profiles')
-          .select('*')
+          .select(PROFILE_COLUMNS)
           .eq('id', user.id)
           .maybeSingle();
         if (data) {
           setForm({
             first_name: data.first_name || '',
             last_name: data.last_name || '',
-            email: user.email || data.email || '',
+            email: user.email || '',
             niche_preference: data.niche_preference || '',
             posting_frequency: data.posting_frequency || '',
             primary_platform: data.primary_platform || '',

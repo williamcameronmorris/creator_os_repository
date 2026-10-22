@@ -63,17 +63,14 @@ export type Profile = {
 
   // ── Meta / Facebook ────────────────────────────────────────────────────────
   meta_user_id?: string;
-  meta_access_token?: string;
   meta_token_expires_at?: string | null;
 
   facebook_page_id?: string;
-  facebook_page_access_token?: string;
   facebook_page_name?: string;
   facebook_page_followers?: number;
   last_facebook_sync?: string | null;
 
   // ── Instagram (legacy Basic Display + Business Account) ───────────────────
-  instagram_access_token?: string;
   instagram_user_id?: string;
   instagram_handle?: string;
   instagram_followers?: number;
@@ -82,27 +79,31 @@ export type Profile = {
 
   // ── Threads ───────────────────────────────────────────────────────────────
   threads_user_id?: string;
-  threads_access_token?: string;
   threads_token_expires_at?: string | null;
   threads_handle?: string;
   threads_followers?: number;
   last_threads_sync?: string | null;
 
   // ── TikTok ────────────────────────────────────────────────────────────────
-  tiktok_access_token?: string;
   tiktok_user_id?: string;
   tiktok_handle?: string;
   tiktok_followers?: number;
   last_tiktok_sync?: string | null;
 
   // ── YouTube ───────────────────────────────────────────────────────────────
-  youtube_access_token?: string;
-  youtube_refresh_token?: string;
   youtube_token_expires_at?: string | null;
   youtube_channel_id?: string;
   youtube_handle?: string;
   youtube_followers?: number;
   last_youtube_sync?: string | null;
+
+  // ── Grant flags ───────────────────────────────────────────────────────────
+  // The raw tokens are server-only; these say whether one is stored.
+  has_instagram_token?: boolean;
+  has_youtube_refresh_token?: boolean;
+  has_tiktok_token?: boolean;
+  has_threads_token?: boolean;
+  has_meta_token?: boolean;
 };
 
 export type Deal = {

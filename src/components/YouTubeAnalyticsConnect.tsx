@@ -30,14 +30,14 @@ export function YouTubeAnalyticsConnect() {
     }
     supabase
       .from('profiles')
-      .select('youtube_handle, youtube_followers, last_youtube_sync, youtube_refresh_token')
+      .select('youtube_handle, youtube_followers, last_youtube_sync, has_youtube_refresh_token')
       .eq('id', user.id)
       .maybeSingle()
       .then(({ data }) => {
         setHandle(data?.youtube_handle || null);
         setSubs(data?.youtube_followers ?? null);
         setLastSync(data?.last_youtube_sync ?? null);
-        setHasToken(Boolean(data?.youtube_refresh_token));
+        setHasToken(Boolean(data?.has_youtube_refresh_token));
         setLoading(false);
       });
   }, [user]);

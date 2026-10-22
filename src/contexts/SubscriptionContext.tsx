@@ -48,17 +48,11 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     setIsLoading(false);
   };
 
-  const updateTier = async (newTier: SubscriptionTier) => {
-    if (!user) return;
-
-    const { error } = await supabase
-      .from('profiles')
-      .update({ subscription_tier: newTier })
-      .eq('id', user.id);
-
-    if (!error) {
-      setTier(newTier);
-    }
+  // The tier is server-owned: increment_ai_request reads it to size the AI
+  // quota, so the app has no grant to write it (migration 20261022120100). A
+  // real upgrade path sets it from the payment webhook on the service role.
+  const updateTier = async () => {
+    throw new Error('Subscription changes are applied by the billing system, not the app.');
   };
 
   return (

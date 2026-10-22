@@ -7,6 +7,7 @@ import { Save, TrendingUp, DollarSign, AlertCircle, CheckCircle, Link2, Palette,
 import { COMMON_TIMEZONES, detectBrowserTimezone } from '../lib/timezone';
 import { PostForMeConnections } from './PostForMeConnections';
 import { VoiceCard } from './VoiceCard';
+import { PROFILE_COLUMNS } from '../lib/profileColumns';
 
 export function Settings() {
   const { user } = useAuth();
@@ -39,7 +40,7 @@ export function Settings() {
     if (!user) return;
     const { data } = await supabase
       .from('profiles')
-      .select('*')
+      .select(PROFILE_COLUMNS)
       .eq('id', user.id)
       .maybeSingle();
     if (data) setProfile(data);
@@ -53,9 +54,24 @@ export function Settings() {
     setSuccess('');
 
     try {
+      // Only the fields this page edits. Sending the whole loaded row wrote
+      // back columns the app may not write (subscription_tier, the generated
+      // has_*_token flags), and the column grants reject the entire update.
       const { error: updateError } = await supabase
         .from('profiles')
-        .update(profile)
+        .update({
+          timezone: profile.timezone,
+          cpm_tier: profile.cpm_tier,
+          cpm_custom: profile.cpm_custom,
+          include_youtube_longform: profile.include_youtube_longform,
+          youtube_avg_views: profile.youtube_avg_views,
+          youtube_shorts_avg_views: profile.youtube_shorts_avg_views,
+          tiktok_avg_views: profile.tiktok_avg_views,
+          instagram_avg_views: profile.instagram_avg_views,
+          revision_rounds_included: profile.revision_rounds_included,
+          extra_revision_fee: profile.extra_revision_fee,
+          payment_terms: profile.payment_terms,
+        })
         .eq('id', user.id);
 
       if (updateError) throw updateError;

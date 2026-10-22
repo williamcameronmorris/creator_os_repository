@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { verifySvixSignature } from "../_shared/webhookSignature.ts";
 
 /**
  * postforme-webhook
@@ -13,19 +14,13 @@ import { createClient } from "npm:@supabase/supabase-js@2";
  *      as a webhook endpoint.
  *   2. Subscribe to at minimum the post-result events.
  *   3. Save the signing secret as Supabase secret `Post_For_Me_Webhook_Secret`.
- *      (Signature verification is skipped while the secret is unset, but the
- *      function will reject all requests once the secret is configured and
- *      a request arrives without a valid signature header.)
+ *      Until it is set, every request is rejected (401): verification fails
+ *      closed. postforme-sync's 6h poll still reconciles status, so events
+ *      are late, not lost.
  *
- * Signature scheme: PFM signs with a Svix-style scheme (secret has the
- * `whsec_` prefix). The signed content is `${id}.${timestamp}.${rawBody}`,
- * HMAC-SHA256, base64-encoded, delivered in a space-separated
- * `webhook-signature: v1,<sig> v2,<sig>` header with `webhook-id` and
- * `webhook-timestamp` companions. Because this secret isn't standard-length
- * base64, we can't be sure PFM base64-decodes the key vs. uses it raw, so we
- * accept a match under EITHER key interpretation — both are secret-gated, so
- * neither is forgeable without the secret. Tighten to the confirmed scheme
- * once a real event is observed in the logs.
+ * Signature scheme and replay window: see ../_shared/webhookSignature.ts. A
+ * request whose signed timestamp is more than 5 minutes from now is rejected
+ * even with a valid signature, so a captured request cannot be replayed.
  *
  * Lookup strategy: PFM events identify posts by their PFM `post_id`. We
  * stored that on every row at create time as `postforme_post_id`, so we
@@ -50,75 +45,6 @@ function firstHeader(req: Request, names: string[]): string | null {
     if (v) return v;
   }
   return null;
-}
-
-function constantTimeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return diff === 0;
-}
-
-async function hmacBase64(keyBytes: Uint8Array, message: string): Promise<string> {
-  const key = await crypto.subtle.importKey(
-    "raw",
-    keyBytes,
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
-  const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(message));
-  return btoa(String.fromCharCode(...new Uint8Array(sig)));
-}
-
-/**
- * Verify a Svix-style signature. Returns true when the computed HMAC matches
- * any `v*,<sig>` entry in the signature header, under either key
- * interpretation (base64-decoded or raw). Fails CLOSED when the secret or any
- * required header is missing — postforme-sync reconciles status on its 6h
- * poll, so real events aren't lost, but set Post_For_Me_Webhook_Secret for
- * real-time updates.
- */
-async function verifySignature(
-  rawBody: string,
-  id: string | null,
-  timestamp: string | null,
-  signatureHeader: string | null,
-): Promise<boolean> {
-  if (!WEBHOOK_SECRET || !id || !timestamp || !signatureHeader) return false;
-
-  const signedContent = `${id}.${timestamp}.${rawBody}`;
-
-  // Candidate signing keys. Standard Svix base64-decodes the part after
-  // `whsec_`; some implementations sign with the raw string. Try both.
-  const rawSecret = WEBHOOK_SECRET.startsWith("whsec_")
-    ? WEBHOOK_SECRET.slice(6)
-    : WEBHOOK_SECRET;
-  const keyCandidates: Uint8Array[] = [];
-  try {
-    keyCandidates.push(Uint8Array.from(atob(rawSecret), (c) => c.charCodeAt(0)));
-  } catch {
-    // rawSecret isn't valid base64 — skip this interpretation
-  }
-  keyCandidates.push(new TextEncoder().encode(rawSecret));
-
-  const expected: string[] = [];
-  for (const keyBytes of keyCandidates) {
-    expected.push(await hmacBase64(keyBytes, signedContent));
-  }
-
-  // Header is a space-separated list of "<version>,<base64sig>" entries.
-  const provided = signatureHeader.split(" ").map((part) => {
-    const comma = part.indexOf(",");
-    return comma >= 0 ? part.slice(comma + 1) : part;
-  });
-
-  for (const sig of provided) {
-    for (const exp of expected) {
-      if (constantTimeEqual(sig, exp)) return true;
-    }
-  }
-  return false;
 }
 
 function deriveStatus(eventType: string, payloadStatus?: string): string | null {
@@ -163,11 +89,18 @@ Deno.serve(async (req) => {
     "X-Webhook-Signature",
   ]);
 
-  const ok = await verifySignature(rawBody, webhookId, webhookTimestamp, signature);
-  if (!ok) {
+  const check = await verifySvixSignature({
+    secret: WEBHOOK_SECRET,
+    rawBody,
+    id: webhookId,
+    timestamp: webhookTimestamp,
+    signatureHeader: signature,
+  });
+  if (!check.ok) {
     // One-line diagnostic (no secret logged) so a real event's actual header
     // shape can be confirmed from the logs if verification ever misses.
     console.warn("postforme-webhook: signature rejected", {
+      reason: check.reason,
       hasSecret: !!WEBHOOK_SECRET,
       haveId: !!webhookId,
       haveTs: !!webhookTimestamp,
