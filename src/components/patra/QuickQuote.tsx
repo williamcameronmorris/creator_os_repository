@@ -5,6 +5,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useBrand } from '../../contexts/BrandContext';
 import { calculatePricing, type PricingOutput } from '../../lib/pricing';
 import { ArrowRight, Plus, AlertCircle } from 'lucide-react';
+import { PROFILE_COLUMNS } from '../../lib/profileColumns';
 
 // Terracotta = Patra's error color per the brand spec.
 const ERROR_COLOR = '#B07050';
@@ -57,7 +58,7 @@ export function QuickQuote({ onDealSaved }: QuickQuoteProps) {
     if (!user || !activeBrand) return;
     const load = async () => {
       const [profileRes, dealsRes, stagesRes] = await Promise.all([
-        supabase.from('profiles').select('*').eq('id', user.id).maybeSingle(),
+        supabase.from('profiles').select(PROFILE_COLUMNS).eq('id', user.id).maybeSingle(),
         supabase.from('deals').select('*').eq('user_id', user.id).eq('brand_id', activeBrand.id).order('created_at', { ascending: false }),
         supabase.from('deal_stages').select('*').eq('user_id', user.id).eq('brand_id', activeBrand.id).order('position', { ascending: true }),
       ]);

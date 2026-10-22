@@ -4,6 +4,7 @@ import { supabase, type Profile } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useConnectionStatus } from '../contexts/ConnectionStatusContext';
 import { PostForMeConnections } from './PostForMeConnections';
+import { PROFILE_COLUMNS } from '../lib/profileColumns';
 
 /**
  * First-time user onboarding flow. Replaces the pricing-era Onboarding that
@@ -45,7 +46,7 @@ export function Onboarding({ onComplete }: Props) {
     (async () => {
       const { data } = await supabase
         .from('profiles')
-        .select('*')
+        .select(PROFILE_COLUMNS)
         .eq('id', user.id)
         .maybeSingle();
       if (data) {
