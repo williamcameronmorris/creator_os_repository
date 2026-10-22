@@ -119,6 +119,50 @@ guards.push(function migrationsEnableRls() {
   return { name: 'migrations enable RLS', problems };
 });
 
+/**
+ * Brand scope: brands are isolated tenants, and brand_id was added after the
+ * tables were already user-scoped, so a read that filters only by user_id
+ * silently mixes a creator's brands together. A read of a brand-scoped table
+ * must filter by brand_id, or by a key that is already brand-scoped (its own
+ * id, a parent *_id), or carry an `all-brands: <reason>` comment within the
+ * three lines above it when crossing brands is the point.
+ *
+ * BRAND_SCOPED_TABLES is every public table with brand_id NOT NULL. A new
+ * brand-scoped table goes on this list in the PR that creates it.
+ */
+const BRAND_SCOPED_TABLES = [
+  'ai_content_suggestions', 'ai_daily_briefs', 'brand_prospect_activities', 'brand_prospects',
+  'brand_social_accounts', 'challenge_day_completions', 'challenge_metrics', 'challenge_progress',
+  'comments', 'content_post_metrics_daily', 'content_posts', 'content_workflow_stages',
+  'deal_activities', 'deal_contracts', 'deal_fit_checks', 'deal_invoices', 'deal_performance_reports',
+  'deal_production_checklist', 'deal_renewals', 'deal_reports', 'deal_stages', 'deal_templates',
+  'deals', 'media_kit_leads', 'media_kit_rates', 'media_kits', 'media_library',
+  'pfm_account_snapshots', 'platform_metrics', 'playbook_tasks', 'post_analytics',
+  'revenue_records', 'saved_content_ideas', 'suggested_times_cache', 'user_content_profiles',
+];
+guards.push(function brandScopedReads() {
+  const problems = [];
+  const files = [
+    ...walk(join(ROOT, 'src'), ['.ts', '.tsx']),
+    ...walk(join(ROOT, 'supabase/functions'), ['.ts']),
+  ].filter((f) => !/(\.test\.tsx?|_test\.ts)$/.test(f));
+  const fromTable = new RegExp(`\\.from\\(\\s*["'](${BRAND_SCOPED_TABLES.join('|')})["']\\s*\\)`, 'g');
+  for (const file of files) {
+    const text = readFileSync(file, 'utf8');
+    for (const m of text.matchAll(fromTable)) {
+      const chain = text.slice(m.index + m[0].length, m.index + m[0].length + 900).split(/\.from\(|;\s*$/m)[0];
+      if (!/\.select\(/.test(chain) || /\.(insert|upsert|update|delete)\(/.test(chain)) continue;
+      const keys = [...chain.matchAll(/\.(?:eq|in|match)\(\s*["'`]([a-z_]+)["'`]/g)].map((k) => k[1]);
+      if (keys.some((k) => k === 'brand_id' || k === 'id' || (k.endsWith('_id') && k !== 'user_id'))) continue;
+      const line = lineOf(text, m.index);
+      const above = text.split('\n').slice(Math.max(0, line - 4), line).join('\n');
+      if (/all-brands:\s*\S/.test(above)) continue;
+      problems.push(`${rel(file)}:${line} reads ${m[1]} without a brand_id filter (or an all-brands: comment)`);
+    }
+  }
+  return { name: 'brand-scoped reads', problems };
+});
+
 let failed = false;
 for (const guard of guards) {
   const { name, problems } = guard();

@@ -44,6 +44,7 @@ async function fetchProfileRow(
   brandId: string | null = null,
 ): Promise<ProfileVoiceRow | null> {
   let query = supabase
+    // all-brands: brand_id is applied below when given; null brandId is the user-level fallback.
     .from("user_content_profiles")
     .select("voice_profile, caption_style, raw_analysis")
     .eq("user_id", userId);
@@ -169,6 +170,7 @@ export async function loadAccountNiche(
   // so a second brand was briefed in the first brand's niche.
   const read = async (accountId: string | null): Promise<string | null> => {
     let query = supabase
+      // all-brands: brand_id is applied below when given.
       .from("user_content_profiles")
       .select("niche")
       .eq("user_id", userId);
