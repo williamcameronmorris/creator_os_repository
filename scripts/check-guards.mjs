@@ -69,6 +69,56 @@ guards.push(function profilesSelects() {
   return { name: 'profiles selects', problems };
 });
 
+/**
+ * Edge function auth: every function authenticates through _shared/auth.ts.
+ * A function must call one of its helpers, or declare `@auth-exempt: <why>`
+ * (signed webhooks with no caller identity). Rolling a check inline, by
+ * calling auth.getUser or comparing a bearer to the service key, fails: that
+ * is how functions once ended up trusting a body-supplied userId.
+ */
+guards.push(function edgeFunctionAuth() {
+  const problems = [];
+  const dir = join(ROOT, 'supabase/functions');
+  const HELPERS = /\b(requireUser|requireUserOrCron|requireService|requireServiceOrCron|optionalUser)\(/;
+  for (const name of readdirSync(dir)) {
+    const entry = join(dir, name, 'index.ts');
+    if (name.startsWith('_') || !statSync(join(dir, name)).isDirectory()) continue;
+    let text;
+    try { text = readFileSync(entry, 'utf8'); } catch { continue; }
+    const exempt = /@auth-exempt:\s*\S/.test(text);
+    if (!exempt && !HELPERS.test(text)) {
+      problems.push(`${rel(entry)} has no auth: call a _shared/auth.ts helper or declare @auth-exempt: <reason>`);
+    }
+    const inline = text.search(/\.auth\.getUser\(|===\s*(serviceRoleKey|supabaseKey|SERVICE_KEY|SUPABASE_SERVICE_ROLE_KEY)\b|(serviceRoleKey|supabaseKey|SERVICE_KEY)\s*===/);
+    if (inline >= 0) {
+      problems.push(`${rel(entry)}:${lineOf(text, inline)} checks auth inline; use _shared/auth.ts`);
+    }
+  }
+  return { name: 'edge function auth', problems };
+});
+
+/**
+ * RLS: a migration that creates a public table must enable RLS on it in the
+ * same file. Checked for migrations after the 45/45 baseline, so the rule
+ * holds for every table from here on.
+ */
+const RLS_BASELINE = '20261022000000';
+guards.push(function migrationsEnableRls() {
+  const problems = [];
+  const dir = join(ROOT, 'supabase/migrations');
+  for (const name of readdirSync(dir).filter((n) => n.endsWith('.sql')).sort()) {
+    if (name.slice(0, 14) <= RLS_BASELINE) continue;
+    const sql = readFileSync(join(dir, name), 'utf8').replace(/--[^\n]*/g, '');
+    const created = [...sql.matchAll(/create\s+table\s+(?:if\s+not\s+exists\s+)?(?:public\.)?"?([a-z_][a-z0-9_]*)"?/gi)]
+      .map((m) => m[1].toLowerCase());
+    for (const table of created) {
+      const rls = new RegExp(`alter\\s+table\\s+(?:only\\s+)?(?:public\\.)?"?${table}"?\\s+enable\\s+row\\s+level\\s+security`, 'i');
+      if (!rls.test(sql)) problems.push(`supabase/migrations/${name} creates ${table} without ENABLE ROW LEVEL SECURITY`);
+    }
+  }
+  return { name: 'migrations enable RLS', problems };
+});
+
 let failed = false;
 for (const guard of guards) {
   const { name, problems } = guard();

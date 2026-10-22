@@ -16,7 +16,8 @@
 // is never left behind with no way to sign in and retry.
 
 import { serve } from 'https://deno.land/std@0.208.0/http/server.ts';
-import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2';
+import { requireUser } from '../_shared/auth.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -165,21 +166,14 @@ serve(async (req) => {
     });
 
   try {
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader?.startsWith('Bearer ')) {
-      return json({ ok: false, message: 'Missing bearer token' }, 401);
-    }
-    const accessToken = authHeader.slice('Bearer '.length);
-
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
 
-    const { data: userRes, error: userErr } = await admin.auth.getUser(accessToken);
-    if (userErr || !userRes?.user) {
-      return json({ ok: false, message: 'Invalid session' }, 401);
-    }
-    const userId = userRes.user.id;
+    // Keep this function's { ok, message } error shape for the Profile page.
+    const auth = await requireUser(req, admin);
+    if (!auth.ok) return json({ ok: false, message: 'Invalid session' }, 401);
+    const userId = auth.userId;
 
     const errors: TableError[] = [];
 

@@ -58,7 +58,8 @@ jobs:
       # Typecheck is a hard gate: the ratchet reached 0, so any type error is a
       # new type error.
       # Structural rules (scripts/check-guards.mjs): no profiles select('*'),
-      # no token columns in the app.
+      # no token columns in the app, every edge function authenticates through
+      # _shared/auth.ts, every new table enables RLS.
       - run: npm run guards
 
       - run: npm run typecheck

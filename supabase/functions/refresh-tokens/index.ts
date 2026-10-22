@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { requireServiceOrCron } from "../_shared/auth.ts";
 
 /**
  * refresh-tokens Edge Function
@@ -48,23 +49,13 @@ Deno.serve(async (req: Request) => {
   // service-role bearer (how the pg_cron job authenticates) or the shared
   // Cron_Secret, matching publish-scheduled-posts.
   {
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-    const expectedCron = Deno.env.get("Cron_Secret");
-    const authHeader = req.headers.get("Authorization") ?? "";
-    const bearer = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
-    let cronSecret: string | undefined;
+    let body: { cronSecret?: unknown } = {};
     try {
       const raw = await req.text();
-      if (raw) cronSecret = JSON.parse(raw).cronSecret;
+      if (raw) body = JSON.parse(raw);
     } catch { /* no body / not JSON */ }
-    const isService = bearer !== "" && bearer === serviceRoleKey;
-    const isCron = !!cronSecret && !!expectedCron && cronSecret === expectedCron;
-    if (!isService && !isCron) {
-      return new Response(
-        JSON.stringify({ error: "Unauthorized — cron-only function" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    const internal = requireServiceOrCron(req, body);
+    if (!internal.ok) return internal.response;
   }
 
   try {

@@ -4,7 +4,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { loadVoiceContext, loadAccountNiche } from "../_shared/voice.ts";
 import { inspirationTagsForNiche } from "../_shared/niche.ts";
-import { resolveBrandId } from "../_shared/auth.ts";
+import { resolveBrandId, requireUser } from "../_shared/auth.ts";
 import { QuotaError, reserveAiRequest, type Refund } from "../_shared/quota.ts";
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
@@ -108,15 +108,9 @@ Deno.serve(async (req: Request) => {
     // Verify caller's JWT — userId previously came from request body, which
     // let any caller with the anon key fetch any user's profile + posts +
     // deals data block. Token-bound id is the only safe source.
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader?.startsWith("Bearer ")) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
-    }
-    const { data: userData, error: authErr } = await supabase.auth.getUser(authHeader.slice(7));
-    if (authErr || !userData?.user) {
-      return new Response(JSON.stringify({ error: "Invalid session" }), { status: 401, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
-    }
-    const userId = userData.user.id;
+    const auth = await requireUser(req, supabase);
+    if (!auth.ok) return auth.response;
+    const userId = auth.userId;
 
     const { question, messages: rawHistory, socialAccountId: rawAccountId, brandId: rawBrandId } = await req.json();
     if (!question?.trim()) return new Response(JSON.stringify({ error: "question is required" }), { status: 400, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });

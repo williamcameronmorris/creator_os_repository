@@ -1,23 +1,26 @@
 /**
- * Shared auth helpers for edge functions.
+ * Shared auth helpers for edge functions. EVERY function authenticates
+ * through one of these; scripts/check-guards.mjs fails CI on a function that
+ * calls auth.getUser itself or compares a bearer to the service key inline.
  *
  * Project convention is to deploy edge functions with `--no-verify-jwt` and
- * verify the bearer token internally with the SERVICE_ROLE key. Without this
- * helper every function rolls its own check (or skips it), which is how we
- * ended up with several functions accepting an arbitrary `userId` in the body.
+ * verify inside. Before these helpers every function rolled its own check
+ * (or skipped it), which is how several once accepted an arbitrary `userId`
+ * in the body.
  *
- * Usage:
+ *   requireUser(req, supabase)                → signed-in caller only
+ *   requireUserOrCron(req, supabase, body)    → cron secret, else a user
+ *   requireService(req)                       → internal: service-role bearer
+ *   requireServiceOrCron(req, body)           → scheduled/internal jobs
+ *   optionalUser(req, supabase)               → public endpoints that behave
+ *                                               differently for the owner
  *
  *   const auth = await requireUser(req, supabase);
  *   if (!auth.ok) return auth.response;   // 401 already built
  *   const userId = auth.userId;           // safe: token-verified
  *
- *   // Or, for cron-triggered functions, accept either a bearer token OR a
- *   // pre-shared secret in the body:
- *
- *   const auth = await requireUserOrCron(req, supabase, body, "Cron_Secret");
- *   if (!auth.ok) return auth.response;
- *   const userId = auth.userId;
+ * Functions with no caller identity at all (signed webhooks) declare it with
+ * an `@auth-exempt: <reason>` line in their header instead.
  */
 
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
@@ -33,6 +36,33 @@ type AuthCronOk = { ok: true; userId: string; isCron: true };
 type AuthFail = { ok: false; response: Response };
 export type AuthResult = AuthOk | AuthFail;
 export type AuthOrCronResult = AuthOk | AuthCronOk | AuthFail;
+
+/** Constant-time string compare for secrets. */
+export function safeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
+function bearerOf(req: Request): string {
+  const header = req.headers.get("Authorization") ?? "";
+  return header.replace(/^Bearer\s+/i, "").trim();
+}
+
+/** True when the caller presented this project's service-role key. */
+export function isServiceBearer(req: Request): boolean {
+  const key = (Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "").trim();
+  const bearer = bearerOf(req);
+  return key !== "" && bearer !== "" && safeEqual(bearer, key);
+}
+
+/** True when the body carries the shared cron secret. */
+export function isCronBody(body: { cronSecret?: unknown } | null | undefined, envSecretName = "Cron_Secret"): boolean {
+  const expected = Deno.env.get(envSecretName);
+  const given = body?.cronSecret;
+  return !!expected && typeof given === "string" && given !== "" && safeEqual(given, expected);
+}
 
 function unauthorized(message = "Unauthorized"): AuthFail {
   return {
@@ -75,8 +105,7 @@ export async function requireUserOrCron(
   envSecretName = "Cron_Secret",
   envDefaultUserName = "Default_PFM_User_Id",
 ): Promise<AuthOrCronResult> {
-  const expected = Deno.env.get(envSecretName);
-  if (body.cronSecret && expected && body.cronSecret === expected) {
+  if (isCronBody(body, envSecretName)) {
     const userId = body.userId || Deno.env.get(envDefaultUserName);
     if (!userId) return unauthorized("Cron mode requires userId in body or default-user env var");
     return { ok: true, userId, isCron: true };
@@ -155,4 +184,42 @@ export async function resolveBrandId(
   if (error) throw new Error(`default brand lookup: ${error.message}`);
   if (!brand) throw new Error(`No default brand for user ${userId}`);
   return brand.id as string;
+}
+
+type InternalOk = { ok: true; via: "service" | "cron" };
+
+/**
+ * Internal callers only: another edge function or a script holding the
+ * service-role key. Functions behind this trust `userId` from the body, so a
+ * user session must never get through.
+ */
+export function requireService(req: Request): { ok: true; via: "service" } | AuthFail {
+  return isServiceBearer(req) ? { ok: true, via: "service" } : unauthorized("Internal function");
+}
+
+/**
+ * Scheduled or internal jobs: the shared cron secret in the body (how pg_cron
+ * calls, since its vault copy of the key stopped matching after the API key
+ * migration) or the service-role bearer.
+ */
+export function requireServiceOrCron(
+  req: Request,
+  body: { cronSecret?: unknown } | null | undefined,
+  envSecretName = "Cron_Secret",
+): InternalOk | AuthFail {
+  if (isCronBody(body, envSecretName)) return { ok: true, via: "cron" };
+  if (isServiceBearer(req)) return { ok: true, via: "service" };
+  return unauthorized("Unauthorized: cron-only function");
+}
+
+/**
+ * Public endpoints that treat the owner differently (no view count on their
+ * own media kit). Returns the verified user id, or null for anyone else or a
+ * bad token. Never a failure: the endpoint is public either way.
+ */
+export async function optionalUser(req: Request, supabase: SupabaseClient): Promise<string | null> {
+  const token = bearerOf(req);
+  if (!token) return null;
+  const { data, error } = await supabase.auth.getUser(token);
+  return error || !data?.user ? null : data.user.id;
 }
