@@ -107,6 +107,7 @@ export function BrandProvider({ children }: { children: ReactNode }) {
           .order('is_default', { ascending: false })
           .order('created_at', { ascending: true }),
         // RLS already limits this to brands the user owns.
+        // all-brands: the switcher maps every account to its brand.
         supabase.from('brand_social_accounts').select('pfm_account_id, brand_id'),
       ]);
       if (brandRes.error) throw brandRes.error;

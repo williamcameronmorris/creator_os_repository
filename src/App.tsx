@@ -243,7 +243,8 @@ function AppContent() {
       <Route path="/office" element={<Navigate to="/patra" replace />} />
       <Route path="/office/connections" element={<ProtectedRoute><Layout><Connections /></Layout></ProtectedRoute>} />
       <Route path="/schedule" element={<ProtectedRoute><Layout><Schedule /></Layout></ProtectedRoute>} />
-      <Route path="/schedule/new" element={<ProtectedRoute><Layout><PostComposerPage /></Layout></ProtectedRoute>} />
+      {/* /compose is the composer. /schedule/new only survives for old links. */}
+      <Route path="/schedule/new" element={<Navigate to="/compose" replace />} />
       <Route path="/schedule/edit/:id" element={<ProtectedRoute><Layout><PostComposerPage /></Layout></ProtectedRoute>} />
       <Route path="/compose" element={<ProtectedRoute><Layout><ComposePost /></Layout></ProtectedRoute>} />
       <Route path="/drop" element={<ProtectedRoute><Layout><DropZone /></Layout></ProtectedRoute>} />

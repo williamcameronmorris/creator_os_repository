@@ -1,3 +1,9 @@
+/**
+ * Legacy composer: EDITING existing provider='direct' posts only, mounted at
+ * /schedule/edit/:id from Schedule. New posts are created in
+ * src/pages/ComposePost.tsx (/compose), which books through Post for Me. Don't
+ * grow this file; move edit support into ComposePost and delete it.
+ */
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useBrand } from '../contexts/BrandContext';

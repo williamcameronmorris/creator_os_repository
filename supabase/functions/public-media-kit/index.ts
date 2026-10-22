@@ -119,6 +119,7 @@ const KIT_COLUMNS =
 async function findKit(supabase: SupabaseClient, slug: string): Promise<KitRow | null> {
   const pattern = slug.replace(/[\\%_]/g, (c) => `\\${c}`);
   const { data, error } = await supabase
+    // all-brands: public lookup by slug; the slug is unique.
     .from("media_kits")
     .select(KIT_COLUMNS)
     .ilike("slug", pattern)
