@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { resolveBrandId } from "../_shared/auth.ts";
+import { resolveBrandId, requireUserOrCron } from "../_shared/auth.ts";
 
 /**
  * generate-insights Edge Function
@@ -35,8 +35,6 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
-const CRON_SECRET = Deno.env.get("Cron_Secret");
-const DEFAULT_USER_ID = Deno.env.get("Default_PFM_User_Id");
 
 interface InsightRow {
   user_id: string;
@@ -77,37 +75,11 @@ Deno.serve(async (req: Request) => {
     const { platform: filterPlatform } = body;
     const requestedBrandId: string | null =
       typeof body.brandId === "string" && body.brandId.trim() ? body.brandId.trim() : null;
-    let userId = body.userId;
-
-    // Authenticate. Cron path takes precedence so scheduled jobs don't need a user JWT.
-    const isCron = body.cronSecret && CRON_SECRET && body.cronSecret === CRON_SECRET;
-    if (isCron) {
-      if (!userId) userId = DEFAULT_USER_ID;
-      if (!userId) {
-        return new Response(
-          JSON.stringify({ error: "Cron mode requires userId in body or Default_PFM_User_Id secret" }),
-          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-        );
-      }
-    } else {
-      const authHeader = req.headers.get("Authorization");
-      if (!authHeader?.startsWith("Bearer ")) {
-        return new Response(JSON.stringify({ error: "Missing bearer token" }), {
-          status: 401,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      const token = authHeader.slice(7);
-      const { data: userData, error: authErr } = await supabase.auth.getUser(token);
-      if (authErr || !userData?.user) {
-        return new Response(JSON.stringify({ error: "Invalid session" }), {
-          status: 401,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      // Bearer-token caller can only generate insights for themselves; ignore body.userId.
-      userId = userData.user.id;
-    }
+    // Cron (secret + body.userId or the default user) or a signed-in caller,
+    // who can only generate insights for themselves.
+    const auth = await requireUserOrCron(req, supabase, body);
+    if (!auth.ok) return auth.response;
+    const userId = auth.userId;
 
     if (!userId) throw new Error("Missing required field: userId");
 

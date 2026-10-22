@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { detectMediaKind } from "../_shared/media.ts";
+import { requireService } from "../_shared/auth.ts";
 
 /**
  * threads-publish Edge Function
@@ -117,17 +118,8 @@ Deno.serve(async (req: Request) => {
   // their behalf, trusting `userId` from the body. Only the internal cron
   // dispatcher (publish-scheduled-posts, service-role bearer) may call it;
   // reject anon-key callers to prevent publishing to any user's account.
-  {
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-    const authHeader = req.headers.get("Authorization") ?? "";
-    const bearer = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
-    if (!serviceRoleKey || bearer !== serviceRoleKey) {
-      return new Response(
-        JSON.stringify({ error: "Unauthorized — internal function" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-  }
+  const internal = requireService(req);
+  if (!internal.ok) return internal.response;
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;

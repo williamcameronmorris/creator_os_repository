@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { requireUser } from "../_shared/auth.ts";
 
 /**
  * youtube-auth Edge Function
@@ -41,15 +42,9 @@ Deno.serve(async (req: Request) => {
     // body, which let anyone with the public anon key write OAuth tokens onto
     // another user's profile row (and even insert a new profile). The
     // token-bound id is the only safe source.
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader?.startsWith("Bearer ")) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
-    const { data: authData, error: authErr } = await supabase.auth.getUser(authHeader.slice(7));
-    if (authErr || !authData?.user) {
-      return new Response(JSON.stringify({ error: "Invalid session" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
-    const userId = authData.user.id;
+    const auth = await requireUser(req, supabase);
+    if (!auth.ok) return auth.response;
+    const userId = auth.userId;
 
     const { code, redirect_uri } = await req.json();
     if (!code || !redirect_uri) {

@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { requireServiceOrCron, requireUser } from "../_shared/auth.ts";
 
 /**
  * instagram-sync
@@ -40,9 +41,7 @@ Deno.serve(async (req: Request) => {
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const cronSecret = Deno.env.get("Cron_Secret");
 
     // Resolve caller. Three paths, in order:
     //   1. Cron: `{ cronSecret, userId }` in the body.
@@ -59,43 +58,18 @@ Deno.serve(async (req: Request) => {
     let body: { userId?: string; cronSecret?: string } = {};
     try { body = await req.json(); } catch { /* empty body is fine for user mode */ }
 
-    const isCron = !!body.cronSecret && !!cronSecret && body.cronSecret === cronSecret;
-
     let userId: string;
-    if (isCron) {
+    if (requireServiceOrCron(req, body).ok) {
+      // Cron and internal callers name the user in the body.
       if (!body.userId) {
-        return new Response(JSON.stringify({ error: "userId is required in body for cron calls" }),
+        return new Response(JSON.stringify({ error: "userId is required in body for cron and service-role calls" }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
       userId = body.userId;
     } else {
-      const authHeader = req.headers.get("Authorization");
-      if (!authHeader) {
-        return new Response(JSON.stringify({ error: "Missing Authorization header" }),
-          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      }
-      const jwt = authHeader.replace(/^Bearer\s+/i, "");
-
-      // Real key comparison. The previous decode-only role check was FORGEABLE:
-      // any unsigned token carrying a service_role claim passed and could write
-      // across tenants.
-      const isServiceRole = jwt.trim() !== "" && jwt.trim() === supabaseKey.trim();
-
-      if (isServiceRole) {
-        if (!body.userId) {
-          return new Response(JSON.stringify({ error: "userId is required in body for service-role calls" }),
-            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-        }
-        userId = body.userId;
-      } else {
-        const anon = createClient(supabaseUrl, supabaseAnonKey);
-        const { data: { user }, error: userError } = await anon.auth.getUser(jwt);
-        if (userError || !user) {
-          return new Response(JSON.stringify({ error: "Unauthorized" }),
-            { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-        }
-        userId = user.id;
-      }
+      const auth = await requireUser(req, createClient(supabaseUrl, supabaseKey));
+      if (!auth.ok) return auth.response;
+      userId = auth.userId;
     }
 
     const supabase = createClient(supabaseUrl, supabaseKey);

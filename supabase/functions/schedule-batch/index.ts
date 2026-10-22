@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
+import { requireServiceOrCron } from "../_shared/auth.ts";
 
 /**
  * schedule-batch
@@ -42,7 +43,6 @@ import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const PFM_KEY = Deno.env.get("Post_For_Me_API");
-const CRON_SECRET = Deno.env.get("Cron_Secret");
 const DEFAULT_USER = Deno.env.get("Default_PFM_User_Id");
 const PFM_BASE = "https://api.postforme.dev";
 
@@ -99,10 +99,8 @@ Deno.serve(async (req) => {
   // Two callers: pg_cron style ({ cronSecret } in the body) and a script
   // holding the project's service-role key as a bearer. Real key comparison,
   // same as instagram-sync: a decoded role claim alone would be forgeable.
-  const bearer = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
-  const isCron = !!body.cronSecret && !!CRON_SECRET && body.cronSecret === CRON_SECRET;
-  const isServiceRole = bearer !== "" && !!SERVICE_KEY && bearer === SERVICE_KEY.trim();
-  if (!isCron && !isServiceRole) return json({ error: "Unauthorized" }, 401);
+  const internal = requireServiceOrCron(req, body);
+  if (!internal.ok) return internal.response;
   if (!PFM_KEY || !DEFAULT_USER) return json({ error: "Missing Post_For_Me_API or Default_PFM_User_Id" }, 500);
 
   const supabase = createClient(SUPABASE_URL, SERVICE_KEY);

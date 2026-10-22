@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { detectMediaKinds, signMediaUrls, type MediaKind } from "../_shared/media.ts";
+import { requireServiceOrCron } from "../_shared/auth.ts";
 
 /**
  * publish-scheduled-posts Edge Function
@@ -187,7 +188,6 @@ Deno.serve(async (req: Request) => {
   // Cron-only: require Cron_Secret in body OR a valid service-role bearer.
   // Without this, anyone with the anon key could force-publish any user's
   // scheduled posts immediately (or repeatedly trigger expensive PFM calls).
-  const expectedCron = Deno.env.get("Cron_Secret");
   let body: { cronSecret?: string } = {};
   try {
     const raw = await req.text();
@@ -195,15 +195,8 @@ Deno.serve(async (req: Request) => {
   } catch {
     // ignore
   }
-  const authHeader = req.headers.get("Authorization");
-  const isService = authHeader?.startsWith("Bearer ") && authHeader.slice(7) === supabaseKey;
-  const isCron = body.cronSecret && expectedCron && body.cronSecret === expectedCron;
-  if (!isService && !isCron) {
-    return new Response(JSON.stringify({ error: "Unauthorized — cron-only function" }), {
-      status: 401,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
+  const internal = requireServiceOrCron(req, body);
+  if (!internal.ok) return internal.response;
 
   try {
     // ── Atomically claim due posts ────────────────────────────────────────────

@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { signMediaUrls } from "../_shared/media.ts";
+import { optionalUser } from "../_shared/auth.ts";
 
 /**
  * public-media-kit
@@ -455,12 +456,7 @@ Deno.serve(async (req) => {
 
     // The owner's own visits are not views. The page sends the session when
     // there is one; anyone else, or a bad token, is counted as a visitor.
-    let isOwner = false;
-    const authHeader = req.headers.get("Authorization");
-    if (authHeader?.startsWith("Bearer ")) {
-      const { data } = await supabase.auth.getUser(authHeader.slice(7));
-      isOwner = !!data?.user && data.user.id === kit.user_id;
-    }
+    const isOwner = (await optionalUser(req, supabase)) === kit.user_id;
 
     const payload = await buildPayload(supabase, kit);
     // Counted on the server so it cannot be gamed from the page.

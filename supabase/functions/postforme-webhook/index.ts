@@ -5,6 +5,9 @@ import { verifySvixSignature } from "../_shared/webhookSignature.ts";
 /**
  * postforme-webhook
  *
+ * @auth-exempt: no caller identity; every request must carry a valid Post for
+ * Me signature inside the 5 minute window (../_shared/webhookSignature.ts).
+ *
  * Receives webhook events from Post for Me when posts publish, fail, or
  * platform-side state changes. Updates the local `content_posts` mirror
  * so OfficeHub stays in sync without polling.

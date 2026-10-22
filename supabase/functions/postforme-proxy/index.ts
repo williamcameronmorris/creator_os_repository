@@ -1,5 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { classify } from "./routes.ts";
+import { requireUser } from "../_shared/auth.ts";
 
 const PFM_BASE = "https://api.postforme.dev";
 
@@ -9,51 +11,35 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
-const ALLOWED_PREFIXES = [
-  "/v1/social-accounts",
-  "/v1/social-posts",
-  "/v1/social-post-results",
-  "/v1/social-post-previews",
-  "/v1/social-account-feeds/",
-  "/v1/media/create-upload-url",
-];
-
-const ALLOWED_METHODS = new Set(["GET", "POST", "PUT", "PATCH", "DELETE"]);
-
-function pathAllowed(path: string): boolean {
-  return ALLOWED_PREFIXES.some((p) => path === p || path.startsWith(p + "/") || path.startsWith(p));
-}
-
 /**
- * Multi-tenancy: PFM accounts and posts are tagged with `external_id` =
- * Cliopatra user.id. The proxy enforces this server-side rather than trusting
- * the client:
+ * Multi-tenancy: PFM is one shared workspace, and accounts and posts are
+ * tagged with `external_id` = Cliopatra user.id. The proxy forwards ONLY the
+ * operations the app uses, each scoped to the caller server-side:
  *
- *   GET /v1/social-accounts*       → auto-append ?external_id={user.id}
- *   GET /v1/social-posts*          → auto-append ?external_id={user.id}
- *   POST /v1/social-accounts/auth-url → force body.external_id = user.id
- *   POST /v1/social-posts          → force body.external_id = user.id
+ *   GET  /v1/social-accounts               → ?external_id={user.id} forced
+ *   POST /v1/social-accounts/auth-url      → body.external_id = user.id
+ *   POST /v1/social-accounts/{id}/disconnect → only if {id} is one of the
+ *                                             caller's accounts
+ *   POST /v1/social-posts                  → body.external_id = user.id, and
+ *                                             every social_accounts id must
+ *                                             be one of the caller's
  *
- * Per-account operations (disconnect, get-by-id) and feed reads still rely on
- * the caller knowing the right account id. We could add a server-side check
- * (look up the account, verify external_id matches) but for v1 single-tenant
- * usage that's overkill — flagged for follow-up when there are multiple users.
+ * It used to allow every path under six prefixes and scope only the list
+ * calls, so anyone signed in could read another user's account feed or
+ * disconnect, edit or delete their accounts and posts given the id, and a
+ * create could target any account id at all.
  */
-function shouldFilterListByExternalId(method: string, path: string): boolean {
-  if (method !== "GET") return false;
-  // Filter only the top-level list endpoints. Path with an ID after the prefix
-  // is a single-resource read where the filter would be meaningless.
-  const isAccountsList = path === "/v1/social-accounts" || path.startsWith("/v1/social-accounts?");
-  const isPostsList = path === "/v1/social-posts" || path.startsWith("/v1/social-posts?");
-  const isPostResultsList = path === "/v1/social-post-results" || path.startsWith("/v1/social-post-results?");
-  return isAccountsList || isPostsList || isPostResultsList;
-}
 
-function shouldStampBodyExternalId(method: string, path: string): boolean {
-  if (method !== "POST") return false;
-  if (path === "/v1/social-accounts/auth-url") return true;
-  if (path === "/v1/social-posts") return true;
-  return false;
+/** The ids of `userId`'s Post for Me accounts. */
+async function ownedAccountIds(apiKey: string, userId: string): Promise<Set<string>> {
+  const res = await fetch(
+    `${PFM_BASE}/v1/social-accounts?external_id=${encodeURIComponent(userId)}`,
+    { headers: { Authorization: `Bearer ${apiKey}` } },
+  );
+  if (!res.ok) throw new Error(`Could not verify account ownership (${res.status})`);
+  const body = await res.json();
+  const list: { id?: string; external_id?: string }[] = Array.isArray(body) ? body : (body?.data || []);
+  return new Set(list.filter((a) => a.id && a.external_id === userId).map((a) => a.id as string));
 }
 
 Deno.serve(async (req) => {
@@ -68,27 +54,13 @@ Deno.serve(async (req) => {
     });
   }
 
-  const authHeader = req.headers.get("Authorization");
-  if (!authHeader?.startsWith("Bearer ")) {
-    return new Response(JSON.stringify({ error: "Missing bearer token" }), {
-      status: 401,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
-  const token = authHeader.slice(7);
-
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const admin = createClient(supabaseUrl, serviceKey);
 
-  const { data: userData, error: authErr } = await admin.auth.getUser(token);
-  if (authErr || !userData?.user) {
-    return new Response(JSON.stringify({ error: "Invalid session" }), {
-      status: 401,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
-  const userId = userData.user.id;
+  const auth = await requireUser(req, admin);
+  if (!auth.ok) return auth.response;
+  const userId = auth.userId;
 
   let payload: { method?: string; path?: string; body?: unknown; query?: Record<string, string | string[]> };
   try {
@@ -103,14 +75,9 @@ Deno.serve(async (req) => {
   const method = (payload.method || "GET").toUpperCase();
   const path = payload.path || "";
 
-  if (!ALLOWED_METHODS.has(method)) {
-    return new Response(JSON.stringify({ error: `Method ${method} not allowed` }), {
-      status: 400,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
-  if (!pathAllowed(path)) {
-    return new Response(JSON.stringify({ error: `Path ${path} not allowed` }), {
+  const route = classify(method, path);
+  if (!route) {
+    return new Response(JSON.stringify({ error: `${method} ${path} is not allowed` }), {
       status: 400,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
@@ -133,7 +100,7 @@ Deno.serve(async (req) => {
       else sp.append(k, v);
     }
   }
-  if (shouldFilterListByExternalId(method, path)) {
+  if (route.op === "list_accounts") {
     // Always set, never trust client-supplied value
     sp.set("external_id", userId);
   }
@@ -142,11 +109,38 @@ Deno.serve(async (req) => {
 
   // Stamp external_id into POST bodies for create operations
   let bodyToSend = payload.body;
-  if (shouldStampBodyExternalId(method, path)) {
+  if (route.op === "auth_url" || route.op === "create_post") {
     if (bodyToSend && typeof bodyToSend === "object" && !Array.isArray(bodyToSend)) {
       bodyToSend = { ...(bodyToSend as Record<string, unknown>), external_id: userId };
     } else {
       bodyToSend = { external_id: userId };
+    }
+  }
+
+  // Account-targeted operations: every account id must be the caller's.
+  if (route.op === "disconnect_account" || route.op === "create_post") {
+    const requested = route.op === "disconnect_account"
+      ? [route.accountId]
+      : (bodyToSend as { social_accounts?: unknown }).social_accounts;
+    if (!Array.isArray(requested) || requested.length === 0 || !requested.every((id) => typeof id === "string" && id)) {
+      return new Response(JSON.stringify({ error: "social_accounts must be a non-empty list of account ids" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    try {
+      const owned = await ownedAccountIds(apiKey, userId);
+      if (!requested.every((id) => owned.has(id as string))) {
+        return new Response(JSON.stringify({ error: "That account is not yours" }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    } catch (err) {
+      return new Response(JSON.stringify({ error: (err as Error).message }), {
+        status: 502,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
   }
 

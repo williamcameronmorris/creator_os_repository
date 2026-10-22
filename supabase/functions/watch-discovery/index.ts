@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { canonicalNiche } from "../_shared/niche.ts";
+import { requireServiceOrCron } from "../_shared/auth.ts";
 
 /**
  * watch-discovery Edge Function
@@ -291,19 +292,13 @@ Deno.serve(async (req: Request) => {
 
   // Cron-only guard.
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-  const expectedCron = Deno.env.get("Cron_Secret");
-  const authHeader = req.headers.get("Authorization") ?? "";
-  const bearer = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
   let body: { cronSecret?: string; niche?: string } = {};
   try {
     const raw = await req.text();
     if (raw) body = JSON.parse(raw);
   } catch { /* no body */ }
-  const isService = bearer !== "" && bearer === serviceRoleKey;
-  const isCron = !!body.cronSecret && !!expectedCron && body.cronSecret === expectedCron;
-  if (!isService && !isCron) {
-    return json({ error: "Unauthorized — cron-only function" }, 401);
-  }
+  const internal = requireServiceOrCron(req, body);
+  if (!internal.ok) return internal.response;
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;

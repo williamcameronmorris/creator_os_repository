@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { isPublishHandle, matchBookedRows, matchByPublishWindow } from "./reconcile.ts";
+import { requireUserOrCron } from "../_shared/auth.ts";
 
 /**
  * postforme-sync
@@ -103,7 +104,6 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const POSTFORME_API_KEY = Deno.env.get("Post_For_Me_API");
 const CRON_SECRET = Deno.env.get("Cron_Secret");
-const DEFAULT_PFM_USER_ID = Deno.env.get("Default_PFM_User_Id");
 const PFM_BASE = "https://api.postforme.dev";
 
 /** Feed pages to walk per account. 50/page, so 3 pages ≈ the last 150 posts. */
@@ -1131,44 +1131,12 @@ Deno.serve(async (req) => {
     // empty / invalid body is fine
   }
 
-  let userId: string | null = null;
-
-  // Cron mode
-  if (body.cronSecret && CRON_SECRET && body.cronSecret === CRON_SECRET) {
-    if (!DEFAULT_PFM_USER_ID) {
-      return new Response(
-        JSON.stringify({ error: "Cron mode requires Default_PFM_User_Id secret" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
-    userId = DEFAULT_PFM_USER_ID;
-  } else {
-    // User mode — verify JWT
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader?.startsWith("Bearer ")) {
-      return new Response(JSON.stringify({ error: "Missing bearer token" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-    const token = authHeader.slice(7);
-    const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-    const { data: userData, error: authErr } = await admin.auth.getUser(token);
-    if (authErr || !userData?.user) {
-      return new Response(JSON.stringify({ error: "Invalid session" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-    userId = userData.user.id;
-  }
-
-  if (!userId) {
-    return new Response(JSON.stringify({ error: "Could not determine userId" }), {
-      status: 400,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
+  // Cron syncs the default PFM user (any userId in a cron body is ignored,
+  // as before); otherwise the signed-in caller syncs themselves.
+  const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+  const auth = await requireUserOrCron(req, admin, { cronSecret: body.cronSecret });
+  if (!auth.ok) return auth.response;
+  const userId = auth.userId;
 
   try {
     const summary = await syncForUser(userId);

@@ -13,6 +13,9 @@ import { createClient } from "npm:@supabase/supabase-js@2";
  *   POST /threads-deauth?type=delete — Delete Callback URL
  *     Called when a user submits a data deletion request via Meta.
  *     Deletes all stored Threads data for that user.
+ *
+ * @auth-exempt: Meta calls this with no session; only a signed_request that
+ * verifies against the app secret is acted on.
  */
 
 const corsHeaders = {
